@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- TRIPLE MMM CONFIG ---
@@ -358,7 +358,7 @@ const EstimateApp = ({ userId }) => {
                 <div>
                     {!logoError ? (
                         <img 
-                            src={process.env.PUBLIC_URL + "/1768639609664.png"} 
+                            src={process.env.PUBLIC_URL + "/1768838821897.png"} 
                             alt="TRIPLE MMM BODY REPAIRS" 
                             style={{ maxHeight: '200px', maxWidth: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }}
                             onError={() => setLogoError(true)} 
