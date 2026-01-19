@@ -1,0 +1,25 @@
+{
+  "short_name": "Triple MMM",
+  "name": "Triple MMM Bodyshop Manager",
+  "icons": [
+    {
+      "src": "1768838821897.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "1768838821897.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "1768838821897.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#cc0000",
+  "background_color": "#ffffff"
+}
