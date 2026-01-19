@@ -259,7 +259,7 @@ const EstimateApp = ({ userId }) => {
     const totals = calculateTotal();
 
     const clearForm = () => {
-        if(window.confirm("Start fresh?")) {
+        if(window.confirm("Start fresh? This will clear the current form.")) {
             setMode('ESTIMATE');
             setInvoiceNum(''); setInvoiceDate('');
             setName(''); setAddress(''); setPhone(''); setEmail('');
@@ -326,6 +326,9 @@ const EstimateApp = ({ userId }) => {
     if(mode === 'SETTINGS') {
         return (
             <div style={{ padding: '40px', maxWidth: '600px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
+                 {/* NEW: Back Button */}
+                <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'20px', padding:'10px', background:'#eee', border:'none', borderRadius:'4px', cursor:'pointer'}}>← BACK TO DASHBOARD</button>
+                
                 <h2 style={{borderBottom:'2px solid #333', paddingBottom:'10px'}}>⚙️ System Settings</h2>
                 <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                     <label>Labor Rate (£/hr): <input value={settings.laborRate} onChange={e => setSettings({...settings, laborRate: e.target.value})} style={inputStyle} /></label>
@@ -336,7 +339,6 @@ const EstimateApp = ({ userId }) => {
                     <label>Email: <input value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} style={inputStyle} /></label>
                     <div style={{display:'flex', gap:'10px', marginTop:'20px'}}>
                         <button onClick={saveSettings} style={primaryBtn}>SAVE SETTINGS</button>
-                        <button onClick={() => setMode('ESTIMATE')} style={secondaryBtn}>CANCEL</button>
                     </div>
                 </div>
             </div>
@@ -346,6 +348,11 @@ const EstimateApp = ({ userId }) => {
     return (
         <div style={{ padding: '40px', maxWidth: '900px', margin: '0 auto', fontFamily: 'Arial, sans-serif', background: 'white' }}>
             
+             {/* NEW: Back Button (Only shows if NOT in Estimate mode) */}
+             {mode !== 'ESTIMATE' && (
+                <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'20px', padding:'10px', background:'#eee', border:'none', borderRadius:'4px', cursor:'pointer'}}>← BACK TO ESTIMATE</button>
+            )}
+
             {/* HEADER */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '4px solid #cc0000', paddingBottom: '20px', marginBottom: '30px' }}>
                 <div>
