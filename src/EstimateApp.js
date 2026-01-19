@@ -259,7 +259,7 @@ const EstimateApp = ({ userId }) => {
     const totals = calculateTotal();
 
     const clearForm = () => {
-        if(window.confirm("Start fresh? This will clear the current form.")) {
+        if(window.confirm("Start fresh?")) {
             setMode('ESTIMATE');
             setInvoiceNum(''); setInvoiceDate('');
             setName(''); setAddress(''); setPhone(''); setEmail('');
