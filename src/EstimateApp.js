@@ -38,7 +38,7 @@ const EstimateApp = ({ userId }) => {
     // --- SETTINGS STATE ---
     const [settings, setSettings] = useState({
         laborRate: '50',
-        markup: '20', // Default Markup %
+        markup: '20',
         companyName: 'TRIPLE MMM',
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
@@ -58,11 +58,11 @@ const EstimateApp = ({ userId }) => {
 
     // Items & Costs
     const [itemDesc, setItemDesc] = useState('');
-    const [itemCostPrice, setItemCostPrice] = useState(''); // What YOU pay
+    const [itemCostPrice, setItemCostPrice] = useState(''); 
     const [items, setItems] = useState([]);
     
     // Internal Job Costs
-    const [paintAllocated, setPaintAllocated] = useState(''); // Paint cost for THIS job
+    const [paintAllocated, setPaintAllocated] = useState(''); 
 
     // Photos
     const [photos, setPhotos] = useState([]);
@@ -90,7 +90,6 @@ const EstimateApp = ({ userId }) => {
 
     // LOAD DATA
     useEffect(() => {
-        // Settings
         getDoc(doc(db, 'settings', 'global')).then(snap => {
             if(snap.exists()) {
                 const s = snap.data();
@@ -99,11 +98,9 @@ const EstimateApp = ({ userId }) => {
             }
         });
 
-        // Estimates Sync
         const qEst = query(collection(db, 'estimates'), orderBy('createdAt', 'desc'));
         const unsubEst = onSnapshot(qEst, (snap) => setSavedEstimates(snap.docs.map(d => ({id: d.id, ...d.data()}))));
 
-        // Expenses Sync
         const qExp = query(collection(db, 'expenses'), orderBy('date', 'desc'));
         const unsubExp = onSnapshot(qExp, (snap) => setGeneralExpenses(snap.docs.map(d => ({id: d.id, ...d.data()}))));
 
@@ -226,7 +223,6 @@ const EstimateApp = ({ userId }) => {
     };
 
     // --- SIGNATURE & PHOTOS ---
-    // (Keeping previous implementations compact)
     const handlePhotoUpload = async (e) => {
         if (!e.target.files[0]) return;
         setUploading(true);
@@ -236,24 +232,42 @@ const EstimateApp = ({ userId }) => {
         catch (error) { alert("Upload failed!"); }
         setUploading(false);
     };
+    
     const removePhoto = (index) => setPhotos(photos.filter((_, i) => i !== index));
+
+    // --- SIGNATURE FUNCTIONS (FIXED) ---
     const startDrawing = ({nativeEvent}) => {
         const {offsetX, offsetY} = getCoordinates(nativeEvent);
         const ctx = canvasRef.current.getContext('2d');
         ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(offsetX, offsetY); setIsDrawing(true);
     };
+    
     const draw = ({nativeEvent}) => {
         if(!isDrawing) return;
         const {offsetX, offsetY} = getCoordinates(nativeEvent);
         canvasRef.current.getContext('2d').lineTo(offsetX, offsetY);
         canvasRef.current.getContext('2d').stroke();
     };
+
+    const stopDrawing = () => {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx.closePath();
+        setIsDrawing(false);
+    };
+
     const getCoordinates = (event) => {
         if (event.touches && event.touches[0]) {
             const rect = canvasRef.current.getBoundingClientRect();
             return { offsetX: event.touches[0].clientX - rect.left, offsetY: event.touches[0].clientY - rect.top };
         }
         return { offsetX: event.offsetX, offsetY: event.offsetY };
+    };
+
+    const clearSignature = () => {
+        if(canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
     };
     // ---------------------------
 
@@ -265,6 +279,11 @@ const EstimateApp = ({ userId }) => {
             csv += `${d},${inv.invoiceNumber},${inv.customer},${inv.totals.invoiceTotal},${inv.totals.totalJobCost},${inv.totals.jobProfit},${inv.status}\n`;
         });
         const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "TripleMMM_Ledger.csv"; link.click();
+    };
+
+    const togglePaid = async (id, currentStatus) => {
+        const newStatus = currentStatus === 'PAID' ? 'UNPAID' : 'PAID';
+        await updateDoc(doc(db, 'estimates', id), { status: newStatus });
     };
 
     // --- VIEWS ---
