@@ -59,6 +59,7 @@ const EstimateApp = ({ userId }) => {
     const [makeModel, setMakeModel] = useState('');
     const [bookingDate, setBookingDate] = useState(''); 
     const [bookingTime, setBookingTime] = useState('09:00'); 
+    const [foundHistory, setFoundHistory] = useState(false); // New Indicator
 
     // Items
     const [itemDesc, setItemDesc] = useState('');
@@ -125,35 +126,28 @@ const EstimateApp = ({ userId }) => {
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
     }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, mode]);
 
-    // --- GOOGLE CALENDAR LINK ---
-    const addToGoogleCalendar = () => {
-        if(!bookingDate) return alert("Please select a Booking Date first.");
-        const start = bookingDate.replace(/-/g, '') + 'T' + bookingTime.replace(/:/g, '') + '00';
-        const end = bookingDate.replace(/-/g, '') + 'T' + (parseInt(bookingTime.split(':')[0]) + 1).toString().padStart(2, '0') + bookingTime.split(':')[1] + '00';
-        
-        const title = encodeURIComponent(`Repair: ${name} (${reg})`);
-        const details = encodeURIComponent(`Vehicle: ${makeModel}\nPhone: ${phone}\n\nWork Required:\n${items.map(i => '- ' + i.desc).join('\n')}`);
-        const loc = encodeURIComponent(settings.address);
-        
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${loc}`;
-        window.open(url, '_blank');
-    };
+    // --- ENHANCED HISTORY CHECK ---
+    const handleRegChange = async (e) => {
+        const newReg = e.target.value.toUpperCase();
+        setReg(newReg);
+        setFoundHistory(false); // Reset indicator
 
-    // --- FUNCTIONS ---
-    const checkHistory = async (regInput) => {
-        if(regInput.length < 3) return;
-        const q = query(collection(db, 'estimates'), where("reg", "==", regInput), orderBy('createdAt', 'desc'));
-        try {
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const prev = querySnapshot.docs[0].data();
-                setMakeModel(prev.makeModel || ''); 
-                setName(prev.customer || '');
-                setPhone(prev.phone || '');
-                setEmail(prev.email || '');
-                setAddress(prev.address || '');
-            }
-        } catch(e) { }
+        if(newReg.length > 2) {
+            // Check database for this Reg
+            const q = query(collection(db, 'estimates'), where("reg", "==", newReg), orderBy('createdAt', 'desc'));
+            try {
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    const prev = querySnapshot.docs[0].data();
+                    setMakeModel(prev.makeModel || ''); 
+                    setName(prev.customer || '');
+                    setPhone(prev.phone || '');
+                    setEmail(prev.email || '');
+                    setAddress(prev.address || '');
+                    setFoundHistory(true); // Show "Found" badge
+                }
+            } catch(e) { }
+        }
     };
 
     const lookupReg = async () => {
@@ -219,15 +213,9 @@ const EstimateApp = ({ userId }) => {
         setExpDesc(''); setExpAmount('');
     };
     
-    // DELETE JOB FUNCTION (This is the new feature!)
     const deleteJob = async (id) => {
         if(window.confirm("WARNING: Are you sure you want to PERMANENTLY delete this job? This will remove it from your CSV export.")) {
-            try {
-                await deleteDoc(doc(db, 'estimates', id));
-                // No need to alert, the list will update automatically
-            } catch (e) {
-                alert("Error deleting: " + e.message);
-            }
+            try { await deleteDoc(doc(db, 'estimates', id)); } catch (e) { alert("Error deleting: " + e.message); }
         }
     };
 
@@ -260,7 +248,7 @@ const EstimateApp = ({ userId }) => {
             setMode('ESTIMATE'); setInvoiceNum(''); setInvoiceDate(''); setName(''); setAddress(''); setPhone(''); setEmail('');
             setReg(''); setMileage(''); setMakeModel(''); setClaimNum(''); setNetworkCode(''); 
             setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated('');
-            setBookingDate(''); setBookingTime('09:00');
+            setBookingDate(''); setBookingTime('09:00'); setFoundHistory(false);
             setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
             if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
         }
@@ -283,6 +271,17 @@ const EstimateApp = ({ userId }) => {
     const getCoordinates = (event) => { if (event.touches && event.touches[0]) { const rect = canvasRef.current.getBoundingClientRect(); return { offsetX: event.touches[0].clientX - rect.left, offsetY: event.touches[0].clientY - rect.top }; } return { offsetX: event.offsetX, offsetY: event.offsetY }; };
     const clearSignature = () => { if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); } };
     useEffect(() => { clearSignature(); }, [mode]);
+
+    const addToGoogleCalendar = () => {
+        if(!bookingDate) return alert("Please select a Booking Date first.");
+        const start = bookingDate.replace(/-/g, '') + 'T' + bookingTime.replace(/:/g, '') + '00';
+        const end = bookingDate.replace(/-/g, '') + 'T' + (parseInt(bookingTime.split(':')[0]) + 1).toString().padStart(2, '0') + bookingTime.split(':')[1] + '00';
+        const title = encodeURIComponent(`Repair: ${name} (${reg})`);
+        const details = encodeURIComponent(`Vehicle: ${makeModel}\nPhone: ${phone}\n\nWork Required:\n${items.map(i => '- ' + i.desc).join('\n')}`);
+        const loc = encodeURIComponent(settings.address);
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${loc}`;
+        window.open(url, '_blank');
+    };
 
     const downloadAccountingCSV = () => {
         const invoices = savedEstimates.filter(est => est.type === 'INVOICE');
@@ -375,13 +374,14 @@ const EstimateApp = ({ userId }) => {
                 <div>
                     <h4 style={headerStyle}>VEHICLE DETAILS</h4>
                     <div style={{display:'flex', gap:'10px'}}>
-                        <input placeholder="Reg" value={reg} onChange={e => setReg(e.target.value)} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background:'#f0f9ff'}} />
+                        <input placeholder="Reg" value={reg} onChange={handleRegChange} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background:'#f0f9ff'}} />
                         
                         {/* LOOKUP BUTTON */}
                         <button onClick={lookupReg} className="no-print" style={{background:'#4b5563', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>🔎</button>
                         
                         <input placeholder="Mileage" value={mileage} onChange={e => setMileage(e.target.value)} style={inputStyle} />
                     </div>
+                    {foundHistory && <div style={{color:'green', fontSize:'0.8em', marginTop:'-8px', marginBottom:'5px'}}>✓ Found previous customer!</div>}
                     <input placeholder="Make / Model" value={makeModel} onChange={e => setMakeModel(e.target.value)} style={inputStyle} />
                     
                     {/* BOOKING SECTION */}
@@ -394,7 +394,7 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     </div>
 
-                    <div className="no-print" style={{marginTop:'100px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
+                    <div className="no-print" style={{marginTop:'10px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
                         <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
                     </div>
                 </div>
