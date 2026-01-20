@@ -106,33 +106,24 @@ const EstimateApp = ({ userId }) => {
         return () => { unsubEst(); unsubExp(); };
     }, []);
 
-    // --- IRONCLAD AUTO-SAVE & LOAD ---
-    // Loads EVERYTHING back when you reopen the app
+    // AUTO-LOAD & SAVE DRAFT
     useEffect(() => {
         const savedData = localStorage.getItem('triple_mmm_draft');
         if (savedData) {
             const draft = JSON.parse(savedData);
-            setName(draft.name || ''); setAddress(draft.address || ''); setPhone(draft.phone || ''); setEmail(draft.email || '');
-            setReg(draft.reg || ''); setMileage(draft.mileage || ''); setMakeModel(draft.makeModel || '');
-            setItems(draft.items || []); setLaborRate(draft.laborRate || settings.laborRate); setLaborHours(draft.laborHours || '');
-            setClaimNum(draft.claimNum || ''); setNetworkCode(draft.networkCode || ''); 
-            setPhotos(draft.photos || []); setPaintAllocated(draft.paintAllocated || ''); setExcess(draft.excess || '');
+            setName(draft.name || ''); setReg(draft.reg || ''); setItems(draft.items || []);
+            setLaborRate(draft.laborRate || settings.laborRate); setClaimNum(draft.claimNum || '');
+            setNetworkCode(draft.networkCode || ''); setPhotos(draft.photos || []);
+            setPaintAllocated(draft.paintAllocated || '');
             setBookingDate(draft.bookingDate || ''); setBookingTime(draft.bookingTime || '09:00');
-            setInvoiceNum(draft.invoiceNum || ''); setInvoiceDate(draft.invoiceDate || '');
         }
-    }, [settings]); // Depend on settings so we default to correct labor rate if no draft
+    }, [settings]);
 
-    // Saves EVERYTHING on every change
     useEffect(() => {
         if(mode === 'SETTINGS' || mode === 'DASHBOARD') return;
-        const draft = { 
-            name, address, phone, email, reg, mileage, makeModel, items, 
-            laborRate, laborHours, claimNum, networkCode, photos, paintAllocated, excess,
-            bookingDate, bookingTime, invoiceNum, invoiceDate
-        };
+        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime };
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
-    }, [name, address, phone, email, reg, mileage, makeModel, items, laborRate, laborHours, claimNum, networkCode, photos, paintAllocated, excess, bookingDate, bookingTime, invoiceNum, invoiceDate, mode]);
-
+    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, mode]);
 
     // --- GOOGLE CALENDAR LINK ---
     const addToGoogleCalendar = () => {
@@ -228,6 +219,18 @@ const EstimateApp = ({ userId }) => {
         setExpDesc(''); setExpAmount('');
     };
     
+    // DELETE JOB FUNCTION (This is the new feature!)
+    const deleteJob = async (id) => {
+        if(window.confirm("WARNING: Are you sure you want to PERMANENTLY delete this job? This will remove it from your CSV export.")) {
+            try {
+                await deleteDoc(doc(db, 'estimates', id));
+                // No need to alert, the list will update automatically
+            } catch (e) {
+                alert("Error deleting: " + e.message);
+            }
+        }
+    };
+
     const deleteExpense = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, 'expenses', id)); };
 
     const saveToCloud = async (type) => {
@@ -391,7 +394,7 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     </div>
 
-                    <div className="no-print" style={{marginTop:'10px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
+                    <div className="no-print" style={{marginTop:'100px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
                         <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
                     </div>
                 </div>
@@ -456,8 +459,6 @@ const EstimateApp = ({ userId }) => {
             )}
 
             <div className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '15px', background: 'white', borderTop: '1px solid #ccc', display: 'flex', justifyContent: 'center', gap: '15px', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', flexWrap: 'wrap' }}>
-                {mode !== 'ESTIMATE' && <button onClick={() => setMode('ESTIMATE')} style={{...secondaryBtn, background: '#666'}}>← BACK</button>}
-                
                 <button onClick={() => saveToCloud('ESTIMATE')} disabled={saveStatus === 'SAVING'} style={saveStatus === 'SUCCESS' ? successBtn : primaryBtn}>{saveStatus === 'SAVING' ? 'SAVING...' : (saveStatus === 'SUCCESS' ? '✅ SAVED!' : 'SAVE ESTIMATE')}</button>
                 {mode === 'ESTIMATE' && <button onClick={() => saveToCloud('INVOICE')} style={secondaryBtn}>GENERATE INVOICE</button>}
                 <button onClick={() => setMode('JOBCARD')} style={{...secondaryBtn, background: '#4b5563'}}>JOB CARD</button>
@@ -474,7 +475,7 @@ const EstimateApp = ({ userId }) => {
                     <input placeholder="Search jobs..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{padding:'8px', border:'1px solid #ccc', borderRadius:'4px'}} />
                     <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export CSV</button>
                 </div>
-                {filteredEstimates.map(est => (<div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: est.status === 'PAID' ? '#f0fdf4' : 'transparent'}}><div style={{color: est.type === 'INVOICE' ? '#16a34a' : '#333'}}><span>{est.type === 'INVOICE' ? `📄 ${est.invoiceNumber}` : '📝 Estimate'} - {est.customer} ({est.reg})</span><div style={{fontSize:'0.8em', color:'#666'}}>{new Date(est.createdAt?.seconds * 1000).toLocaleDateString()} - £{est.totals?.finalDue.toFixed(2)}</div></div><button onClick={() => togglePaid(est.id, est.status)} style={{padding:'5px 10px', border:'1px solid #ccc', borderRadius:'4px', background: est.status === 'PAID' ? '#16a34a' : 'white', color: est.status === 'PAID' ? 'white' : '#333', cursor:'pointer'}}>{est.status === 'PAID' ? 'PAID' : 'MARK PAID'}</button></div>))}
+                {filteredEstimates.map(est => (<div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: est.status === 'PAID' ? '#f0fdf4' : 'transparent'}}><div style={{color: est.type === 'INVOICE' ? '#16a34a' : '#333'}}><span>{est.type === 'INVOICE' ? `📄 ${est.invoiceNumber}` : '📝 Estimate'} - {est.customer} ({est.reg})</span><div style={{fontSize:'0.8em', color:'#666'}}>{new Date(est.createdAt?.seconds * 1000).toLocaleDateString()} - £{est.totals?.finalDue.toFixed(2)}</div></div><div style={{display:'flex', gap:'5px'}}><button onClick={() => deleteJob(est.id)} style={{border:'none', background:'none', color:'#ef4444', fontSize:'1.2em', cursor:'pointer'}}>🗑️</button><button onClick={() => togglePaid(est.id, est.status)} style={{padding:'5px 10px', border:'1px solid #ccc', borderRadius:'4px', background: est.status === 'PAID' ? '#16a34a' : 'white', color: est.status === 'PAID' ? 'white' : '#333', cursor:'pointer'}}>{est.status === 'PAID' ? 'PAID' : 'MARK PAID'}</button></div></div>))}
             </div>
 
             <style>{`@media print { .no-print { display: none !important; } body { padding: 0; margin: 0; } }`}</style>
