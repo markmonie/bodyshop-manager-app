@@ -106,24 +106,33 @@ const EstimateApp = ({ userId }) => {
         return () => { unsubEst(); unsubExp(); };
     }, []);
 
-    // AUTO-LOAD & SAVE DRAFT
+    // --- IRONCLAD AUTO-SAVE & LOAD ---
+    // Loads EVERYTHING back when you reopen the app
     useEffect(() => {
         const savedData = localStorage.getItem('triple_mmm_draft');
         if (savedData) {
             const draft = JSON.parse(savedData);
-            setName(draft.name || ''); setReg(draft.reg || ''); setItems(draft.items || []);
-            setLaborRate(draft.laborRate || settings.laborRate); setClaimNum(draft.claimNum || '');
-            setNetworkCode(draft.networkCode || ''); setPhotos(draft.photos || []);
-            setPaintAllocated(draft.paintAllocated || '');
+            setName(draft.name || ''); setAddress(draft.address || ''); setPhone(draft.phone || ''); setEmail(draft.email || '');
+            setReg(draft.reg || ''); setMileage(draft.mileage || ''); setMakeModel(draft.makeModel || '');
+            setItems(draft.items || []); setLaborRate(draft.laborRate || settings.laborRate); setLaborHours(draft.laborHours || '');
+            setClaimNum(draft.claimNum || ''); setNetworkCode(draft.networkCode || ''); 
+            setPhotos(draft.photos || []); setPaintAllocated(draft.paintAllocated || ''); setExcess(draft.excess || '');
             setBookingDate(draft.bookingDate || ''); setBookingTime(draft.bookingTime || '09:00');
+            setInvoiceNum(draft.invoiceNum || ''); setInvoiceDate(draft.invoiceDate || '');
         }
-    }, [settings]);
+    }, [settings]); // Depend on settings so we default to correct labor rate if no draft
 
+    // Saves EVERYTHING on every change
     useEffect(() => {
         if(mode === 'SETTINGS' || mode === 'DASHBOARD') return;
-        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime };
+        const draft = { 
+            name, address, phone, email, reg, mileage, makeModel, items, 
+            laborRate, laborHours, claimNum, networkCode, photos, paintAllocated, excess,
+            bookingDate, bookingTime, invoiceNum, invoiceDate
+        };
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
-    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, mode]);
+    }, [name, address, phone, email, reg, mileage, makeModel, items, laborRate, laborHours, claimNum, networkCode, photos, paintAllocated, excess, bookingDate, bookingTime, invoiceNum, invoiceDate, mode]);
+
 
     // --- GOOGLE CALENDAR LINK ---
     const addToGoogleCalendar = () => {
@@ -140,8 +149,6 @@ const EstimateApp = ({ userId }) => {
     };
 
     // --- FUNCTIONS ---
-
-    // This is the function that was missing!
     const checkHistory = async (regInput) => {
         if(regInput.length < 3) return;
         const q = query(collection(db, 'estimates'), where("reg", "==", regInput), orderBy('createdAt', 'desc'));
@@ -238,7 +245,7 @@ const EstimateApp = ({ userId }) => {
                 type: type, status: 'UNPAID', invoiceNumber: finalInvNum,
                 customer: name, address, phone, email, claimNum, networkCode,
                 reg, mileage, makeModel, items, laborHours, laborRate, vatRate, excess, photos,
-                bookingDate, bookingTime, // Save booking info
+                bookingDate, bookingTime, 
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId
             });
             setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
@@ -449,6 +456,8 @@ const EstimateApp = ({ userId }) => {
             )}
 
             <div className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '15px', background: 'white', borderTop: '1px solid #ccc', display: 'flex', justifyContent: 'center', gap: '15px', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', flexWrap: 'wrap' }}>
+                {mode !== 'ESTIMATE' && <button onClick={() => setMode('ESTIMATE')} style={{...secondaryBtn, background: '#666'}}>← BACK</button>}
+                
                 <button onClick={() => saveToCloud('ESTIMATE')} disabled={saveStatus === 'SAVING'} style={saveStatus === 'SUCCESS' ? successBtn : primaryBtn}>{saveStatus === 'SAVING' ? 'SAVING...' : (saveStatus === 'SUCCESS' ? '✅ SAVED!' : 'SAVE ESTIMATE')}</button>
                 {mode === 'ESTIMATE' && <button onClick={() => saveToCloud('INVOICE')} style={secondaryBtn}>GENERATE INVOICE</button>}
                 <button onClick={() => setMode('JOBCARD')} style={{...secondaryBtn, background: '#4b5563'}}>JOB CARD</button>
