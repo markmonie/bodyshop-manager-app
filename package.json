@@ -1,25 +1,37 @@
 {
-  "short_name": "Triple MMM",
-  "name": "Triple MMM Bodyshop Manager",
-  "icons": [
-    {
-      "src": "1768838955583.png",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/png"
-    },
-    {
-      "src": "1768838955583.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "1768838955583.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#cc0000",
-  "background_color": "#ffffff"
+  "name": "bodyshop-manager-app",
+  "version": "0.1.0",
+  "private": true,
+  "homepage": "https://markmonie.github.io/bodyshop-manager-app",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "firebase": "^10.12.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "CI=false react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
 }
