@@ -43,7 +43,7 @@ const EstimateApp = ({ userId }) => {
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
         email: 'markmonie72@gmail.com',
-        dvlaKey: '' // NEW: Place to store your key later
+        dvlaKey: ''
     });
 
     // Inputs
@@ -58,7 +58,6 @@ const EstimateApp = ({ userId }) => {
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
 
-    // Items
     const [itemDesc, setItemDesc] = useState('');
     const [itemCost, setItemCost] = useState('');
     const [items, setItems] = useState([]);
@@ -123,12 +122,10 @@ const EstimateApp = ({ userId }) => {
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
     }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, mode]);
 
-    // --- DVLA LOOKUP (Simulated until Key arrives) ---
+    // --- DVLA LOOKUP ---
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Registration");
-        
         if (settings.dvlaKey) {
-            // REAL LOOKUP (Future)
             try {
                 const res = await axios.post(
                     'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles',
@@ -141,7 +138,6 @@ const EstimateApp = ({ userId }) => {
                 }
             } catch (e) { alert("DVLA Error: " + e.message); }
         } else {
-            // SIMULATED LOOKUP
             alert("Waiting for DVLA Key... (Simulated: Vehicle Found!)");
             setMakeModel("FORD TRANSIT (Simulated)");
         }
@@ -154,6 +150,10 @@ const EstimateApp = ({ userId }) => {
         const price = cost * (1 + (markupPercent / 100)); 
         setItems([...items, { desc: itemDesc, costPrice: cost, price: price }]);
         setItemDesc(''); setItemCostPrice('');
+    };
+
+    const removeItem = (indexToRemove) => {
+        setItems(items.filter((_, index) => index !== indexToRemove));
     };
 
     const calculateJobFinancials = () => {
