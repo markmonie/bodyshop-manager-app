@@ -30,15 +30,14 @@ const successBtn = { padding: '12px 24px', background: '#15803d', color: 'white'
 const secondaryBtn = { padding: '12px 24px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' };
 
 const EstimateApp = ({ userId }) => {
-    // Modes
     const [mode, setMode] = useState('ESTIMATE');
     const [invoiceNum, setInvoiceNum] = useState('');
     const [invoiceDate, setInvoiceDate] = useState('');
 
-    // --- SETTINGS STATE ---
+    // Settings
     const [settings, setSettings] = useState({
         laborRate: '50',
-        vatRate: '0',
+        markup: '20',
         companyName: 'TRIPLE MMM',
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
@@ -54,22 +53,25 @@ const EstimateApp = ({ userId }) => {
     const [claimNum, setClaimNum] = useState('');
     const [networkCode, setNetworkCode] = useState('');
     
+    // Vehicle & Booking
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
+    const [bookingDate, setBookingDate] = useState(''); // NEW
+    const [bookingTime, setBookingTime] = useState('09:00'); // NEW
 
+    // Items
     const [itemDesc, setItemDesc] = useState('');
-    const [itemCost, setItemCost] = useState('');
-    const [items, setItems] = useState([]);
     const [itemCostPrice, setItemCostPrice] = useState(''); 
+    const [items, setItems] = useState([]);
     
-    // Photos & Expenses
+    // Photos & Internal
     const [photos, setPhotos] = useState([]);
     const [uploading, setUploading] = useState(false);
+    const [paintAllocated, setPaintAllocated] = useState(''); 
     const [expDesc, setExpDesc] = useState('');
     const [expAmount, setExpAmount] = useState('');
     const [expCategory, setExpCategory] = useState('Stock');
-    const [paintAllocated, setPaintAllocated] = useState(''); 
 
     // Financials
     const [laborHours, setLaborHours] = useState('');
@@ -113,16 +115,30 @@ const EstimateApp = ({ userId }) => {
             setLaborRate(draft.laborRate || settings.laborRate); setClaimNum(draft.claimNum || '');
             setNetworkCode(draft.networkCode || ''); setPhotos(draft.photos || []);
             setPaintAllocated(draft.paintAllocated || '');
+            setBookingDate(draft.bookingDate || ''); setBookingTime(draft.bookingTime || '09:00');
         }
     }, [settings]);
 
     useEffect(() => {
         if(mode === 'SETTINGS' || mode === 'DASHBOARD') return;
-        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated };
+        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime };
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
-    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, mode]);
+    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, mode]);
 
-    // --- DVLA LOOKUP ---
+    // --- GOOGLE CALENDAR LINK ---
+    const addToGoogleCalendar = () => {
+        if(!bookingDate) return alert("Please select a Booking Date first.");
+        const start = bookingDate.replace(/-/g, '') + 'T' + bookingTime.replace(/:/g, '') + '00';
+        const end = bookingDate.replace(/-/g, '') + 'T' + (parseInt(bookingTime.split(':')[0]) + 1).toString().padStart(2, '0') + bookingTime.split(':')[1] + '00';
+        
+        const title = encodeURIComponent(`Repair: ${name} (${reg})`);
+        const details = encodeURIComponent(`Vehicle: ${makeModel}\nPhone: ${phone}\n\nWork Required:\n${items.map(i => '- ' + i.desc).join('\n')}`);
+        const loc = encodeURIComponent(settings.address);
+        
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${loc}`;
+        window.open(url, '_blank');
+    };
+
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Registration");
         if (settings.dvlaKey) {
@@ -203,6 +219,7 @@ const EstimateApp = ({ userId }) => {
                 type: type, status: 'UNPAID', invoiceNumber: finalInvNum,
                 customer: name, address, phone, email, claimNum, networkCode,
                 reg, mileage, makeModel, items, laborHours, laborRate, vatRate, excess, photos,
+                bookingDate, bookingTime, // Save booking info
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId
             });
             setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
@@ -212,7 +229,9 @@ const EstimateApp = ({ userId }) => {
     const clearForm = () => {
         if(window.confirm("Start fresh?")) {
             setMode('ESTIMATE'); setInvoiceNum(''); setInvoiceDate(''); setName(''); setAddress(''); setPhone(''); setEmail('');
-            setReg(''); setMileage(''); setMakeModel(''); setClaimNum(''); setNetworkCode(''); setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated('');
+            setReg(''); setMileage(''); setMakeModel(''); setClaimNum(''); setNetworkCode(''); 
+            setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated('');
+            setBookingDate(''); setBookingTime('09:00');
             setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
             if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
         }
@@ -327,15 +346,22 @@ const EstimateApp = ({ userId }) => {
                 <div>
                     <h4 style={headerStyle}>VEHICLE DETAILS</h4>
                     <div style={{display:'flex', gap:'10px'}}>
-                        <input placeholder="Reg" value={reg} onChange={e => setReg(e.target.value)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background:'#f0f9ff'}} />
-                        
-                        {/* LOOKUP BUTTON */}
+                        <input placeholder="Reg" value={reg} onChange={e => setReg(e.target.value)} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background:'#f0f9ff'}} />
                         <button onClick={lookupReg} className="no-print" style={{background:'#4b5563', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>🔎</button>
-                        
                         <input placeholder="Mileage" value={mileage} onChange={e => setMileage(e.target.value)} style={inputStyle} />
                     </div>
                     <input placeholder="Make / Model" value={makeModel} onChange={e => setMakeModel(e.target.value)} style={inputStyle} />
                     
+                    {/* BOOKING SECTION */}
+                    <div style={{marginTop:'15px', borderTop:'1px dashed #ccc', paddingTop:'10px'}}>
+                        <h4 style={{fontSize:'0.9em', color:'#666', margin:'0 0 5px 0'}}>BOOKING</h4>
+                        <div style={{display:'flex', gap:'5px', alignItems:'center'}}>
+                            <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} style={{...inputStyle, marginBottom:0}} />
+                            <input type="time" value={bookingTime} onChange={e => setBookingTime(e.target.value)} style={{...inputStyle, marginBottom:0, width:'100px'}} />
+                            <button onClick={addToGoogleCalendar} className="no-print" style={{background:'#2563eb', color:'white', border:'none', padding:'8px', borderRadius:'4px', cursor:'pointer'}}>📅 Add</button>
+                        </div>
+                    </div>
+
                     <div className="no-print" style={{marginTop:'10px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
                         <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
                     </div>
