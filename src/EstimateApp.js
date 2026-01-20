@@ -30,11 +30,14 @@ const successBtn = { padding: '12px 24px', background: '#15803d', color: 'white'
 const secondaryBtn = { padding: '12px 24px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' };
 
 const EstimateApp = ({ userId }) => {
+    // Modes: 'ESTIMATE', 'INVOICE', 'SATISFACTION', 'JOBCARD', 'SETTINGS', 'DASHBOARD'
     const [mode, setMode] = useState('ESTIMATE');
     const [invoiceNum, setInvoiceNum] = useState('');
     const [invoiceDate, setInvoiceDate] = useState('');
+    
+    // Tracks if this is an "Excess Only" invoice or "Main" invoice
+    const [invoiceType, setInvoiceType] = useState('MAIN'); 
 
-    // Settings
     const [settings, setSettings] = useState({
         laborRate: '50',
         markup: '20',
@@ -53,7 +56,10 @@ const EstimateApp = ({ userId }) => {
     const [claimNum, setClaimNum] = useState('');
     const [networkCode, setNetworkCode] = useState('');
     
-    // Vehicle & Booking
+    // Insurance Company Details (New)
+    const [insuranceCo, setInsuranceCo] = useState('');
+    const [insuranceAddr, setInsuranceAddr] = useState('');
+
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
@@ -63,12 +69,10 @@ const EstimateApp = ({ userId }) => {
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
 
-    // Items
     const [itemDesc, setItemDesc] = useState('');
     const [itemCostPrice, setItemCostPrice] = useState(''); 
     const [items, setItems] = useState([]);
     
-    // Photos & Internal
     const [photos, setPhotos] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [paintAllocated, setPaintAllocated] = useState(''); 
@@ -76,13 +80,11 @@ const EstimateApp = ({ userId }) => {
     const [expAmount, setExpAmount] = useState('');
     const [expCategory, setExpCategory] = useState('Stock');
 
-    // Financials
     const [laborHours, setLaborHours] = useState('');
     const [laborRate, setLaborRate] = useState('50');
     const [vatRate, setVatRate] = useState('0');
-    const [excess, setExcess] = useState('');
+    const [excess, setExcess] = useState(''); // When > 0, triggers Insurance Mode
     
-    // System
     const [savedEstimates, setSavedEstimates] = useState([]);
     const [generalExpenses, setGeneralExpenses] = useState([]);
     const [saveStatus, setSaveStatus] = useState('IDLE');
@@ -117,7 +119,8 @@ const EstimateApp = ({ userId }) => {
             setName(draft.name || ''); setReg(draft.reg || ''); setItems(draft.items || []);
             setLaborRate(draft.laborRate || settings.laborRate); setClaimNum(draft.claimNum || '');
             setNetworkCode(draft.networkCode || ''); setPhotos(draft.photos || []);
-            setPaintAllocated(draft.paintAllocated || '');
+            setPaintAllocated(draft.paintAllocated || ''); setExcess(draft.excess || '');
+            setInsuranceCo(draft.insuranceCo || ''); setInsuranceAddr(draft.insuranceAddr || '');
             setBookingDate(draft.bookingDate || ''); setBookingTime(draft.bookingTime || '09:00');
             setVin(draft.vin || ''); setPaintCode(draft.paintCode || '');
         }
@@ -125,11 +128,10 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         if(mode === 'SETTINGS' || mode === 'DASHBOARD') return;
-        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode };
+        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr };
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
-    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, mode]);
+    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, mode]);
 
-    // --- GOOGLE CALENDAR LINK ---
     const addToGoogleCalendar = () => {
         if(!bookingDate) return alert("Please select a Booking Date first.");
         const start = bookingDate.replace(/-/g, '') + 'T' + bookingTime.replace(/:/g, '') + '00';
@@ -141,7 +143,6 @@ const EstimateApp = ({ userId }) => {
         window.open(url, '_blank');
     };
 
-    // --- FUNCTIONS ---
     const checkHistory = async (regInput) => {
         if(regInput.length < 3) return;
         const q = query(collection(db, 'estimates'), where("reg", "==", regInput), orderBy('createdAt', 'desc'));
@@ -156,6 +157,8 @@ const EstimateApp = ({ userId }) => {
                 setAddress(prev.address || '');
                 setVin(prev.vin || '');
                 setPaintCode(prev.paintCode || '');
+                // Also load insurance if they are a repeat claimant
+                if(prev.insuranceCo) setInsuranceCo(prev.insuranceCo);
                 setFoundHistory(true);
             }
         } catch(e) { }
@@ -232,26 +235,47 @@ const EstimateApp = ({ userId }) => {
     
     const deleteJob = async (id) => {
         if(window.confirm("WARNING: Delete this job permanently?")) {
-            try { await deleteDoc(doc(db, 'estimates', id)); } catch (e) { alert("Error: " + e.message); }
+            try { await deleteDoc(doc(db, 'estimates', id)); } catch (e) { alert("Error deleting: " + e.message); }
         }
     };
 
     const deleteExpense = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, 'expenses', id)); };
 
-    const saveToCloud = async (type) => {
+    const saveToCloud = async (targetType) => {
+        // targetType can be: ESTIMATE, INVOICE_MAIN, INVOICE_EXCESS
         if (!name || !reg) return alert("Enter Customer Name & Reg");
         setSaveStatus('SAVING');
+        
         try {
             let finalInvNum = invoiceNum;
-            if(type === 'INVOICE' && !finalInvNum) {
+            let displayType = targetType; // What we save to DB
+
+            // Generate Invoice Number if creating one
+            if((targetType === 'INVOICE_MAIN' || targetType === 'INVOICE_EXCESS') && !finalInvNum) {
                 finalInvNum = `INV-${1000 + savedEstimates.length + 1}`;
                 setInvoiceNum(finalInvNum);
                 setInvoiceDate(new Date().toLocaleDateString());
-                setMode('INVOICE');
             }
+
+            // Set Mode for View
+            if(targetType === 'INVOICE_MAIN') {
+                setMode('INVOICE');
+                setInvoiceType('MAIN');
+                displayType = 'INVOICE'; // Save as generic invoice type
+            } else if (targetType === 'INVOICE_EXCESS') {
+                setMode('INVOICE');
+                setInvoiceType('EXCESS');
+                displayType = 'INVOICE (EXCESS)';
+            } else {
+                setMode(targetType);
+            }
+
             await addDoc(collection(db, 'estimates'), {
-                type: type, status: 'UNPAID', invoiceNumber: finalInvNum,
+                type: displayType, 
+                status: 'UNPAID', 
+                invoiceNumber: finalInvNum,
                 customer: name, address, phone, email, claimNum, networkCode,
+                insuranceCo, insuranceAddr, // New Fields
                 reg, mileage, makeModel, vin, paintCode,
                 items, laborHours, laborRate, vatRate, excess, photos,
                 bookingDate, bookingTime, 
@@ -266,6 +290,7 @@ const EstimateApp = ({ userId }) => {
             setMode('ESTIMATE'); setInvoiceNum(''); setInvoiceDate(''); setName(''); setAddress(''); setPhone(''); setEmail('');
             setReg(''); setMileage(''); setMakeModel(''); setClaimNum(''); setNetworkCode(''); setVin(''); setPaintCode('');
             setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated('');
+            setInsuranceCo(''); setInsuranceAddr(''); // Clear insurance
             setBookingDate(''); setBookingTime('09:00'); setFoundHistory(false);
             setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
             if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
@@ -291,11 +316,12 @@ const EstimateApp = ({ userId }) => {
     useEffect(() => { clearSignature(); }, [mode]);
 
     const downloadAccountingCSV = () => {
-        const invoices = savedEstimates.filter(est => est.type === 'INVOICE');
-        let csv = "data:text/csv;charset=utf-8,Date,Invoice,Customer,Total,Job Cost,Profit,Status\n";
+        const invoices = savedEstimates.filter(est => est.type && est.type.includes('INVOICE'));
+        let csv = "data:text/csv;charset=utf-8,Date,Type,Invoice,Customer,Reg,Total,Status\n";
         invoices.forEach(inv => {
             const d = inv.createdAt ? new Date(inv.createdAt.seconds * 1000).toLocaleDateString() : 'N/A';
-            csv += `${d},${inv.invoiceNumber},${inv.customer},${inv.totals.invoiceTotal},${inv.totals.totalJobCost},${inv.totals.jobProfit},${inv.status}\n`;
+            const total = inv.type.includes('EXCESS') ? inv.excess : inv.totals.finalDue; // Correct total based on type
+            csv += `${d},${inv.type},${inv.invoiceNumber},${inv.customer},${inv.reg},${parseFloat(total).toFixed(2)},${inv.status}\n`;
         });
         const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "TripleMMM_Ledger.csv"; link.click();
     };
@@ -326,8 +352,8 @@ const EstimateApp = ({ userId }) => {
     );
 
     if(mode === 'DASHBOARD') {
-        const totalSales = savedEstimates.filter(e => e.type === 'INVOICE').reduce((acc, curr) => acc + (curr.totals?.invoiceTotal || 0), 0);
-        const totalJobCosts = savedEstimates.filter(e => e.type === 'INVOICE').reduce((acc, curr) => acc + (curr.totals?.totalJobCost || 0), 0);
+        const totalSales = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.type.includes('EXCESS') ? parseFloat(curr.excess) : curr.totals?.finalDue || 0), 0);
+        const totalJobCosts = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.totalJobCost || 0), 0);
         const totalOverheads = generalExpenses.reduce((acc, curr) => acc + curr.amount, 0);
         const netProfit = totalSales - totalJobCosts - totalOverheads;
         return (
@@ -360,7 +386,10 @@ const EstimateApp = ({ userId }) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '30px' }}>
-                <h2 style={{ margin: 0, fontSize: '2em', color: '#333' }}>{mode === 'SATISFACTION' ? 'SATISFACTION NOTE' : (mode === 'JOBCARD' ? 'WORKSHOP JOB CARD' : mode)}</h2>
+                {/* DYNAMIC TITLE BASED ON INVOICE TYPE */}
+                <h2 style={{ margin: 0, fontSize: '2em', color: '#333' }}>
+                    {mode === 'SATISFACTION' ? 'SATISFACTION NOTE' : (mode === 'JOBCARD' ? 'WORKSHOP JOB CARD' : (invoiceType === 'EXCESS' ? 'INVOICE (EXCESS)' : mode))}
+                </h2>
                 {mode !== 'ESTIMATE' && mode !== 'JOBCARD' && <div style={{ textAlign: 'right' }}><div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>{invoiceNum}</div><div>Date: {invoiceDate || new Date().toLocaleDateString()}</div></div>}
             </div>
 
@@ -377,6 +406,15 @@ const EstimateApp = ({ userId }) => {
                         <input placeholder="Claim No." value={claimNum} onChange={e => setClaimNum(e.target.value)} style={{...inputStyle, border:'1px solid #2563eb'}} />
                         <input placeholder="Network Code" value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={{...inputStyle, border:'1px solid #2563eb'}} />
                     </div>
+                    
+                    {/* INSURANCE COMPANY BOX (Only appears if Excess > 0) */}
+                    {excess > 0 && (
+                         <div style={{marginTop:'10px', background:'#fffbeb', padding:'10px', borderRadius:'4px', border:'1px solid #f59e0b'}}>
+                            <h5 style={{margin:'0 0 5px 0', color:'#b45309'}}>Insurance Company (For Billing)</h5>
+                            <input placeholder="Insurer Name" value={insuranceCo} onChange={e => setInsuranceCo(e.target.value)} style={{...inputStyle, marginBottom:'5px'}} />
+                            <textarea placeholder="Insurer Address" value={insuranceAddr} onChange={e => setInsuranceAddr(e.target.value)} style={{...inputStyle, height:'50px', marginBottom:0}} />
+                        </div>
+                    )}
                 </div>
                 <div>
                     <h4 style={headerStyle}>VEHICLE DETAILS</h4>
@@ -388,7 +426,6 @@ const EstimateApp = ({ userId }) => {
                     {foundHistory && <div style={{color:'green', fontSize:'0.8em', marginTop:'-8px', marginBottom:'5px'}}>✓ Found previous customer!</div>}
                     <input placeholder="Make / Model" value={makeModel} onChange={e => setMakeModel(e.target.value)} style={inputStyle} />
                     
-                    {/* NEW: INSURANCE DETAILS */}
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px', marginTop:'5px'}}>
                         <input placeholder="Chassis / VIN" value={vin} onChange={e => setVin(e.target.value)} style={inputStyle} />
                         <input placeholder="Paint Code" value={paintCode} onChange={e => setPaintCode(e.target.value)} style={inputStyle} />
@@ -402,8 +439,7 @@ const EstimateApp = ({ userId }) => {
                             <button onClick={addToGoogleCalendar} className="no-print" style={{background:'#2563eb', color:'white', border:'none', padding:'8px', borderRadius:'4px', cursor:'pointer'}}>📅 Add</button>
                         </div>
                     </div>
-
-                    <div className="no-print" style={{marginTop:'100px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
+                    <div className="no-print" style={{marginTop:'10px', background:'#f0fdf4', padding:'10px', borderRadius:'4px', border:'1px dashed #16a34a'}}>
                         <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
                     </div>
                 </div>
@@ -413,26 +449,51 @@ const EstimateApp = ({ userId }) => {
 
             {mode !== 'SATISFACTION' && (
                 <>
-                    <div className="no-print" style={{ background: '#f8fafc', padding: '15px', marginBottom: '15px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input placeholder="Desc" value={itemDesc} onChange={e => setItemDesc(e.target.value)} style={{ flexGrow: 1, padding: '10px' }} />
-                            <input type="number" placeholder="Cost £" value={itemCostPrice} onChange={e => setItemCostPrice(e.target.value)} style={{ width: '80px', padding: '10px' }} />
-                            <button onClick={addItem} style={{ background: '#333', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer' }}>Add (+{settings.markup}%)</button>
-                        </div>
-                    </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
-                        <thead><tr style={{textAlign:'left', borderBottom:'2px solid #333', color: '#333'}}><th style={{padding:'10px'}}>DESCRIPTION</th>{mode !== 'JOBCARD' && <th style={{textAlign:'right', padding:'10px'}}>PRICE</th>}</tr></thead>
-                        <tbody>{items.map((item, i) => (<tr key={i} style={{ borderBottom: '1px solid #eee' }}><td style={{padding:'12px 10px'}}>{item.desc}</td>{mode !== 'JOBCARD' && <td style={{textAlign:'right', padding:'12px 10px'}}>£{item.price.toFixed(2)}</td>}<td className="no-print" style={{textAlign:'center'}}><button onClick={() => removeItem(i)} style={{background:'#ef4444', color:'white', border:'none', borderRadius:'50%', width:'24px', height:'24px', cursor:'pointer', fontWeight:'bold'}}>×</button></td></tr>))}</tbody>
-                    </table>
+                    {/* ONLY SHOW REPAIR ITEMS IF NOT EXCESS INVOICE */}
+                    {invoiceType !== 'EXCESS' && (
+                        <>
+                            <div className="no-print" style={{ background: '#f8fafc', padding: '15px', marginBottom: '15px', borderRadius: '8px' }}>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <input placeholder="Desc" value={itemDesc} onChange={e => setItemDesc(e.target.value)} style={{ flexGrow: 1, padding: '10px' }} />
+                                    <input type="number" placeholder="Cost £" value={itemCostPrice} onChange={e => setItemCostPrice(e.target.value)} style={{ width: '80px', padding: '10px' }} />
+                                    <button onClick={addItem} style={{ background: '#333', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer' }}>Add (+{settings.markup}%)</button>
+                                </div>
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+                                <thead><tr style={{textAlign:'left', borderBottom:'2px solid #333', color: '#333'}}><th style={{padding:'10px'}}>DESCRIPTION</th>{mode !== 'JOBCARD' && <th style={{textAlign:'right', padding:'10px'}}>PRICE</th>}</tr></thead>
+                                <tbody>{items.map((item, i) => (<tr key={i} style={{ borderBottom: '1px solid #eee' }}><td style={{padding:'12px 10px'}}>{item.desc}</td>{mode !== 'JOBCARD' && <td style={{textAlign:'right', padding:'12px 10px'}}>£{item.price.toFixed(2)}</td>}<td className="no-print" style={{textAlign:'center'}}><button onClick={() => removeItem(i)} style={{background:'#ef4444', color:'white', border:'none', borderRadius:'50%', width:'24px', height:'24px', cursor:'pointer', fontWeight:'bold'}}>×</button></td></tr>))}</tbody>
+                            </table>
+                        </>
+                    )}
+                    
+                    {/* SPECIAL VIEW FOR EXCESS INVOICE */}
+                    {invoiceType === 'EXCESS' && (
+                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+                            <thead><tr style={{textAlign:'left', borderBottom:'2px solid #333', color: '#333'}}><th style={{padding:'10px'}}>DESCRIPTION</th><th style={{textAlign:'right', padding:'10px'}}>PRICE</th></tr></thead>
+                            <tbody><tr style={{ borderBottom: '1px solid #eee' }}><td style={{padding:'12px 10px'}}>Insurance Excess Contribution for Claim: {claimNum}</td><td style={{textAlign:'right', padding:'12px 10px'}}>£{excess}</td></tr></tbody>
+                        </table>
+                    )}
+
                     {mode !== 'JOBCARD' && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <div style={{ width: '300px', textAlign: 'right' }}>
-                                <div className="no-print" style={{marginBottom:'10px'}}>Labor: <input type="number" value={laborHours} onChange={e => setLaborHours(e.target.value)} style={{width:'50px'}} /> hrs @ £<input type="number" value={laborRate} onChange={e => setLaborRate(e.target.value)} style={{width:'50px'}} /></div>
-                                <div style={rowStyle}><span>Labor Total:</span> <span>£{totals.labor.toFixed(2)}</span></div>
-                                <div style={rowStyle}><span>Parts Total:</span> <span>£{totals.partsPrice.toFixed(2)}</span></div>
-                                <div style={{...rowStyle, fontSize:'1.2em', fontWeight:'bold', borderTop:'2px solid #333', marginTop:'5px'}}><span>GRAND TOTAL:</span> <span>£{totals.invoiceTotal.toFixed(2)}</span></div>
-                                <div style={{...rowStyle, color:'#dc2626'}}><span>Less Excess:</span><span className="no-print"><input type="number" value={excess} onChange={e => setExcess(e.target.value)} style={{width:'60px'}} /></span><span>-£{totals.excessAmount.toFixed(2)}</span></div>
-                                <div style={{...rowStyle, fontSize:'1.4em', fontWeight:'bold', color:'#333', borderTop:'2px solid #333', marginTop:'5px', paddingTop:'10px'}}><span>BALANCE DUE:</span> <span>£{totals.finalDue.toFixed(2)}</span></div>
+                                
+                                {invoiceType !== 'EXCESS' && (
+                                    <>
+                                    <div className="no-print" style={{marginBottom:'10px'}}>Labor: <input type="number" value={laborHours} onChange={e => setLaborHours(e.target.value)} style={{width:'50px'}} /> hrs @ £<input type="number" value={laborRate} onChange={e => setLaborRate(e.target.value)} style={{width:'50px'}} /></div>
+                                    <div style={rowStyle}><span>Labor Total:</span> <span>£{totals.labor.toFixed(2)}</span></div>
+                                    <div style={rowStyle}><span>Parts Total:</span> <span>£{totals.partsPrice.toFixed(2)}</span></div>
+                                    <div style={{...rowStyle, fontSize:'1.2em', fontWeight:'bold', borderTop:'2px solid #333', marginTop:'5px'}}><span>GRAND TOTAL:</span> <span>£{totals.invoiceTotal.toFixed(2)}</span></div>
+                                    <div style={{...rowStyle, color:'#dc2626'}}><span>Less Excess:</span><span className="no-print"><input type="number" value={excess} onChange={e => setExcess(e.target.value)} style={{width:'60px'}} /></span><span>-£{totals.excessAmount.toFixed(2)}</span></div>
+                                    </>
+                                )}
+
+                                <div style={{...rowStyle, fontSize:'1.4em', fontWeight:'bold', color:'#333', borderTop:'2px solid #333', marginTop:'5px', paddingTop:'10px'}}>
+                                    {/* SHOW DIFFERENT TOTAL BASED ON INVOICE TYPE */}
+                                    <span>BALANCE DUE:</span> 
+                                    <span>£{invoiceType === 'EXCESS' ? parseFloat(excess).toFixed(2) : totals.finalDue.toFixed(2)}</span>
+                                </div>
+                                
                                 <div className="no-print" style={{marginTop:'20px', padding:'10px', background:'#fef2f2', borderRadius:'4px', border:'1px dashed #f87171'}}>
                                     <h4 style={{margin:'0 0 5px 0', color:'#991b1b'}}>Internal Job Costs (Profit Check)</h4>
                                     <div style={rowStyle}><span>Allocated Materials:</span> <input type="number" value={paintAllocated} onChange={e => setPaintAllocated(e.target.value)} style={{width:'60px'}} /></div>
@@ -444,7 +505,26 @@ const EstimateApp = ({ userId }) => {
                     )}
                     {(mode === 'INVOICE' || mode === 'JOBCARD') && (
                         <div style={{ marginTop: '50px', padding: '20px', background: '#f9f9f9', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', border: '1px solid #ddd' }}>
-                            {mode === 'INVOICE' && <div><h4 style={{margin:'0 0 10px 0'}}>PAYMENT DETAILS</h4><div style={{fontSize:'0.9em', lineHeight:'1.6'}}>Account Name: <strong>{settings.companyName} BODY REPAIRS</strong><br/>Account No: <strong>06163462</strong><br/>Sort Code: <strong>80-22-60</strong><br/>Bank: <strong>BANK OF SCOTLAND</strong></div></div>}
+                            {mode === 'INVOICE' && (
+                                <div>
+                                    <h4 style={{margin:'0 0 10px 0'}}>PAYMENT DETAILS</h4>
+                                    <div style={{fontSize:'0.9em', lineHeight:'1.6'}}>
+                                        {/* Dynamic Bill To Address */}
+                                        <strong>Bill To:</strong> {invoiceType === 'EXCESS' ? name : (insuranceCo || name)}<br/>
+                                        <br/>
+                                        Account Name: <strong>{settings.companyName} BODY REPAIRS</strong><br/>
+                                        Account No: <strong>06163462</strong><br/>
+                                        Sort Code: <strong>80-22-60</strong><br/>
+                                        Bank: <strong>BANK OF SCOTLAND</strong>
+                                    </div>
+                                    {/* TERMS AND CONDITIONS */}
+                                    <div style={{marginTop:'15px', fontSize:'0.7em', color:'#666', borderTop:'1px solid #ccc', paddingTop:'5px'}}>
+                                        Payment terms: <strong>{invoiceType === 'EXCESS' ? '7 Days' : '30 Days'}</strong> from date of invoice.<br/>
+                                        Title of goods remains with Triple MMM until paid in full.<br/>
+                                        All work guaranteed for 12 months.
+                                    </div>
+                                </div>
+                            )}
                             {mode === 'JOBCARD' && <div><strong>Technician Notes:</strong><br/><br/>_______________________</div>}
                             <div style={{ textAlign: 'center', width: '350px', marginTop: '20px' }}>
                                 <div className="no-print" style={{border: '1px dashed #ccc', height: '100px', backgroundColor: '#fff', position: 'relative', marginBottom:'5px'}}><canvas ref={canvasRef} width={350} height={100} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} style={{width: '100%', height: '100%', touchAction: 'none'}} /><button onClick={clearSignature} style={{position: 'absolute', top: 5, right: 5, fontSize: '0.7em', padding: '2px 5px'}}>Clear</button></div>
@@ -469,7 +549,21 @@ const EstimateApp = ({ userId }) => {
 
             <div className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '15px', background: 'white', borderTop: '1px solid #ccc', display: 'flex', justifyContent: 'center', gap: '15px', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', flexWrap: 'wrap' }}>
                 <button onClick={() => saveToCloud('ESTIMATE')} disabled={saveStatus === 'SAVING'} style={saveStatus === 'SUCCESS' ? successBtn : primaryBtn}>{saveStatus === 'SAVING' ? 'SAVING...' : (saveStatus === 'SUCCESS' ? '✅ SAVED!' : 'SAVE ESTIMATE')}</button>
-                {mode === 'ESTIMATE' && <button onClick={() => saveToCloud('INVOICE')} style={secondaryBtn}>GENERATE INVOICE</button>}
+                
+                {mode === 'ESTIMATE' && (
+                    <>
+                        {/* SMART BUTTONS: If Excess exists, show Split Invoice options */}
+                        {parseFloat(excess) > 0 ? (
+                            <>
+                                <button onClick={() => saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background: '#4338ca'}}>INVOICE INSURER</button>
+                                <button onClick={() => saveToCloud('INVOICE_EXCESS')} style={{...secondaryBtn, background: '#be123c'}}>INVOICE CUSTOMER EXCESS</button>
+                            </>
+                        ) : (
+                            <button onClick={() => saveToCloud('INVOICE')} style={secondaryBtn}>GENERATE INVOICE</button>
+                        )}
+                    </>
+                )}
+
                 <button onClick={() => setMode('JOBCARD')} style={{...secondaryBtn, background: '#4b5563'}}>JOB CARD</button>
                 {mode === 'INVOICE' && <button onClick={() => setMode('SATISFACTION')} style={{...secondaryBtn, background: '#d97706'}}>SATISFACTION NOTE</button>}
                 <button onClick={() => window.print()} style={{...secondaryBtn, background: '#333'}}>PRINT</button>
@@ -484,7 +578,7 @@ const EstimateApp = ({ userId }) => {
                     <input placeholder="Search jobs..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{padding:'8px', border:'1px solid #ccc', borderRadius:'4px'}} />
                     <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export CSV</button>
                 </div>
-                {filteredEstimates.map(est => (<div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: est.status === 'PAID' ? '#f0fdf4' : 'transparent'}}><div style={{color: est.type === 'INVOICE' ? '#16a34a' : '#333'}}><span>{est.type === 'INVOICE' ? `📄 ${est.invoiceNumber}` : '📝 Estimate'} - {est.customer} ({est.reg})</span><div style={{fontSize:'0.8em', color:'#666'}}>{new Date(est.createdAt?.seconds * 1000).toLocaleDateString()} - £{est.totals?.finalDue.toFixed(2)}</div></div><div style={{display:'flex', gap:'5px'}}><button onClick={() => deleteJob(est.id)} style={{border:'none', background:'none', color:'#ef4444', fontSize:'1.2em', cursor:'pointer'}}>🗑️</button><button onClick={() => togglePaid(est.id, est.status)} style={{padding:'5px 10px', border:'1px solid #ccc', borderRadius:'4px', background: est.status === 'PAID' ? '#16a34a' : 'white', color: est.status === 'PAID' ? 'white' : '#333', cursor:'pointer'}}>{est.status === 'PAID' ? 'PAID' : 'MARK PAID'}</button></div></div>))}
+                {filteredEstimates.map(est => (<div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: est.status === 'PAID' ? '#f0fdf4' : 'transparent'}}><div style={{color: est.type && est.type.includes('INVOICE') ? '#16a34a' : '#333'}}><span>{est.type && est.type.includes('INVOICE') ? `📄 ${est.invoiceNumber}` : '📝 Estimate'} - {est.customer} ({est.reg})</span><div style={{fontSize:'0.8em', color:'#666'}}>{new Date(est.createdAt?.seconds * 1000).toLocaleDateString()} - £{est.totals?.finalDue.toFixed(2)} {est.type && est.type.includes('EXCESS') ? '(EXCESS)' : ''}</div></div><div style={{display:'flex', gap:'5px'}}><button onClick={() => deleteJob(est.id)} style={{border:'none', background:'none', color:'#ef4444', fontSize:'1.2em', cursor:'pointer'}}>🗑️</button><button onClick={() => togglePaid(est.id, est.status)} style={{padding:'5px 10px', border:'1px solid #ccc', borderRadius:'4px', background: est.status === 'PAID' ? '#16a34a' : 'white', color: est.status === 'PAID' ? 'white' : '#333', cursor:'pointer'}}>{est.status === 'PAID' ? 'PAID' : 'MARK PAID'}</button></div></div>))}
             </div>
 
             <style>{`@media print { .no-print { display: none !important; } body { padding: 0; margin: 0; } }`}</style>
