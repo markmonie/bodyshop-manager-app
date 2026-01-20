@@ -57,8 +57,8 @@ const EstimateApp = ({ userId }) => {
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
-    const [bookingDate, setBookingDate] = useState(''); // NEW
-    const [bookingTime, setBookingTime] = useState('09:00'); // NEW
+    const [bookingDate, setBookingDate] = useState(''); 
+    const [bookingTime, setBookingTime] = useState('09:00'); 
 
     // Items
     const [itemDesc, setItemDesc] = useState('');
@@ -137,6 +137,25 @@ const EstimateApp = ({ userId }) => {
         
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${loc}`;
         window.open(url, '_blank');
+    };
+
+    // --- FUNCTIONS ---
+
+    // This is the function that was missing!
+    const checkHistory = async (regInput) => {
+        if(regInput.length < 3) return;
+        const q = query(collection(db, 'estimates'), where("reg", "==", regInput), orderBy('createdAt', 'desc'));
+        try {
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                const prev = querySnapshot.docs[0].data();
+                setMakeModel(prev.makeModel || ''); 
+                setName(prev.customer || '');
+                setPhone(prev.phone || '');
+                setEmail(prev.email || '');
+                setAddress(prev.address || '');
+            }
+        } catch(e) { }
     };
 
     const lookupReg = async () => {
@@ -347,7 +366,10 @@ const EstimateApp = ({ userId }) => {
                     <h4 style={headerStyle}>VEHICLE DETAILS</h4>
                     <div style={{display:'flex', gap:'10px'}}>
                         <input placeholder="Reg" value={reg} onChange={e => setReg(e.target.value)} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background:'#f0f9ff'}} />
+                        
+                        {/* LOOKUP BUTTON */}
                         <button onClick={lookupReg} className="no-print" style={{background:'#4b5563', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>🔎</button>
+                        
                         <input placeholder="Mileage" value={mileage} onChange={e => setMileage(e.target.value)} style={inputStyle} />
                     </div>
                     <input placeholder="Make / Model" value={makeModel} onChange={e => setMakeModel(e.target.value)} style={inputStyle} />
