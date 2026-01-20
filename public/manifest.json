@@ -3,19 +3,19 @@
   "name": "Triple MMM Bodyshop Manager",
   "icons": [
     {
-      "src": "1768838821897.png",
+      "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/png"
+      "type": "image/x-icon"
     },
     {
-      "src": "1768838821897.png",
+      "src": "favicon.ico",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/x-icon"
     },
     {
-      "src": "1768838821897.png",
+      "src": "favicon.ico",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/x-icon"
     }
   ],
   "start_url": ".",
