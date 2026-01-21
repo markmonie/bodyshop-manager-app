@@ -396,7 +396,7 @@ const EstimateApp = ({ userId }) => {
 
     // Helper for email link generation (Prevents Syntax Error)
     const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
-    const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Satisfaction Note: Attached`;
+    const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
     const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
     // --- VIEWS ---
@@ -645,6 +645,22 @@ const EstimateApp = ({ userId }) => {
                             <h4 style={{color:'#333', margin:'0 0 15px 0'}}>2. System Generated</h4>
                             <div style={rowStyle}><span>📸 Images</span><strong>{photos.length > 0 ? `✅ ${photos.length} Photos` : '❌ Need Photos'}</strong></div>
                             <div style={rowStyle}><span>💰 Invoice</span><strong>{invoiceNum ? `✅ ${invoiceNum}` : '❌ Pending'}</strong></div>
+                            
+                            {/* SATISFACTION NOTE UPLOAD */}
+                            <div style={{marginTop:'10px', paddingTop:'10px', borderTop:'1px dashed #eee'}}>
+                                <div style={{display:'flex', justifyContent:'space-between'}}>
+                                    <span>✍️ Satisfaction Note</span>
+                                    <span>{activeJob?.dealFile?.satisfaction ? '✅ Ready' : '❌ Pending'}</span>
+                                </div>
+                                
+                                <input type="file" style={{marginTop:'5px', fontSize:'0.9em'}} onChange={(e) => uploadDoc('satisfaction', e.target.files[0])} />
+                                
+                                {activeJob?.dealFile?.satisfaction && (
+                                    <a href={activeJob.dealFile.satisfaction.url} target="_blank" rel="noreferrer" style={{fontSize:'0.8em', display:'block', color:'#2563eb', marginTop:'2px'}}>
+                                        View Signed Note
+                                    </a>
+                                )}
+                            </div>
                             
                             <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'2px solid #eee'}}>
                                  <div style={{fontSize:'0.8em', color:'#666', marginBottom:'5px'}}>SEND PACK TO:</div>
