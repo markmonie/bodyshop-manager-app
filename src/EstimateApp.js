@@ -57,7 +57,7 @@ const EstimateApp = ({ userId }) => {
     const [insuranceCo, setInsuranceCo] = useState('');
     const [insuranceAddr, setInsuranceAddr] = useState('');
     
-    // Vehicle
+    // Vehicle & Booking
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
@@ -130,7 +130,7 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         if(mode === 'SETTINGS' || mode === 'DASHBOARD') return;
-        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr };
+        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, mode };
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
     }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, mode]);
 
@@ -139,10 +139,20 @@ const EstimateApp = ({ userId }) => {
         if(!bookingDate) return alert("Please select a Booking Date first.");
         const start = bookingDate.replace(/-/g, '') + 'T' + bookingTime.replace(/:/g, '') + '00';
         const end = bookingDate.replace(/-/g, '') + 'T' + (parseInt(bookingTime.split(':')[0]) + 1).toString().padStart(2, '0') + bookingTime.split(':')[1] + '00';
+        
         const title = encodeURIComponent(`Repair: ${name} (${reg})`);
         const details = encodeURIComponent(`Vehicle: ${makeModel}\nPhone: ${phone}\n\nWork Required:\n${items.map(i => '- ' + i.desc).join('\n')}`);
         const loc = encodeURIComponent(settings.address);
-        window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${loc}`, '_blank');
+        
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${loc}`;
+        window.open(url, '_blank');
+    };
+
+    const handlePrint = () => {
+        // Robust print function
+        setTimeout(() => {
+            window.print();
+        }, 500);
     };
 
     const checkHistory = async (regInput) => {
@@ -152,9 +162,12 @@ const EstimateApp = ({ userId }) => {
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 const prev = querySnapshot.docs[0].data();
-                setMakeModel(prev.makeModel || ''); setName(prev.customer || '');
-                setPhone(prev.phone || ''); setEmail(prev.email || '');
-                setAddress(prev.address || ''); setVin(prev.vin || '');
+                setMakeModel(prev.makeModel || ''); 
+                setName(prev.customer || '');
+                setPhone(prev.phone || '');
+                setEmail(prev.email || '');
+                setAddress(prev.address || '');
+                setVin(prev.vin || '');
                 setPaintCode(prev.paintCode || '');
                 if(prev.insuranceCo) setInsuranceCo(prev.insuranceCo);
                 setFoundHistory(true);
@@ -164,7 +177,8 @@ const EstimateApp = ({ userId }) => {
 
     const handleRegChange = (e) => {
         const val = e.target.value.toUpperCase();
-        setReg(val); setFoundHistory(false);
+        setReg(val);
+        setFoundHistory(false);
     };
 
     const lookupReg = async () => {
@@ -196,7 +210,9 @@ const EstimateApp = ({ userId }) => {
         setItemDesc(''); setItemCostPrice('');
     };
 
-    const removeItem = (indexToRemove) => { setItems(items.filter((_, index) => index !== indexToRemove)); };
+    const removeItem = (indexToRemove) => {
+        setItems(items.filter((_, index) => index !== indexToRemove));
+    };
 
     const calculateJobFinancials = () => {
         const partsPrice = items.reduce((acc, i) => acc + i.price, 0); 
@@ -216,7 +232,10 @@ const EstimateApp = ({ userId }) => {
     // --- ACTIONS ---
     const saveSettings = async () => {
         await setDoc(doc(db, 'settings', 'global'), settings);
-        alert("Settings Saved!"); setMode('ESTIMATE'); setLaborRate(settings.laborRate); setVatRate(settings.vatRate);
+        alert("Settings Saved!");
+        setMode('ESTIMATE');
+        setLaborRate(settings.laborRate);
+        setVatRate(settings.vatRate);
     };
 
     const addGeneralExpense = async () => {
@@ -226,7 +245,7 @@ const EstimateApp = ({ userId }) => {
     };
     
     const deleteJob = async (id) => {
-        if(window.confirm("WARNING: Permanently delete this job?")) {
+        if(window.confirm("WARNING: Delete this job permanently?")) {
             try { await deleteDoc(doc(db, 'estimates', id)); } catch (e) { alert("Error deleting: " + e.message); }
         }
     };
@@ -252,7 +271,8 @@ const EstimateApp = ({ userId }) => {
                 type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum,
                 customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
                 reg, mileage, makeModel, vin, paintCode,
-                items, laborHours, laborRate, vatRate, excess, photos, bookingDate, bookingTime, 
+                items, laborHours, laborRate, vatRate, excess, photos,
+                bookingDate, bookingTime, 
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId
             });
             setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
@@ -517,7 +537,7 @@ const EstimateApp = ({ userId }) => {
                 )}
                 <button onClick={() => setMode('JOBCARD')} style={{...secondaryBtn, background: '#4b5563'}}>JOB CARD</button>
                 {mode === 'INVOICE' && <button onClick={() => setMode('SATISFACTION')} style={{...secondaryBtn, background: '#d97706'}}>SATISFACTION NOTE</button>}
-                <button onClick={() => window.print()} style={{...secondaryBtn, background: '#333'}}>PRINT</button>
+                <button onClick={handlePrint} style={{...secondaryBtn, background: '#333'}}>PRINT</button>
                 <button onClick={clearForm} style={{...secondaryBtn, background: '#ef4444'}}>NEW JOB</button>
                 <button onClick={() => setMode('SETTINGS')} style={{...secondaryBtn, background: '#666'}}>⚙️</button>
                 <button onClick={() => setMode('DASHBOARD')} style={{...secondaryBtn, background: '#0f766e'}}>📊</button>
