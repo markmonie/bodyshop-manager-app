@@ -1,4 +1,4 @@
-// TRIPLE MMM MANAGER - VERSION 2.0 (WORKSHOP CONTROL)
+// TRIPLE MMM MANAGER - VERSION 2.0 (COMPLETE FIX)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -455,6 +455,82 @@ const EstimateApp = ({ userId }) => {
     const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
     const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Signed T&Cs: ${activeJob?.dealFile?.terms ? 'Attached' : 'Pending'}%0D%0A4. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
     const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
+
+    // --- MISSING FUNCTIONS ADDED HERE ---
+    
+    const handlePhotoUpload = async (e) => {
+        if (!e.target.files[0]) return;
+        setUploading(true);
+        const file = e.target.files[0];
+        const storageRef = ref(storage, `damage_photos/${Date.now()}_${file.name}`);
+        try { await uploadBytes(storageRef, file); const url = await getDownloadURL(storageRef); setPhotos([...photos, url]); } 
+        catch (error) { alert("Upload failed!"); }
+        setUploading(false);
+    };
+
+    const removePhoto = (index) => setPhotos(photos.filter((_, i) => i !== index));
+
+    const saveToCloud = async (targetType) => {
+        if (!name || !reg) return alert("Enter Customer Name & Reg");
+        setSaveStatus('SAVING');
+        try {
+            let finalInvNum = invoiceNum;
+            let displayType = targetType;
+            if((targetType === 'INVOICE_MAIN' || targetType === 'INVOICE_EXCESS') && !finalInvNum) {
+                finalInvNum = `INV-${1000 + savedEstimates.length + 1}`;
+                setInvoiceNum(finalInvNum);
+                setInvoiceDate(new Date().toLocaleDateString());
+            }
+            if(targetType === 'INVOICE_MAIN') { setMode('INVOICE'); setInvoiceType('MAIN'); displayType = 'INVOICE'; } 
+            else if (targetType === 'INVOICE_EXCESS') { setMode('INVOICE'); setInvoiceType('EXCESS'); displayType = 'INVOICE (EXCESS)'; } 
+            else { setMode(targetType); }
+
+            // UPDATED SAVE LOGIC: CAPTURE ID
+            const docRef = await addDoc(collection(db, 'estimates'), {
+                type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum,
+                customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
+                reg, mileage, makeModel, vin, paintCode,
+                items, laborHours, laborRate, vatRate, excess, photos,
+                bookingDate, bookingTime, 
+                totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
+                // Initialize dealFile & Workshop object
+                dealFile: { methodsRequired: false },
+                stages: {},
+                notes: [],
+                hasFlag: false
+            });
+            
+            // Set current ID so we can immediately upload files
+            setCurrentJobId(docRef.id);
+
+            setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
+        } catch (error) { alert("Error saving: " + error.message); setSaveStatus('IDLE'); }
+    };
+
+    const clearForm = () => {
+        if(window.confirm("Start fresh?")) {
+            setMode('ESTIMATE'); setInvoiceNum(''); setInvoiceDate(''); setName(''); setAddress(''); setPhone(''); setEmail('');
+            setReg(''); setMileage(''); setMakeModel(''); setClaimNum(''); setNetworkCode(''); setVin(''); setPaintCode('');
+            setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated(''); setInsuranceCo(''); setInsuranceAddr('');
+            setBookingDate(''); setBookingTime('09:00'); setFoundHistory(false);
+            setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
+            
+            // RESET NEW STATE
+            setCurrentJobId(null);
+            setMethodsRequired(false);
+            setJobStages({});
+            setJobNotes([]);
+
+            if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
+        }
+    };
+
+    const startDrawing = ({nativeEvent}) => { const {offsetX, offsetY} = getCoordinates(nativeEvent); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth=3; ctx.lineCap='round'; ctx.strokeStyle='#000'; ctx.beginPath(); ctx.moveTo(offsetX, offsetY); setIsDrawing(true); };
+    const draw = ({nativeEvent}) => { if(!isDrawing) return; const {offsetX, offsetY} = getCoordinates(nativeEvent); canvasRef.current.getContext('2d').lineTo(offsetX, offsetY); canvasRef.current.getContext('2d').stroke(); };
+    const stopDrawing = () => { const ctx = canvasRef.current.getContext('2d'); ctx.closePath(); setIsDrawing(false); };
+    const getCoordinates = (event) => { if (event.touches && event.touches[0]) { const rect = canvasRef.current.getBoundingClientRect(); return { offsetX: event.touches[0].clientX - rect.left, offsetY: event.touches[0].clientY - rect.top }; } return { offsetX: event.offsetX, offsetY: event.offsetY }; };
+    const clearSignature = () => { if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); } };
+    useEffect(() => { clearSignature(); }, [mode]);
 
     // --- RENDER HELPERS ---
     const renderStage = (key, label) => {
