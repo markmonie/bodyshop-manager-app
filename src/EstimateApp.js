@@ -145,11 +145,33 @@ const EstimateApp = ({ userId }) => {
 
     // --- FUNCTIONS ---
     
-    // NEW: JOB LOADER
+    // NEW: JOB LOADER (FIXED: Now loads ALL data)
     const loadJobIntoState = (est) => {
         setCurrentJobId(est.id); 
         setName(est.customer);
+        setAddress(est.address || ''); 
+        setPhone(est.phone || ''); 
+        setEmail(est.email || ''); 
         setReg(est.reg);
+        setMileage(est.mileage || ''); 
+        setMakeModel(est.makeModel || ''); 
+        setVin(est.vin || ''); 
+        setPaintCode(est.paintCode || ''); 
+        setClaimNum(est.claimNum || ''); 
+        setNetworkCode(est.networkCode || ''); 
+        setInsuranceCo(est.insuranceCo || ''); 
+        setInsuranceAddr(est.insuranceAddr || ''); 
+        
+        setItems(est.items || []); 
+        setLaborHours(est.laborHours || ''); 
+        setLaborRate(est.laborRate || settings.laborRate); 
+        setVatRate(est.vatRate || settings.vatRate);
+        setExcess(est.excess || ''); 
+        setPhotos(est.photos || []); 
+        setBookingDate(est.bookingDate || ''); 
+        setBookingTime(est.bookingTime || '09:00'); 
+        setPaintAllocated(est.paintAllocated || ''); 
+        
         setInvoiceNum(est.invoiceNumber || '');
         setMethodsRequired(est.dealFile?.methodsRequired || false); 
         setMode('DEAL_FILE'); 
@@ -204,10 +226,16 @@ const EstimateApp = ({ userId }) => {
         window.open(url, '_blank');
     };
 
+    // FIXED: Smart Print Logic
     const handlePrint = () => {
+        // If we are in Deal File or Dashboard, switch to Invoice view first so we print something useful
+        if (mode === 'DEAL_FILE' || mode === 'DASHBOARD' || mode === 'SETTINGS') {
+            setMode('INVOICE');
+        }
+        // Give React a second to update the screen before printing
         setTimeout(() => {
             window.print();
-        }, 500);
+        }, 1000);
     };
 
     const checkHistory = async (regInput) => {
@@ -383,7 +411,20 @@ const EstimateApp = ({ userId }) => {
             const total = inv.type.includes('EXCESS') ? inv.excess : inv.totals.finalDue; 
             csv += `${d},${inv.type},${inv.invoiceNumber},${inv.customer},${inv.reg},${parseFloat(total).toFixed(2)},${inv.status}\n`;
         });
-        const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "TripleMMM_Ledger.csv"; link.click();
+        const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "TripleMMM_Sales_Ledger.csv"; link.click();
+    };
+
+    // NEW: Download EXPENSES CSV
+    const downloadExpensesCSV = () => {
+        let csv = "data:text/csv;charset=utf-8,Date,Category,Description,Amount\n";
+        generalExpenses.forEach(ex => {
+            const d = ex.date ? new Date(ex.date.seconds * 1000).toLocaleDateString() : 'N/A';
+            csv += `${d},${ex.category},${ex.desc},${ex.amount.toFixed(2)}\n`;
+        });
+        const link = document.createElement("a"); 
+        link.href = encodeURI(csv); 
+        link.download = "TripleMMM_Purchase_Ledger.csv"; 
+        link.click();
     };
 
     const togglePaid = async (id, currentStatus) => {
@@ -396,7 +437,7 @@ const EstimateApp = ({ userId }) => {
         return ( (est.customer && est.customer.toLowerCase().includes(search)) || (est.reg && est.reg.toLowerCase().includes(search)) || (est.invoiceNumber && est.invoiceNumber.toLowerCase().includes(search)) );
     });
 
-    // Helper for email link generation
+    // Helper for email link generation (Prevents Syntax Error)
     const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
     const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
     const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
@@ -435,7 +476,12 @@ const EstimateApp = ({ userId }) => {
                     <input type="number" placeholder="£" value={expAmount} onChange={e => setExpAmount(e.target.value)} style={{width:'80px', padding:'10px'}} />
                     <button onClick={addGeneralExpense} style={primaryBtn}>Add</button>
                 </div>
-                <h3>Expense Log</h3>
+                
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'20px', marginBottom:'10px'}}>
+                    <h3>Expense Log</h3>
+                    <button onClick={downloadExpensesCSV} style={{background:'#4b5563', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export Expenses CSV</button>
+                </div>
+                
                 {generalExpenses.map(ex => (<div key={ex.id} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'10px'}}><span>{ex.desc}</span><div style={{display:'flex', gap:'10px'}}><strong>£{ex.amount.toFixed(2)}</strong><button onClick={() => deleteExpense(ex.id)} style={{color:'red', border:'none', background:'none', cursor:'pointer'}}>x</button></div></div>))}
             </div>
         );
@@ -712,7 +758,7 @@ const EstimateApp = ({ userId }) => {
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #eee', marginBottom:'15px'}}>
                     <h3 style={{color:'#888'}}>Recent Jobs</h3>
                     <input placeholder="Search jobs..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{padding:'8px', border:'1px solid #ccc', borderRadius:'4px'}} />
-                    <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export CSV</button>
+                    <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export Sales CSV</button>
                 </div>
                 {filteredEstimates.map(est => (
                     <div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: est.status === 'PAID' ? '#f0fdf4' : 'transparent'}}>
