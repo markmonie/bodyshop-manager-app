@@ -207,11 +207,7 @@ const EstimateApp = ({ userId }) => {
 
 
 
-
-
-
-        // BLOCK 3: THE INTERFACE (Paste below Block 2)
-
+// BLOCK 3A: SETTINGS & DASHBOARD
     if(mode === 'SETTINGS') return (
         <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'Arial' }}>
             <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'20px', padding:'10px', background:'#eee', border:'none', borderRadius:'4px', cursor:'pointer'}}>← Back</button>
@@ -228,16 +224,27 @@ const EstimateApp = ({ userId }) => {
     );
 
     if(mode === 'DASHBOARD') {
-        const totalSales = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.type.includes('EXCESS') ? parseFloat(curr.excess) : curr.totals?.finalDue || 0), 0);
-        const netProfit = (savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.jobProfit || 0), 0) - generalExpenses.reduce((acc, curr) => acc + curr.amount, 0));
+        const totalSales = savedEstimates
+            .filter(e => e.type && e.type.includes('INVOICE'))
+            .reduce((acc, curr) => acc + (curr.type.includes('EXCESS') ? parseFloat(curr.excess) : curr.totals?.finalDue || 0), 0);
+            
+        const netProfit = (savedEstimates
+            .filter(e => e.type && e.type.includes('INVOICE'))
+            .reduce((acc, curr) => acc + (curr.totals?.jobProfit || 0), 0) - generalExpenses.reduce((acc, curr) => acc + curr.amount, 0));
         
         return (
             <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Arial' }}>
                 <button onClick={() => setMode('ESTIMATE')} style={{marginBottom:'20px', padding:'10px'}}>← Back</button>
                 <h2>📊 Financial Dashboard</h2>
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'30px'}}>
-                    <div style={{padding:'20px', background:'#f0fdf4', borderRadius:'8px'}}><h3>Total Sales</h3><div style={{fontSize:'2em', fontWeight:'bold', color:'#166534'}}>£{totalSales.toFixed(2)}</div></div>
-                    <div style={{padding:'20px', background:'#ecfccb', borderRadius:'8px'}}><h3>Net Profit</h3><div style={{fontSize:'2em', fontWeight:'bold', color: netProfit > 0 ? '#166534' : '#991b1b'}}>£{netProfit.toFixed(2)}</div></div>
+                    <div style={{padding:'20px', background:'#f0fdf4', borderRadius:'8px'}}>
+                        <h3>Total Sales</h3>
+                        <div style={{fontSize:'2em', fontWeight:'bold', color:'#166534'}}>£{totalSales.toFixed(2)}</div>
+                    </div>
+                    <div style={{padding:'20px', background:'#ecfccb', borderRadius:'8px'}}>
+                        <h3>Net Profit</h3>
+                        <div style={{fontSize:'2em', fontWeight:'bold', color: netProfit > 0 ? '#166534' : '#991b1b'}}>£{netProfit.toFixed(2)}</div>
+                    </div>
                 </div>
                 <h3>Log General Expense</h3>
                 <div style={{display:'flex', gap:'10px', marginBottom:'30px'}}>
@@ -249,16 +256,171 @@ const EstimateApp = ({ userId }) => {
                     <h3>Expense Log</h3>
                     <button onClick={downloadExpensesCSV} style={{background:'#4b5563', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export Expenses CSV</button>
                 </div>
-                {generalExpenses.map(ex => (<div key={ex.id} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'10px'}}><span>{ex.desc}</span><div style={{display:'flex', gap:'10px'}}><strong>£{ex.amount.toFixed(2)}</strong><button onClick={() => deleteExpense(ex.id)} style={{color:'red', border:'none', background:'none', cursor:'pointer'}}>x</button></div></div>))}
+                {generalExpenses.map(ex => (
+                    <div key={ex.id} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'10px'}}>
+                        <span>{ex.desc}</span>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <strong>£{ex.amount.toFixed(2)}</strong>
+                            <button onClick={() => deleteExpense(ex.id)} style={{color:'red', border:'none', background:'none', cursor:'pointer'}}>x</button>
+                        </div>
+                    </div>
+                ))}
             </div>
         );
     }
+
+
+// BLOCK 3B: MAIN VIEW & END (Paste at the very bottom)
 
     return (
         <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Arial' }}>
             {mode !== 'ESTIMATE' && <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'10px', padding:'5px 10px'}}>← Back</button>}
             
-            <div style={{borderBottom:'
+            <div style={{borderBottom:'4px solid #c00', marginBottom:'20px', display:'flex', justifyContent:'space-between'}}>
+                <h1 style={{margin:0}}>TRIPLE <span style={{color:'#c00'}}>MMM</span></h1>
+                <div style={{textAlign:'right', fontSize:'0.8em'}}><b>{settings.phone}</b><br/>{settings.address}</div>
+            </div>
+
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:'20px'}}>
+                <h2 style={{margin:0}}>{mode==='DEAL_FILE'?'DEAL FILE':(mode==='JOBCARD'?'WORKSHOP':(invoiceType==='EXCESS'?'INVOICE (EXCESS)':mode))}</h2>
+                {mode.includes('INVOICE') && <div><b>{invoiceNum}</b><br/>{invoiceDate}</div>}
+            </div>
+
+            {mode!=='DEAL_FILE' && mode!=='JOBCARD' && (
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'20px'}}>
+                <div>
+                    <h4 style={headerStyle}>CLIENT</h4>
+                    <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)} style={inputStyle}/>
+                    <textarea placeholder="Address" value={address} onChange={e=>setAddress(e.target.value)} style={{...inputStyle, height:'60px'}}/>
+                    <div style={{display:'flex', gap:'5px'}}>
+                        <input placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)} style={inputStyle}/>
+                        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
+                    </div>
+                    <div style={{display:'flex', gap:'5px'}}>
+                        <input placeholder="Claim #" value={claimNum} onChange={e=>setClaimNum(e.target.value)} style={inputStyle}/>
+                        <input placeholder="Network" value={networkCode} onChange={e=>setNetworkCode(e.target.value)} style={inputStyle}/>
+                    </div>
+                    {excess > 0 && <div style={{background:'#fffbeb', padding:'5px', border:'1px solid orange'}}>Insurer: <input value={insuranceCo} onChange={e=>setInsuranceCo(e.target.value)} style={inputStyle} placeholder="Name"/></div>}
+                </div>
+                <div>
+                    <h4 style={headerStyle}>VEHICLE</h4>
+                    <div style={{display:'flex', gap:'5px'}}>
+                        <input placeholder="REG" value={reg} onChange={handleRegChange} onBlur={()=>checkHistory(reg)} style={{...inputStyle, background:'#e0f2fe', fontWeight:'bold'}}/>
+                        <button onClick={lookupReg} className="no-print" style={{padding:'0 10px'}}>🔍</button>
+                    </div>
+                    {foundHistory && <small style={{color:'green'}}>Found History!</small>}
+                    <input placeholder="Model" value={makeModel} onChange={e=>setMakeModel(e.target.value)} style={inputStyle}/>
+                    <div style={{display:'flex', gap:'5px'}}>
+                        <input placeholder="VIN" value={vin} onChange={e=>setVin(e.target.value)} style={inputStyle}/>
+                        <button onClick={decodeVin} className="no-print">🎨</button>
+                        <button onClick={decodeParts} className="no-print">🔧</button>
+                    </div>
+                    <div style={{display:'flex', gap:'5px', alignItems:'center'}}>
+                        <input type="date" value={bookingDate} onChange={e=>setBookingDate(e.target.value)} style={inputStyle}/>
+                        <button onClick={addToGoogleCalendar} className="no-print">📅</button>
+                    </div>
+                    <input type="file" onChange={handlePhotoUpload} className="no-print" style={{marginTop:'10px'}} disabled={uploading}/>
+                </div>
+            </div>
+            )}
+
+            {photos.length > 0 && mode!=='DEAL_FILE' && mode!=='JOBCARD' && <div style={{display:'flex', gap:'5px', flexWrap:'wrap', marginBottom:'10px'}}>{photos.map((u,i)=><div key={i} style={{position:'relative'}}><img src={u} style={{width:'80px', height:'80px', objectFit:'cover'}} alt="dmg"/><button onClick={()=>removePhoto(i)} style={{position:'absolute', top:0, right:0, background:'red', color:'white'}}>x</button></div>)}</div>}
+
+            {mode==='JOBCARD' && (
+                <div style={{padding:'15px', background:'#f8fafc', border:'1px solid #ccc'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'15px'}}><h3>{reg} - {makeModel}</h3> <select value={activeTech} onChange={e=>setActiveTech(e.target.value)}>{settings.techs.split(',').map(t=><option key={t}>{t}</option>)}</select></div>
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
+                        <div>{renderStage('met_strip','MET Strip')}{renderStage('panel','Panel')}{renderStage('paint','Paint')}{renderStage('met_fit','MET Fit')}{renderStage('valet','Valet')}{renderStage('qc','QC')}</div>
+                        <div>
+                            <h4>Tasks</h4>{items.map((i,x)=><div key={x} style={{padding:'5px', borderBottom:'1px solid #eee'}}>⬜ {i.desc}</div>)}
+                            <h4 style={{marginTop:'20px'}}>Snags</h4>
+                            <div style={{display:'flex', gap:'5px'}}><input value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Add note..." style={{flex:1, padding:'5px'}}/><button onClick={addJobNote} style={{background:'red', color:'white', border:'none'}}>Add</button></div>
+                            {jobNotes.map((n,i)=><div key={i} style={{borderLeft: n.resolved?'4px solid green':'4px solid red', padding:'5px', margin:'5px 0', background: n.resolved?'#f0fdf4':'#fff', display:'flex', justifyContent:'space-between'}}><div><b>{n.text}</b><br/><small>{n.tech}</small></div><button onClick={()=>resolveNote(i)}>{n.resolved?'Undo':'Done'}</button></div>)}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {mode!=='SATISFACTION' && mode!=='DEAL_FILE' && mode!=='JOBCARD' && (
+                <>
+                    {invoiceType!=='EXCESS' && <div className="no-print" style={{background:'#f8fafc', padding:'10px', marginBottom:'20px'}}><div style={{display:'flex', gap:'5px'}}><input placeholder="Desc" value={itemDesc} onChange={e=>setItemDesc(e.target.value)} style={{flex:1, padding:'8px'}}/><input placeholder="£" type="number" value={itemCostPrice} onChange={e=>setItemCostPrice(e.target.value)} style={{width:'60px', padding:'8px'}}/><button onClick={addItem} style={{background:'#333', color:'white', border:'none', padding:'8px'}}>Add</button></div></div>}
+                    <table style={{width:'100%', marginBottom:'20px', borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'2px solid #000', textAlign:'left'}}><th>Desc</th><th style={{textAlign:'right'}}>Price</th></tr></thead><tbody>
+                        {invoiceType==='EXCESS' ? <tr><td style={{padding:'10px'}}>Excess: {claimNum}</td><td style={{textAlign:'right', padding:'10px'}}>£{excess}</td></tr> : items.map((i,x)=><tr key={x} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'10px'}}>{i.desc}</td><td style={{textAlign:'right', padding:'10px'}}>£{i.price.toFixed(2)} <button className="no-print" onClick={()=>removeItem(x)} style={{color:'red', border:'none'}}>x</button></td></tr>)}
+                    </tbody></table>
+                    <div style={{textAlign:'right'}}>
+                        {invoiceType!=='EXCESS' && <><div className="no-print">Labor: <input value={laborHours} onChange={e=>setLaborHours(e.target.value)} style={{width:'40px'}}/>hrs @ £{laborRate}</div><div style={rowStyle}><span>Labor:</span><span>£{totals.labor.toFixed(2)}</span></div><div style={rowStyle}><span>Parts:</span><span>£{totals.partsPrice.toFixed(2)}</span></div><div style={{borderTop:'2px solid #000', fontWeight:'bold', ...rowStyle}}><span>TOTAL:</span><span>£{totals.invoiceTotal.toFixed(2)}</span></div><div style={{color:'red', ...rowStyle}}><span>Less Excess:</span><span>-£{totals.excessAmount.toFixed(2)}</span></div></>}
+                        <h2 style={{borderTop:'2px solid #000', paddingTop:'10px'}}>DUE: £{invoiceType==='EXCESS'?parseFloat(excess).toFixed(2):totals.finalDue.toFixed(2)}</h2>
+                        <div className="no-print" style={{background:'#fef2f2', padding:'10px', marginTop:'10px', border:'1px dashed red'}}>Paint Cost: <input value={paintAllocated} onChange={e=>setPaintAllocated(e.target.value)} style={{width:'50px'}}/> | Profit: <b>£{totals.jobProfit.toFixed(2)}</b></div>
+                    </div>
+                    {mode.includes('INVOICE') && <div style={{marginTop:'40px', display:'flex', justifyContent:'space-between'}}><div><b>Payment Details</b><br/>{settings.companyName}<br/>Sort: 80-22-60<br/>Acc: 06163462</div><div style={{textAlign:'center'}}><div className="no-print" style={{border:'1px dashed #ccc'}}><canvas ref={canvasRef} width={200} height={80} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}/><br/><button onClick={clearSignature}>Clear</button></div><div style={{borderBottom:'1px solid #000', marginTop:'40px'}}>Signed</div></div></div>}
+                </>
+            )}
+
+            {mode==='SATISFACTION' && <div style={{marginTop:'50px', border:'2px solid #000', padding:'20px'}}>I confirm repairs to vehicle <b>{reg}</b> are complete to my satisfaction.<div style={{marginTop:'50px', display:'flex', justifyContent:'space-between'}}><div style={{textAlign:'center'}}><div className="no-print" style={{border:'1px dashed #ccc'}}><canvas ref={canvasRef} width={200} height={80} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}/><br/><button onClick={clearSignature}>Clear</button></div><div style={{borderBottom:'1px solid #000', marginTop:'40px'}}>Customer Sig</div></div><div>Date: {new Date().toLocaleDateString()}</div></div></div>}
+
+            {mode==='DEAL_FILE' && (
+                <div style={{background:'#f0f9ff', padding:'20px', borderRadius:'8px', marginTop:'20px', border:'1px solid #bae6fd'}}>
+                    <h3>Deal File: {reg}</h3>
+                    {!currentJobId && <div style={{color:'red', background:'#fee2e2', padding:'10px'}}>⚠️ Save Job First</div>}
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginTop:'15px'}}>
+                        <div>
+                            <h4>Uploads</h4>
+                            <div style={{marginBottom:'10px'}}>T&Cs: {activeJob?.dealFile?.terms?'✅':'❌'} <input type="file" onChange={(e)=>uploadDoc('terms',e.target.files[0])}/></div>
+                            <div style={{marginBottom:'10px'}}>Auth: {activeJob?.dealFile?.auth?'✅':'❌'} <input type="file" onChange={(e)=>uploadDoc('auth',e.target.files[0])}/></div>
+                            <div style={{marginBottom:'10px'}}>Methods: {methodsRequired?(activeJob?.dealFile?.methods?'✅':'❌'):'N/A'} <input type="checkbox" checked={methodsRequired} onChange={toggleMethods}/> Req? {methodsRequired && <input type="file" onChange={(e)=>uploadDoc('methods',e.target.files[0])}/>}</div>
+                        </div>
+                        <div>
+                            <h4>Checks</h4>
+                            <div>📸 Photos: {photos.length}</div>
+                            <div>💰 Invoice: {invoiceNum||'Pending'}</div>
+                            <div style={{marginBottom:'10px'}}>Sat Note: {activeJob?.dealFile?.satisfaction?'✅':'❌'} <input type="file" onChange={(e)=>uploadDoc('satisfaction',e.target.files[0])}/></div>
+                            <a href={emailLink} style={{display:'block', padding:'10px', background:'#2563eb', color:'white', textAlign:'center', borderRadius:'4px', marginTop:'10px', textDecoration:'none', fontWeight:'bold'}}>📧 Email Pack</a>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="no-print" style={{position:'fixed', bottom:0, left:0, right:0, background:'white', padding:'10px', borderTop:'1px solid #ccc', display:'flex', gap:'5px', overflowX:'auto', justifyContent:'center'}}>
+                <button onClick={()=>saveToCloud('ESTIMATE')} style={saveStatus==='SUCCESS'?successBtn:primaryBtn}>{saveStatus==='SAVING'?'...':'SAVE'}</button>
+                {mode==='ESTIMATE' && <>{excess>0 ? <><button onClick={()=>saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background:'#4338ca'}}>INSURER</button><button onClick={()=>saveToCloud('INVOICE_EXCESS')} style={{...secondaryBtn, background:'#be123c'}}>CUST</button></> : <button onClick={()=>saveToCloud('INVOICE')} style={secondaryBtn}>INV</button>}</>}
+                <button onClick={()=>setMode('JOBCARD')} style={{...secondaryBtn, background:'#4b5563'}}>JOB</button>
+                <button onClick={()=>setMode('DEAL_FILE')} style={{...secondaryBtn, background:'#7c3aed'}}>FILE</button>
+                <button onClick={handlePrint} style={{...secondaryBtn, background:'#333'}}>PRINT</button>
+                <button onClick={clearForm} style={{...secondaryBtn, background:'#ef4444'}}>NEW</button>
+                <button onClick={()=>setMode('SETTINGS')} style={secondaryBtn}>⚙
 
 
-    
+    // BLOCK 4: RECENT JOBS & FINAL EXPORT (The End)
+
+            <div className="no-print" style={{marginTop:'80px', paddingBottom:'50px'}}>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
+                    <input placeholder="Search..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} style={{padding:'8px', width:'60%', border:'1px solid #ccc', borderRadius:'4px'}} />
+                    <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 12px', borderRadius:'4px'}}>CSV</button>
+                </div>
+                
+                {filteredEstimates.map(e => (
+                    <div key={e.id} style={{padding:'10px', borderBottom:'1px solid #eee', background:e.status==='PAID'?'#f0fdf4':'#fff', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                        <div onClick={()=>loadJobIntoState(e)} style={{cursor:'pointer'}}>
+                            {e.hasFlag&&'🚩 '}<b>{e.customer}</b> ({e.reg}) 
+                            <div style={{fontSize:'0.8em', color:'#666'}}>{new Date(e.createdAt?.seconds*1000).toLocaleDateString()} - {e.type}</div>
+                        </div>
+                        <div style={{textAlign:'right'}}>
+                            <div>£{e.totals?.finalDue.toFixed(2)}</div>
+                            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+                                <button onClick={()=>deleteJob(e.id)} style={{color:'red', border:'none', background:'none', fontSize:'1.2em'}}>🗑️</button> 
+                                <button onClick={()=>togglePaid(e.id, e.status)} style={{padding:'2px 5px', fontSize:'0.8em', border:'1px solid #ccc', borderRadius:'4px'}}>{e.status}</button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            <style>{`@media print { .no-print { display: none !important; } body { padding: 0; margin: 0; -webkit-print-color-adjust: exact; } input, textarea, select { border: none !important; background: transparent !important; resize: none; padding: 0 !important; font-family: inherit; font-size: inherit; font-weight: inherit; color: black !important; } input::placeholder, textarea::placeholder { color: transparent; } canvas { border: 1px solid #000 !important; } }`}</style>
+        </div>
+    );
+};
+
+const App = () => { const [u,s]=useState(null); useEffect(()=>onAuthStateChanged(auth,x=>s(x?x.uid:signInAnonymously(auth))),[]); return u?<EstimateApp userId={u}/>:<div>Loading System...</div>; };
+export default App;
+// END OF CODE
+
