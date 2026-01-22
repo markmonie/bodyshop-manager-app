@@ -1,4 +1,4 @@
-// TRIPLE MMM MANAGER - VERSION 2.0 (COMPLETE FIX)
+// TRIPLE MMM MANAGER - VERSION 2.0 (COMPLETE BUILD)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -291,8 +291,9 @@ const EstimateApp = ({ userId }) => {
         window.open(url, '_blank');
     };
 
+    // PRINT LOGIC
     const handlePrint = () => {
-        if (mode === 'DEAL_FILE' || mode === 'DASHBOARD' || mode === 'SETTINGS') {
+        if (mode === 'DEAL_FILE' || mode === 'DASHBOARD' || mode === 'SETTINGS' || mode === 'JOBCARD') {
             setMode('INVOICE');
         }
         setTimeout(() => {
@@ -456,7 +457,7 @@ const EstimateApp = ({ userId }) => {
     const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Signed T&Cs: ${activeJob?.dealFile?.terms ? 'Attached' : 'Pending'}%0D%0A4. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
     const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
-    // --- MISSING FUNCTIONS ADDED HERE ---
+    // --- FUNCTION DECLARATIONS (FIXED & RESTORED) ---
     
     const handlePhotoUpload = async (e) => {
         if (!e.target.files[0]) return;
@@ -485,7 +486,6 @@ const EstimateApp = ({ userId }) => {
             else if (targetType === 'INVOICE_EXCESS') { setMode('INVOICE'); setInvoiceType('EXCESS'); displayType = 'INVOICE (EXCESS)'; } 
             else { setMode(targetType); }
 
-            // UPDATED SAVE LOGIC: CAPTURE ID
             const docRef = await addDoc(collection(db, 'estimates'), {
                 type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum,
                 customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
@@ -493,16 +493,13 @@ const EstimateApp = ({ userId }) => {
                 items, laborHours, laborRate, vatRate, excess, photos,
                 bookingDate, bookingTime, 
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
-                // Initialize dealFile & Workshop object
                 dealFile: { methodsRequired: false },
                 stages: {},
                 notes: [],
                 hasFlag: false
             });
             
-            // Set current ID so we can immediately upload files
             setCurrentJobId(docRef.id);
-
             setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
         } catch (error) { alert("Error saving: " + error.message); setSaveStatus('IDLE'); }
     };
@@ -514,13 +511,10 @@ const EstimateApp = ({ userId }) => {
             setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated(''); setInsuranceCo(''); setInsuranceAddr('');
             setBookingDate(''); setBookingTime('09:00'); setFoundHistory(false);
             setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
-            
-            // RESET NEW STATE
             setCurrentJobId(null);
             setMethodsRequired(false);
             setJobStages({});
             setJobNotes([]);
-
             if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
         }
     };
@@ -955,6 +949,232 @@ const EstimateApp = ({ userId }) => {
                     <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export Sales CSV</button>
                 </div>
                 {filteredEstimates.map(est => (
+                    <div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor:
+    const saveToCloud = async (targetType) => {
+        if (!name || !reg) return alert("Enter Customer Name & Reg");
+        setSaveStatus('SAVING');
+        try {
+            let finalInvNum = invoiceNum;
+            let displayType = targetType;
+            if((targetType === 'INVOICE_MAIN' || targetType === 'INVOICE_EXCESS') && !finalInvNum) {
+                finalInvNum = `INV-${1000 + savedEstimates.length + 1}`;
+                setInvoiceNum(finalInvNum);
+                setInvoiceDate(new Date().toLocaleDateString());
+            }
+            if(targetType === 'INVOICE_MAIN') { setMode('INVOICE'); setInvoiceType('MAIN'); displayType = 'INVOICE'; } 
+            else if (targetType === 'INVOICE_EXCESS') { setMode('INVOICE'); setInvoiceType('EXCESS'); displayType = 'INVOICE (EXCESS)'; } 
+            else { setMode(targetType); }
+
+            const docRef = await addDoc(collection(db, 'estimates'), {
+                type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum,
+                customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
+                reg, mileage, makeModel, vin, paintCode,
+                items, laborHours, laborRate, vatRate, excess, photos,
+                bookingDate, bookingTime, 
+                totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
+                dealFile: { methodsRequired: false },
+                stages: {},
+                notes: [],
+                hasFlag: false
+            });
+            
+            setCurrentJobId(docRef.id);
+            setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
+        } catch (error) { alert("Error saving: " + error.message); setSaveStatus('IDLE'); }
+    };
+
+    const clearForm = () => {
+        if(window.confirm("Start fresh?")) {
+            setMode('ESTIMATE'); setInvoiceNum(''); setInvoiceDate(''); setName(''); setAddress(''); setPhone(''); setEmail('');
+            setReg(''); setMileage(''); setMakeModel(''); setClaimNum(''); setNetworkCode(''); setVin(''); setPaintCode('');
+            setItems([]); setLaborHours(''); setExcess(''); setPhotos([]); setPaintAllocated(''); setInsuranceCo(''); setInsuranceAddr('');
+            setBookingDate(''); setBookingTime('09:00'); setFoundHistory(false);
+            setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
+            setCurrentJobId(null);
+            setMethodsRequired(false);
+            setJobStages({});
+            setJobNotes([]);
+            if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
+        }
+    };
+
+    const startDrawing = ({nativeEvent}) => { const {offsetX, offsetY} = getCoordinates(nativeEvent); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth=3; ctx.lineCap='round'; ctx.strokeStyle='#000'; ctx.beginPath(); ctx.moveTo(offsetX, offsetY); setIsDrawing(true); };
+    const draw = ({nativeEvent}) => { if(!isDrawing) return; const {offsetX, offsetY} = getCoordinates(nativeEvent); canvasRef.current.getContext('2d').lineTo(offsetX, offsetY); canvasRef.current.getContext('2d').stroke(); };
+    const stopDrawing = () => { const ctx = canvasRef.current.getContext('2d'); ctx.closePath(); setIsDrawing(false); };
+    const getCoordinates = (event) => { if (event.touches && event.touches[0]) { const rect = canvasRef.current.getBoundingClientRect(); return { offsetX: event.touches[0].clientX - rect.left, offsetY: event.touches[0].clientY - rect.top }; } return { offsetX: event.offsetX, offsetY: event.offsetY }; };
+    const clearSignature = () => { if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); } };
+    useEffect(() => { clearSignature(); }, [mode]);
+
+    // --- RENDER HELPERS ---
+    const renderStage = (key, label) => {
+        const stage = jobStages[key] || {};
+        const isDone = stage.completed;
+        return (
+            <div style={{...stageBtn, borderColor: isDone ? '#16a34a' : '#ccc', background: isDone ? '#f0fdf4' : 'white'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <input 
+                        type="checkbox" 
+                        checked={isDone || false} 
+                        onChange={(e) => updateStage(key, e.target.checked)} 
+                        style={{width:'20px', height:'20px'}}
+                    />
+                    <span style={{fontWeight:'bold', color: isDone ? '#16a34a' : '#333'}}>{label}</span>
+                </div>
+                {isDone && (
+                    <div style={{fontSize:'0.75em', textAlign:'right', color:'#666'}}>
+                        <div>👤 {stage.tech}</div>
+                        <div>⏱️ {stage.hours} hrs</div>
+                        <div>📅 {stage.date.split(',')[0]}</div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // --- VIEWS ---
+    if(mode === 'SETTINGS') return (
+        <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
+            <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'20px', padding:'10px', background:'#eee', border:'none', borderRadius:'4px', cursor:'pointer'}}>← Back</button>
+            <h2 style={{borderBottom:'2px solid #333', paddingBottom:'10px'}}>⚙️ Settings</h2>
+            <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                <label>Labor Rate (£/hr): <input value={settings.laborRate} onChange={e => setSettings({...settings, laborRate: e.target.value})} style={inputStyle} /></label>
+                <label>Parts Markup (%): <input value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} style={inputStyle} /></label>
+                <label>Tech Names (Comma split): <input value={settings.techs} onChange={e => setSettings({...settings, techs: e.target.value})} style={inputStyle} /></label>
+                <label>DVLA API Key: <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={inputStyle} placeholder="Paste key here later" /></label>
+                <label>Address: <textarea value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} style={{...inputStyle, height:'60px'}} /></label>
+                <button onClick={saveSettings} style={primaryBtn}>SAVE SETTINGS</button>
+            </div>
+        </div>
+    );
+
+    if(mode === 'DASHBOARD') {
+        const totalSales = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.type.includes('EXCESS') ? parseFloat(curr.excess) : curr.totals?.finalDue || 0), 0);
+        const totalJobCosts = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.totalJobCost || 0), 0);
+        const totalOverheads = generalExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+        const netProfit = totalSales - totalJobCosts - totalOverheads;
+        return (
+            <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
+                <button onClick={() => setMode('ESTIMATE')} style={{marginBottom:'20px', padding:'10px'}}>← Back</button>
+                <h2>📊 Financial Dashboard</h2>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'30px'}}>
+                    <div style={{padding:'20px', background:'#f0fdf4', borderRadius:'8px'}}><h3>Total Sales</h3><div style={{fontSize:'2em', fontWeight:'bold', color:'#166534'}}>£{totalSales.toFixed(2)}</div></div>
+                    <div style={{padding:'20px', background:'#ecfccb', borderRadius:'8px'}}><h3>Net Profit</h3><div style={{fontSize:'2em', fontWeight:'bold',
+            {/* --- DEAL FILE VIEW --- */}
+            {mode === 'DEAL_FILE' && (
+                <div style={{ marginTop: '20px', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', background: '#f8fafc' }}>
+                    <h2 style={{borderBottom:'2px solid #333', paddingBottom:'10px'}}>📂 Digital Deal File: {reg}</h2>
+                    
+                    {!currentJobId && <div style={{padding:'10px', background:'#fee2e2', color:'#991b1b'}}>⚠️ Job not saved. Please click "Save Estimate" first.</div>}
+
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginTop:'20px'}}>
+                        
+                        {/* COLUMN 1: UPLOADS */}
+                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.1)'}}>
+                            <h4 style={{color:'#333', margin:'0 0 15px 0'}}>1. External Documents</h4>
+
+                             {/* SIGNED T&CS - NEW */}
+                            <div style={{marginBottom:'20px', paddingBottom:'15px', borderBottom:'1px dashed #eee'}}>
+                                <div style={{display:'flex', justifyContent:'space-between'}}>
+                                    <strong>📝 Signed Contract / T&Cs</strong>
+                                    <span>{activeJob?.dealFile?.terms ? '✅ Uploaded' : '❌ Pending'}</span>
+                                </div>
+                                <input type="file" style={{marginTop:'5px', fontSize:'0.9em'}} onChange={(e) => uploadDoc('terms', e.target.files[0])} />
+                                {activeJob?.dealFile?.terms && <a href={activeJob.dealFile.terms.url} target="_blank" rel="noreferrer" style={{fontSize:'0.8em', display:'block', color:'#2563eb'}}>View Signed T&Cs</a>}
+                            </div>
+
+                            {/* AUTHORITY */}
+                            <div style={{marginBottom:'20px', paddingBottom:'15px', borderBottom:'1px dashed #eee'}}>
+                                <div style={{display:'flex', justifyContent:'space-between'}}>
+                                    <strong>📋 Insurer Authority</strong>
+                                    <span>{activeJob?.dealFile?.auth ? '✅ Uploaded' : '❌ Pending'}</span>
+                                </div>
+                                <input type="file" style={{marginTop:'5px', fontSize:'0.9em'}} onChange={(e) => uploadDoc('auth', e.target.files[0])} />
+                                {activeJob?.dealFile?.auth && <a href={activeJob.dealFile.auth.url} target="_blank" rel="noreferrer" style={{fontSize:'0.8em', display:'block', color:'#2563eb'}}>View Saved Auth</a>}
+                            </div>
+
+                            {/* METHODS */}
+                            <div>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                    <strong>🔧 Repair Methods</strong>
+                                    <label style={{fontSize:'0.8em', display:'flex', alignItems:'center', cursor:'pointer', background:'#eee', padding:'2px 8px', borderRadius:'10px'}}>
+                                        <input type="checkbox" checked={methodsRequired} onChange={toggleMethods} style={{marginRight:'5px'}} />
+                                        {methodsRequired ? 'REQUIRED' : 'NOT REQ'}
+                                    </label>
+                                </div>
+                                {methodsRequired ? (
+                                    <div style={{marginTop:'10px'}}>
+                                        <input type="file" style={{marginTop:'5px', fontSize:'0.9em'}} onChange={(e) => uploadDoc('methods', e.target.files[0])} />
+                                        <div style={{fontSize:'0.8em', color: activeJob?.dealFile?.methods ? 'green' : '#dc2626', marginTop:'5px'}}>
+                                            {activeJob?.dealFile?.methods ? '✅ Methods on file' : '* Structural repair. PDF Required.'}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{marginTop:'10px', fontSize:'0.8em', color:'#16a34a', fontStyle:'italic'}}>✅ Cosmetic Only.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* COLUMN 2: SYSTEM CHECKS */}
+                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.1)'}}>
+                            <h4 style={{color:'#333', margin:'0 0 15px 0'}}>2. System Generated</h4>
+                            <div style={rowStyle}><span>📸 Images</span><strong>{photos.length > 0 ? `✅ ${photos.length} Photos` : '❌ Need Photos'}</strong></div>
+                            <div style={rowStyle}><span>💰 Invoice</span><strong>{invoiceNum ? `✅ ${invoiceNum}` : '❌ Pending'}</strong></div>
+                            
+                            {/* SATISFACTION NOTE UPLOAD */}
+                            <div style={{marginTop:'10px', paddingTop:'10px', borderTop:'1px dashed #eee'}}>
+                                <div style={{display:'flex', justifyContent:'space-between'}}>
+                                    <span>✍️ Satisfaction Note</span>
+                                    <span>{activeJob?.dealFile?.satisfaction ? '✅ Ready' : '❌ Pending'}</span>
+                                </div>
+                                
+                                <input type="file" style={{marginTop:'5px', fontSize:'0.9em'}} onChange={(e) => uploadDoc('satisfaction', e.target.files[0])} />
+                                
+                                {activeJob?.dealFile?.satisfaction && (
+                                    <a href={activeJob.dealFile.satisfaction.url} target="_blank" rel="noreferrer" style={{fontSize:'0.8em', display:'block', color:'#2563eb', marginTop:'2px'}}>
+                                        View Signed Note
+                                    </a>
+                                )}
+                            </div>
+                            
+                            <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'2px solid #eee'}}>
+                                 <div style={{fontSize:'0.8em', color:'#666', marginBottom:'5px'}}>SEND PACK TO:</div>
+                                 <div style={{fontWeight:'bold', fontSize:'1.1em'}}>{insuranceCo || 'Unknown Insurer'}</div>
+                                 
+                                 {/* LOGIC: Show button if Auth exists AND (Methods are either Not Required OR Uploaded) */}
+                                 {(activeJob?.dealFile?.auth && (!methodsRequired || activeJob?.dealFile?.methods)) ? (
+                                     <a 
+                                        href={emailLink}
+                                        style={{display:'block', textAlign:'center', background:'#16a34a', color:'white', textDecoration:'none', padding:'10px', borderRadius:'4px', marginTop:'10px', fontWeight:'bold'}}
+                                     >
+                                         📧 CREATE EMAIL
+                                     </a>
+                                 ) : (
+                                     <div style={{textAlign:'center', padding:'10px', background:'#eee', color:'#999', borderRadius:'4px', marginTop:'10px'}}>⚠️ Upload Docs First</div>
+                                 )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '15px', background: 'white', borderTop: '1px solid #ccc', display: 'flex', justifyContent: 'center', gap: '15px', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', flexWrap: 'wrap' }}>
+                <button onClick={() => saveToCloud('ESTIMATE')} disabled={saveStatus === 'SAVING'} style={saveStatus === 'SUCCESS' ? successBtn : primaryBtn}>{saveStatus === 'SAVING' ? 'SAVING...' : (saveStatus === 'SUCCESS' ? '✅ SAVED!' : 'SAVE ESTIMATE')}</button>
+                {mode === 'ESTIMATE' && (
+                    <>
+                        {parseFloat(excess) > 0 ? (
+                            <>
+                                <button onClick={() => saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background: '#4338ca'}}>INVOICE INSURER</button>
+                                <button onClick={() => saveToCloud('INVOICE_EXCESS')} style={{...secondaryBtn, background: '#be123c'}}>INVOICE CUSTOMER</button>
+                            </>
+                        ) : (
+                            <button onClick={() => saveToCloud('INVO
+            <div className="no-print" style={{marginTop:'100px', paddingBottom:'80px'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #eee', marginBottom:'15px'}}>
+                    <h3 style={{color:'#888'}}>Recent Jobs</h3>
+                    <input placeholder="Search jobs..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{padding:'8px', border:'1px solid #ccc', borderRadius:'4px'}} />
+                    <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor:'pointer', fontSize:'0.9em'}}>📥 Export Sales CSV</button>
+                </div>
+                {filteredEstimates.map(est => (
                     <div key={est.id} style={{padding:'10px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: est.status === 'PAID' ? '#f0fdf4' : 'transparent'}}>
                         <div onClick={() => loadJobIntoState(est)} style={{cursor:'pointer', color: est.type && est.type.includes('INVOICE') ? '#16a34a' : '#333'}}>
                             {est.hasFlag && <span style={{marginRight:'5px'}}>🚩</span>}
@@ -997,3 +1217,4 @@ const App = () => {
 };
 
 export default App;
+// END OF CODE
