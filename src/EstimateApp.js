@@ -145,7 +145,7 @@ const EstimateApp = ({ userId }) => {
 
     // --- FUNCTIONS ---
     
-    // NEW: JOB LOADER (FIXED: Now loads ALL data)
+    // NEW: JOB LOADER
     const loadJobIntoState = (est) => {
         setCurrentJobId(est.id); 
         setName(est.customer);
@@ -282,7 +282,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- NEW: VIN DECODER LOGIC ---
+    // --- VIN DECODER LOGIC (PAINT & SPECS) ---
     const decodeVin = () => {
         if (!vin || vin.length < 3) return alert("Enter at least 3 chars of VIN");
         const cleanVin = vin.toUpperCase().trim();
@@ -295,6 +295,23 @@ const EstimateApp = ({ userId }) => {
         } else if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) { // Mercedes
             url = `https://www.lastvin.com/vin/${cleanVin}`;
         } else if (wmi.startsWith('WVW') || wmi.startsWith('WAU') || wmi.startsWith('VSS') || wmi.startsWith('TMB')) { // VW Group
+            url = `https://7zap.com/en/search/?q=${cleanVin}`;
+        } 
+        
+        window.open(url, '_blank');
+    };
+
+    // --- NEW: PARTS DIAGRAM LOGIC (EPC) ---
+    const decodeParts = () => {
+        if (!vin || vin.length < 3) return alert("Enter at least 3 chars of VIN");
+        const cleanVin = vin.toUpperCase().trim();
+        const wmi = cleanVin.substring(0, 3);
+        
+        let url = `https://partsouq.com/en/catalog/genuine/locate?c=${cleanVin}`; // Default for Asian/General
+
+        if (wmi.startsWith('WBA') || wmi.startsWith('WMW')) { // BMW / Mini - RealOEM is best
+            url = `https://www.realoem.com/bmw/enUS/select?vin=${cleanVin}`;
+        } else if (wmi.startsWith('WVW') || wmi.startsWith('WAU') || wmi.startsWith('WF0') || wmi.startsWith('WDD')) { // VAG / Ford / Merc
             url = `https://7zap.com/en/search/?q=${cleanVin}`;
         } 
         
@@ -555,7 +572,8 @@ const EstimateApp = ({ userId }) => {
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px', marginTop:'5px'}}>
                         <div style={{display:'flex', gap:'5px'}}>
                             <input placeholder="Chassis / VIN" value={vin} onChange={e => setVin(e.target.value)} style={{...inputStyle, flex:1}} />
-                            <button onClick={decodeVin} className="no-print" style={{background:'#2563eb', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', padding:'0 10px', marginBottom:'8px'}}>🌍</button>
+                            <button onClick={decodeVin} className="no-print" title="Find Paint/Specs" style={{background:'#2563eb', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', padding:'0 10px', marginBottom:'8px'}}>🌍</button>
+                            <button onClick={decodeParts} className="no-print" title="Find Parts Diagram" style={{background:'#ea580c', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', padding:'0 10px', marginBottom:'8px'}}>🔧</button>
                         </div>
                         <input placeholder="Paint Code" value={paintCode} onChange={e => setPaintCode(e.target.value)} style={inputStyle} />
                     </div>
