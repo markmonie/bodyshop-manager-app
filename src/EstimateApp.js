@@ -36,7 +36,7 @@ const EstimateApp = ({ userId }) => {
     const [veh, setVeh] = useState({ r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00' });
     const [item, setItem] = useState({ d:'', c:'', list:[] }); 
     const [fin, setFin] = useState({ lh:'0', lr:'50', vat:'0', ex:'0', paint:'0' });
-    const [sys, setSys] = useState({ photos:[], upload:false, expD:'', expA:'', expC:'Stock', save:'IDLE', search:'', jobs:[], exps:[], id:null, stages:{}, notes:[], note:'', invNum:'' });
+    const [sys, setSys] = useState({ photos:[], upload:false, expD:'', expA:'', expC:'Stock', save:'IDLE', search:'', jobs:[], exps:[], id:null, stages:{}, notes:[], note:'', invNum:'', lookupStatus:'IDLE' });
     
     const canvasRef = useRef(null); const [draw, setDraw] = useState(false);
     const activeJob = useMemo(() => sys.jobs.find(j => j.id === sys.id), [sys.jobs, sys.id]);
@@ -52,17 +52,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v9'); 
+            const d = localStorage.getItem('draft_v12'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v9'); }
+        } catch(e) { localStorage.removeItem('draft_v12'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v9', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v12', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -116,18 +116,53 @@ const EstimateApp = ({ userId }) => {
         addItem: () => { if(!item.d) return; const c=parseFloat(item.c)||0; setItem(p=>({...p, d:'', c:'', list:[...p.list, {desc:p.d, c, p: c*(1+(parseFloat(cfg.markup)||0)/100)}]})); },
         delItem: (i) => setItem(p=>({...p, list:p.list.filter((_,x)=>x!==i)})),
         
+        // --- PROXY DVLA LOOKUP ---
         lookup: async () => { 
-            if(veh.r.length<3) return; 
-            try { 
-                const r = await axios.post('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', { registrationNumber: veh.r }, { headers: { 'x-api-key': cfg.dvlaKey } }); 
-                if(r.data) {
-                    setVeh(p=>({...p, mm:`${r.data.make} ${r.data.colour}`, v: r.data.vin || p.v})); 
-                }
-            } catch(e) { alert("Check DVLA Key in Settings"); } 
+            if(veh.r.length < 2) return alert("Enter Reg");
+            setSys(p=>({...p, lookupStatus:'SEARCHING...'}));
+            const cleanReg = veh.r.replace(/\s/g, '');
+            try {
+                // Using CORS Proxy to ensure it works on mobile
+                const proxyUrl = "https://corsproxy.io/?";
+                const targetUrl = "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles";
+                
+                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
+                    method: "POST",
+                    headers: { "x-api-key": cfg.dvlaKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({ registrationNumber: cleanReg })
+                });
+
+                if (!response.ok) throw new Error("Check API Key in Settings");
+                const data = await response.json();
+                
+                setVeh(p=>({...p, mm:`${data.make} ${data.colour}`, v: data.vin || ''})); 
+                setSys(p=>({...p, lookupStatus:'FOUND'}));
+            } catch(e) { 
+                alert("Lookup Error: " + e.message); 
+                setSys(p=>({...p, lookupStatus:'FAILED'}));
+            }
         },
         
-        parts: () => { window.open(`https://7zap.com/en/search/?q=${veh.v || veh.r}`, '_blank'); },
-        paint: () => { window.open(`https://www.google.com/search?q=${encodeURIComponent(veh.mm + " paint code location")}`, '_blank'); },
+        // --- SMART PORTAL LINKS ---
+        parts: () => { 
+            // Prioritize VIN (Chassis), fallback to Reg
+            if(!veh.v && !veh.r) return alert("Enter Reg or VIN first");
+            window.open(`https://7zap.com/en/search/?q=${veh.v || veh.r}`, '_blank'); 
+        },
+        paint: () => { 
+            if(!veh.mm) return alert("Enter Make/Model first");
+            const make = veh.mm.split(' ')[0].toUpperCase();
+            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?make=${make}`; // Default Fallback
+
+            // Manufacturer Specific Portals
+            if(make === 'FORD') url = 'https://www.ford.co.uk/support/vehicle-dashboard'; 
+            if(make === 'BMW') url = 'https://bimmer.work/'; 
+            if(make === 'MERCEDES') url = 'https://www.lastvin.com/'; 
+            if(make === 'VOLKSWAGEN' || make === 'VW' || make === 'AUDI') url = 'https://erwin.volkswagen.de/erwin/showHome.do'; 
+            if(make === 'TOYOTA') url = 'https://www.toyota-tech.eu/'; 
+            
+            window.open(url, '_blank'); 
+        },
         emailIns: () => { window.location.href = `mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}`; },
         
         stage: async (k, done) => { if(!sys.id) return alert("Save First"); const ns = {...sys.stages, [k]: {completed:done, date:done?new Date().toLocaleDateString():''}}; setSys(p=>({...p, stages:ns})); await updateDoc(doc(db, 'estimates', sys.id), {stages:ns}); },
@@ -163,7 +198,7 @@ const EstimateApp = ({ userId }) => {
             <div style={{marginBottom:15}}>
                 <label style={s.label}>COMPANY LOGO</label>
                 <input type="file" onChange={actions.uploadLogo} style={s.inp}/>
-                {cfg.logo && <img src={cfg.logo} style={{height:50, marginTop:5, border:'1px solid #ccc'}}/>}
+                {cfg.logo && <img src={cfg.logo} style={{height:60, maxWidth:'200px', objectFit:'contain'}} alt="Logo"/>}
             </div>
             <div style={{marginBottom:15}}>
                 <label style={s.label}>DVLA API KEY</label>
@@ -214,7 +249,6 @@ const EstimateApp = ({ userId }) => {
                     <input style={s.inp} placeholder="Claim #" value={cust.c} onChange={e=>setCust({...cust, c:e.target.value})}/>
                     <input style={s.inp} placeholder="Insurer Name" value={cust.ic} onChange={e=>setCust({...cust, ic:e.target.value})}/>
                 </div>
-                {/* INSURER EMAIL BOX */}
                 <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
                     <input style={{...s.inp, marginBottom:0}} placeholder="Insurer Email" value={cust.ie} onChange={e=>setCust({...cust, ie:e.target.value})}/>
                     <button onClick={actions.emailIns} style={{...s.btn, background:'#6366f1'}}>✉️ INS</button>
@@ -222,8 +256,8 @@ const EstimateApp = ({ userId }) => {
 
                 <h4 style={s.head}>VEHICLE DETAILS</h4>
                 <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                    <input style={{...s.inp, marginBottom:0, background:'#e0f2fe', fontWeight:'bold', textAlign:'center', fontSize:'20px'}} placeholder="REG" value={veh.r} onChange={e=>setVeh({...veh, r:e.target.value.toUpperCase()})} onBlur={actions.lookup}/>
-                    <button onClick={actions.lookup} style={{...s.btn, background:'#0284c7'}}>FIND</button>
+                    <input style={{...s.inp, marginBottom:0, background:'#e0f2fe', fontWeight:'bold', textAlign:'center', fontSize:'20px'}} placeholder="REG" value={veh.r} onChange={e=>setVeh({...veh, r:e.target.value.toUpperCase()})}/>
+                    <button onClick={actions.lookup} style={{...s.btn, background:sys.lookupStatus==='SEARCHING...'?'#999':'#0284c7', minWidth:'80px'}}>{sys.lookupStatus==='SEARCHING...'?'...':'FIND'}</button>
                 </div>
                 <input style={s.inp} placeholder="Make / Model" value={veh.mm} onChange={e=>setVeh({...veh, mm:e.target.value})}/>
                 <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
