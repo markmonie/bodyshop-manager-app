@@ -142,7 +142,7 @@ const EstimateApp = ({ userId }) => {
         // --- SMART PARTS (WITH FALLBACK) ---
         parts: () => { 
             const cleanVin = (veh.v||'').replace(/\s/g, '');
-            // 1. Try 7zap with VIN
+            // 1. Try 7zap with VIN (needs to be reasonably long)
             if(cleanVin.length > 5) {
                 window.open(`https://7zap.com/en/search/?q=${cleanVin}`, '_blank'); 
             } else {
