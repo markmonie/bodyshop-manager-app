@@ -64,17 +64,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v18'); 
+            const d = localStorage.getItem('draft_v19'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v18'); }
+        } catch(e) { localStorage.removeItem('draft_v19'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v18', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v19', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -238,7 +238,7 @@ const EstimateApp = ({ userId }) => {
 
             <div style={s.card}>
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:15}}>
-                    <div><label style={s.label}>LABOR RATE (£)</label><input style={s.inp} value={cfg.laborRate} onChange={e=>setCfg({...cfg, laborRate:e.target.value})}/></div>
+                    <div><label style={s.label}>LABOUR RATE (£)</label><input style={s.inp} value={cfg.laborRate} onChange={e=>setCfg({...cfg, laborRate:e.target.value})}/></div>
                     <div><label style={s.label}>VAT RATE (%)</label><input style={s.inp} value={cfg.vatRate} onChange={e=>setCfg({...cfg, vatRate:e.target.value})}/></div>
                 </div>
             </div>
@@ -433,7 +433,7 @@ const EstimateApp = ({ userId }) => {
 
             {/* FINANCIALS */}
             {mode==='ESTIMATE' && <div style={{marginTop:30}}>
-                <h4 style={s.head}>🛠️ PARTS & LABOR</h4>
+                <h4 style={s.head}>🛠️ PARTS & LABOUR</h4>
                 <div className="no-print" style={s.card}>
                     <div style={{display:'flex', gap:10}}>
                         <input style={{...s.inp, flex:2, marginBottom:0}} placeholder="Item Description" value={item.d} onChange={e=>setItem({...item, d:e.target.value})}/>
@@ -455,7 +455,7 @@ const EstimateApp = ({ userId }) => {
 
                     <div style={{background:'#f8fafc', padding:15, borderRadius:10}}>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:8, alignItems:'center'}}>
-                            <span style={{color:'#64748b'}}>Labor Hours</span>
+                            <span style={{color:'#64748b'}}>Labour Hours</span>
                             <div style={{display:'flex', alignItems:'center', gap:5}}>
                                 <input type="number" value={fin.lh} onChange={e=>setFin({...fin, lh:e.target.value})} style={{width:'60px', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'6px', textAlign:'center'}}/>
                                 <span style={{fontSize:'12px', color:'#94a3b8'}}>@ £{fin.lr}/hr</span>
