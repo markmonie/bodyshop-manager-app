@@ -29,22 +29,27 @@ const EstimateApp = ({ userId }) => {
         return () => { u1(); u2(); }; 
     }, []);
 
-    // SAFE DRAFT LOADER (Prevents White Screen Crash)
+    // ARMOR-PLATED DRAFT LOADER
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v3'); 
+            const d = localStorage.getItem('draft_v4'); 
             if(d) { 
                 const p = JSON.parse(d); 
-                if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.i) setItem(p.i); if(p.f) setFin(p.f); 
+                if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
+                // Critical Safety Check for Items List
+                if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { console.log('Draft Error', e); localStorage.removeItem('draft_v3'); }
+        } catch(e) { console.log('Draft Error', e); localStorage.removeItem('draft_v4'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v3', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v4', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
-        const pp = item.list.reduce((a,i)=>a+(i.p||0),0); const pc = item.list.reduce((a,i)=>a+(i.c||0),0); 
+        // SAFETY: Fallback to empty array if list is undefined
+        const safeList = item.list || [];
+        const pp = safeList.reduce((a,i)=>a+(i.p||0),0); 
+        const pc = safeList.reduce((a,i)=>a+(i.c||0),0); 
         const l = (parseFloat(fin.lh)||0)*(parseFloat(fin.lr)||0); 
         const paint = parseFloat(fin.paint)||0; const tot = pp+l; const ex = parseFloat(fin.ex)||0;
         return { partsPrice: pp, partsCost: pc, labor: l, paintCost: paint, invoiceTotal: tot, totalJobCost: pc+paint, jobProfit: tot-(pc+paint), excessAmount: ex, finalDue: tot-ex, due: tot-ex, prof: tot-(pc+paint) };
@@ -58,7 +63,8 @@ const EstimateApp = ({ userId }) => {
             setSys(p=>({...p, id:j.id, photos:j.photos||[], meth:j.dealFile?.meth||false, stages:j.stages||{}, notes:j.notes||[]})); 
             setCust({n:j.customer||'', a:j.address||'', p:j.phone||'', e:j.email||'', c:j.claimNum||'', nc:j.networkCode||'', ic:j.insuranceCo||'', ia:j.insuranceAddr||''}); 
             setVeh({r:j.reg||'', m:j.mileage||'', mm:j.makeModel||'', v:j.vin||'', pc:j.paintCode||'', bd:j.bookingDate||'', bt:j.bookingTime||'09:00', hist:false}); 
-            setItem({...item, list:j.items||[]}); 
+            // SAFETY: Ensure list is array
+            setItem({...item, list: Array.isArray(j.items) ? j.items : [] }); 
             setFin({lh:j.laborHours||'', lr:j.laborRate||cfg.laborRate, vat:j.vatRate||'0', ex:j.excess||'', paint:j.paintAllocated||''}); 
             setInvNum(j.invoiceNumber||''); 
             setMode('DEAL_FILE'); window.scrollTo(0,0); 
@@ -184,6 +190,15 @@ const EstimateApp = ({ userId }) => {
     );
 };
 
-const App = () => { const [u,setU]=useState(null); useEffect(()=>onAuthStateChanged(auth,x=>setU(x?x.uid:signInAnonymously(auth))),[]); return u?<EstimateApp userId={u}/>:<div>Loading...</div>; };
+const App = () => { 
+    const [u, setU] = useState(null); 
+    useEffect(() => {
+        return onAuthStateChanged(auth, user => {
+            if (user) setU(user.uid);
+            else signInAnonymously(auth).catch(e=>console.error(e));
+        });
+    }, []); 
+    return u ? <EstimateApp userId={u} /> : <div style={{padding:20}}>Loading System...</div>; 
+};
 export default App;
 // END OF CODE
