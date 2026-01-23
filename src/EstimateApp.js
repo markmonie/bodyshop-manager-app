@@ -39,6 +39,8 @@ const EstimateApp = ({ userId }) => {
     };
     const totals = calc();
 
+    const handlePrint = () => { if (['DEAL_FILE','DASHBOARD','SETTINGS','JOBCARD'].includes(mode)) setMode('INVOICE'); setTimeout(() => window.print(), 1000); };
+
     const actions = {
         load: (j) => { setSys(p=>({...p, id:j.id, photos:j.photos||[], meth:j.dealFile?.meth||false, stages:j.stages||{}, notes:j.notes||[]})); setCust({n:j.customer, a:j.address, p:j.phone, e:j.email, c:j.claimNum, nc:j.networkCode, ic:j.insuranceCo, ia:j.insuranceAddr}); setVeh({r:j.reg, m:j.mileage, mm:j.makeModel, v:j.vin, pc:j.paintCode, bd:j.bookingDate, bt:j.bookingTime||'09:00', hist:false}); setItem({...item, list:j.items||[]}); setFin({lh:j.laborHours, lr:j.laborRate, vat:j.vatRate, ex:j.excess, paint:j.paintAllocated}); setInvNum(j.invoiceNumber); setMode('DEAL_FILE'); window.scrollTo(0,0); },
         save: async (type) => { 
@@ -62,10 +64,10 @@ const EstimateApp = ({ userId }) => {
         upload: async (type, file) => { if(!sys.id || !file) return alert("Save First"); const r = ref(storage, `docs/${sys.id}/${type}_${file.name}`); setSys(p=>({...p, save:'SAVING'})); const s = await uploadBytes(r, file); const u = await getDownloadURL(s.ref); await updateDoc(doc(db, 'estimates', sys.id), { [`dealFile.${type}`]: { name:file.name, url:u, date:new Date().toLocaleDateString() } }); setSys(p=>({...p, save:'IDLE'})); alert("Uploaded"); },
         cal: () => { if(!veh.bd) return alert("Date?"); const t = encodeURIComponent(`Repair: ${cust.n} (${veh.r})`); const d = encodeURIComponent(item.list.map(i=>i.desc).join('\n')); window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&details=${d}&location=${encodeURIComponent(cfg.address)}&dates=${veh.bd.replace(/-/g,'')}T${veh.bt.replace(/:/g,'')}00/${veh.bd.replace(/-/g,'')}T${(parseInt(veh.bt)+1).toString().padStart(2,'0')}0000`, '_blank'); },
         csv: () => { const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.due}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="sales.csv"; a.click(); },
-        delJob: async (id) => { if(confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
+        delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
         pay: async (id, s) => await updateDoc(doc(db,'estimates',id), {status: s==='PAID'?'UNPAID':'PAID'}),
         addExp: async () => { if(!sys.expD) return; await addDoc(collection(db,'expenses'), {desc:sys.expD, amount:parseFloat(sys.expA), category:sys.expC, date:serverTimestamp()}); setSys(p=>({...p, expD:'', expA:''})); },
-        newJob: () => { if(confirm("New?")) { setMode('ESTIMATE'); setInvNum(''); setCust({n:'', a:'', p:'', e:'', c:'', nc:'', ic:'', ia:''}); setVeh({r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00', hist:false}); setItem({d:'', c:'', list:[]}); setFin({lh:'', lr:cfg.laborRate, vat:'0', ex:'', paint:''}); setSys(p=>({...p, photos:[], id:null, stages:{}, notes:[]})); } }
+        newJob: () => { if(window.confirm("New?")) { setMode('ESTIMATE'); setInvNum(''); setCust({n:'', a:'', p:'', e:'', c:'', nc:'', ic:'', ia:''}); setVeh({r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00', hist:false}); setItem({d:'', c:'', list:[]}); setFin({lh:'', lr:cfg.laborRate, vat:'0', ex:'', paint:''}); setSys(p=>({...p, photos:[], id:null, stages:{}, notes:[]})); } }
     };
 
     // Canvas
@@ -164,3 +166,4 @@ const EstimateApp = ({ userId }) => {
 
 const App = () => { const [u,s]=useState(null); useEffect(()=>onAuthStateChanged(auth,x=>s(x?x.uid:signInAnonymously(auth))),[]); return u?<EstimateApp userId={u}/>:<div>Loading...</div>; };
 export default App;
+// END OF CODE
