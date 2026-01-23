@@ -23,20 +23,27 @@ class ErrorBoundary extends React.Component {
 const s = { 
     inp: {width:'100%', padding:'12px', marginBottom:'12px', border:'1px solid #e2e8f0', borderRadius:'10px', fontSize:'16px', boxSizing:'border-box', outline:'none', transition:'border 0.2s', backgroundColor:'#f8fafc'}, 
     head: {borderBottom:'2px solid #cc0000', paddingBottom:'8px', marginBottom:'20px', color:'#1e293b', fontSize:'18px', fontWeight:'700', marginTop:'25px', letterSpacing:'0.5px'}, 
+    
+    // Buttons
     btn: {padding:'10px 16px', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'600', fontSize:'14px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', transition:'transform 0.1s', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'},
-    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'}, 
-    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'}, 
-    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'}, 
-    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'}, 
+    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'}, // Blue
+    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'}, // Green
+    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'}, // Red
+    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'}, // Grey
     backBtn: {width:'100%', padding:'15px', background:'#e2e8f0', color:'#1e293b', border:'none', borderRadius:'8px', fontWeight:'bold', marginBottom:'20px', fontSize:'16px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', cursor:'pointer'},
+
+    // Cards
     card: {background:'#fff', padding:'20px', border:'1px solid #e2e8f0', borderRadius:'12px', marginBottom:'15px', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.05)'},
     label: {display:'block', fontSize:'11px', color:'#64748b', marginBottom:'4px', fontWeight:'bold', textTransform:'uppercase', letterSpacing:'0.5px'},
+    
+    // Bottom Dock Item
     dockItem: {background:'none', border:'none', color:'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:'4px', minWidth:'60px', cursor:'pointer', whiteSpace:'nowrap'}
 };
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
     const [mode, setMode] = useState('ESTIMATE');
+    // Default state ensures 'terms' key always exists
     const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1', logo:'', terms:'' });
     
     // Core Data
@@ -51,7 +58,8 @@ const EstimateApp = ({ userId }) => {
 
     // --- LOADERS ---
     useEffect(() => { 
-        getDoc(doc(db, 'settings', 'global')).then(d => d.exists() && setCfg(d.data()));
+        // Loads DB data and merges it with default state so 'terms' is never undefined
+        getDoc(doc(db, 'settings', 'global')).then(d => d.exists() && setCfg(prev => ({...prev, ...d.data()})));
         const u1 = onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), s => setSys(p => ({...p, jobs: s.docs.map(d => ({id: d.id, ...d.data()}))})));
         const u2 = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), s => setSys(p => ({...p, exps: s.docs.map(d => ({id: d.id, ...d.data()}))})));
         return () => { u1(); u2(); }; 
@@ -60,17 +68,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v21'); 
+            const d = localStorage.getItem('draft_v23'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v21'); }
+        } catch(e) { localStorage.removeItem('draft_v23'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v21', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v23', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -123,7 +131,6 @@ const EstimateApp = ({ userId }) => {
         addItem: () => { if(!item.d) return; const c=parseFloat(item.c)||0; setItem(p=>({...p, d:'', c:'', list:[...p.list, {desc:p.d, c, p: c*(1+(parseFloat(cfg.markup)||0)/100)}]})); },
         delItem: (i) => setItem(p=>({...p, list:p.list.filter((_,x)=>x!==i)})),
         
-        // --- PROXY DVLA LOOKUP ---
         lookup: async () => { 
             if(veh.r.length < 2) return alert("Enter Reg");
             setSys(p=>({...p, lookupStatus:'SEARCHING...'}));
@@ -146,7 +153,6 @@ const EstimateApp = ({ userId }) => {
             }
         },
         
-        // --- SMART PARTS (WITH FALLBACK) ---
         parts: () => { 
             const cleanVin = (veh.v||'').replace(/\s/g, '');
             if (cleanVin.length > 5) window.open(`https://partsouq.com/en/search/all?q=${cleanVin}`, '_blank'); 
@@ -258,10 +264,6 @@ const EstimateApp = ({ userId }) => {
                     <input type="file" onChange={actions.uploadLogo} style={s.inp}/>
                     {cfg.logo && <div style={{textAlign:'center', marginTop:10}}><img src={cfg.logo} style={{height:80, borderRadius:8, border:'1px solid #eee'}} alt="Logo"/></div>}
                 </div>
-                <div style={{marginBottom:15}}>
-                    <label style={s.label}>DVLA API KEY</label>
-                    <input style={{...s.inp, border:'1px solid #3b82f6', background:'#eff6ff'}} value={cfg.dvlaKey} onChange={e=>setCfg({...cfg, dvlaKey:e.target.value})}/>
-                </div>
             </div>
 
             <div style={s.card}>
@@ -291,6 +293,10 @@ const EstimateApp = ({ userId }) => {
                 <div style={{marginBottom:15}}>
                     <label style={s.label}>TERMS & CONDITIONS TEXT</label>
                     <textarea style={{...s.inp, height:120}} value={cfg.terms} onChange={e=>setCfg({...cfg, terms:e.target.value})} placeholder="Paste T&Cs here..."/>
+                </div>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>DVLA API KEY</label>
+                    <input style={{...s.inp, border:'1px solid #3b82f6', background:'#eff6ff'}} value={cfg.dvlaKey} onChange={e=>setCfg({...cfg, dvlaKey:e.target.value})}/>
                 </div>
             </div>
             
