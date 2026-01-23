@@ -35,7 +35,8 @@ const EstimateApp = ({ userId }) => {
     const calc = () => {
         const pp = item.list.reduce((a,i)=>a+i.p,0); const pc = item.list.reduce((a,i)=>a+i.c,0); const l = (parseFloat(fin.lh)||0)*(parseFloat(fin.lr)||0); 
         const paint = parseFloat(fin.paint)||0; const tot = pp+l; const ex = parseFloat(fin.ex)||0;
-        return { pp, pc, l, paint, tot, cost: pc+paint, prof: tot-(pc+paint), ex, due: tot-ex };
+        // COMPATIBILITY: USING ORIGINAL VARIABLE NAMES (finalDue, jobProfit)
+        return { partsPrice: pp, partsCost: pc, labor: l, paintCost: paint, invoiceTotal: tot, totalJobCost: pc+paint, jobProfit: tot-(pc+paint), excessAmount: ex, finalDue: tot-ex };
     };
     const totals = calc();
 
@@ -63,7 +64,7 @@ const EstimateApp = ({ userId }) => {
         resNote: async (i) => { if(!sys.id) return; const nn = [...sys.notes]; nn[i].resolved = !nn[i].resolved; setSys(p=>({...p, notes:nn})); await updateDoc(doc(db, 'estimates', sys.id), {notes:nn, hasFlag:nn.some(x=>!x.resolved)}); },
         upload: async (type, file) => { if(!sys.id || !file) return alert("Save First"); const r = ref(storage, `docs/${sys.id}/${type}_${file.name}`); setSys(p=>({...p, save:'SAVING'})); const s = await uploadBytes(r, file); const u = await getDownloadURL(s.ref); await updateDoc(doc(db, 'estimates', sys.id), { [`dealFile.${type}`]: { name:file.name, url:u, date:new Date().toLocaleDateString() } }); setSys(p=>({...p, save:'IDLE'})); alert("Uploaded"); },
         cal: () => { if(!veh.bd) return alert("Date?"); const t = encodeURIComponent(`Repair: ${cust.n} (${veh.r})`); const d = encodeURIComponent(item.list.map(i=>i.desc).join('\n')); window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&details=${d}&location=${encodeURIComponent(cfg.address)}&dates=${veh.bd.replace(/-/g,'')}T${veh.bt.replace(/:/g,'')}00/${veh.bd.replace(/-/g,'')}T${(parseInt(veh.bt)+1).toString().padStart(2,'0')}0000`, '_blank'); },
-        csv: () => { const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.due}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="sales.csv"; a.click(); },
+        csv: () => { const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.finalDue}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="sales.csv"; a.click(); },
         delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
         pay: async (id, s) => await updateDoc(doc(db,'estimates',id), {status: s==='PAID'?'UNPAID':'PAID'}),
         addExp: async () => { if(!sys.expD) return; await addDoc(collection(db,'expenses'), {desc:sys.expD, amount:parseFloat(sys.expA), category:sys.expC, date:serverTimestamp()}); setSys(p=>({...p, expD:'', expA:''})); },
@@ -80,7 +81,8 @@ const EstimateApp = ({ userId }) => {
 
     if(mode==='SETTINGS') return <div style={{padding:'20px'}}><button onClick={()=>setMode('ESTIMATE')}>Back</button><h2>Settings</h2>{Object.keys(cfg).map(k=><div key={k} style={{marginBottom:'10px'}}><label>{k}</label><input style={s.inp} value={cfg[k]} onChange={e=>setCfg({...cfg, [k]:e.target.value})}/></div>)}<button style={s.btn} onClick={()=>setDoc(doc(db,'settings','global'), cfg)}>Save</button></div>;
     
-    if(mode==='DASHBOARD') return <div style={{padding:'20px'}}><button onClick={()=>setMode('ESTIMATE')}>Back</button><h2>Dashboard</h2><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}><div style={{background:'#e0f2fe', padding:'10px'}}>Sales: £{sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.due||0),0).toFixed(0)}</div><div style={{background:'#dcfce7', padding:'10px'}}>Profit: £{(sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.prof||0),0) - sys.exps.reduce((a,b)=>a+b.amount,0)).toFixed(0)}</div></div><h3>Expenses</h3><div style={{display:'flex'}}><input style={{flex:1}} placeholder="Desc" value={sys.expD} onChange={e=>setSys({...sys, expD:e.target.value})}/><input style={{width:60}} placeholder="£" value={sys.expA} onChange={e=>setSys({...sys, expA:e.target.value})}/><button onClick={actions.addExp}>+</button></div>{sys.exps.map(x=><div key={x.id} style={s.row}>{x.desc} <b>£{x.amount}</b></div>)}</div>;
+    // DASHBOARD - COMPATIBILITY FIX: Reading .finalDue and .jobProfit
+    if(mode==='DASHBOARD') return <div style={{padding:'20px'}}><button onClick={()=>setMode('ESTIMATE')}>Back</button><h2>Dashboard</h2><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}><div style={{background:'#e0f2fe', padding:'10px'}}>Sales: £{sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.finalDue||0),0).toFixed(0)}</div><div style={{background:'#dcfce7', padding:'10px'}}>Profit: £{(sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.jobProfit||0),0) - sys.exps.reduce((a,b)=>a+b.amount,0)).toFixed(0)}</div></div><h3>Expenses</h3><div style={{display:'flex'}}><input style={{flex:1}} placeholder="Desc" value={sys.expD} onChange={e=>setSys({...sys, expD:e.target.value})}/><input style={{width:60}} placeholder="£" value={sys.expA} onChange={e=>setSys({...sys, expA:e.target.value})}/><button onClick={actions.addExp}>+</button></div>{sys.exps.map(x=><div key={x.id} style={s.row}>{x.desc} <b>£{x.amount}</b></div>)}</div>;
 
     return (
         <div style={{padding:'20px', maxWidth:'800px', margin:'0 auto', fontFamily:'sans-serif'}}>
@@ -140,9 +142,9 @@ const EstimateApp = ({ userId }) => {
                     {invType==='EXCESS' ? <tr><td>Excess: {cust.c}</td><td style={{textAlign:'right'}}>£{fin.ex}</td></tr> : item.list.map((i,x)=><tr key={x} style={{borderBottom:'1px solid #eee'}}><td>{i.desc}</td><td style={{textAlign:'right'}}>£{i.p.toFixed(2)} <span className="no-print" onClick={()=>actions.delItem(x)} style={{color:'red', cursor:'pointer'}}>x</span></td></tr>)}
                 </tbody></table>
                 <div style={{textAlign:'right'}}>
-                    {invType!=='EXCESS' && <><div className="no-print">Labor: <input value={fin.lh} onChange={e=>setFin({...fin, lh:e.target.value})} style={{width:40}}/>h @ £{fin.lr}</div><div>Labor: £{totals.l.toFixed(2)}</div><div>Parts: £{totals.pp.toFixed(2)}</div><div style={{fontWeight:'bold'}}>TOT: £{totals.tot.toFixed(2)}</div><div style={{color:'red'}}>Excess: -£{totals.ex.toFixed(2)}</div></>}
-                    <h2 style={{borderTop:'2px solid #000'}}>DUE: £{invType==='EXCESS'?parseFloat(fin.ex).toFixed(2):totals.due.toFixed(2)}</h2>
-                    <div className="no-print" style={{background:'#fee2e2', padding:5}}>Paint Cost: <input value={fin.paint} onChange={e=>setFin({...fin, paint:e.target.value})} style={{width:50}}/> | Profit: <b>£{totals.prof.toFixed(2)}</b></div>
+                    {invType!=='EXCESS' && <><div className="no-print">Labor: <input value={fin.lh} onChange={e=>setFin({...fin, lh:e.target.value})} style={{width:40}}/>h @ £{fin.lr}</div><div>Labor: £{totals.l.toFixed(2)}</div><div>Parts: £{totals.pp.toFixed(2)}</div><div style={{fontWeight:'bold'}}>TOT: £{totals.invoiceTotal.toFixed(2)}</div><div style={{color:'red'}}>Excess: -£{totals.excessAmount.toFixed(2)}</div></>}
+                    <h2 style={{borderTop:'2px solid #000'}}>DUE: £{invType==='EXCESS'?parseFloat(fin.ex).toFixed(2):totals.finalDue.toFixed(2)}</h2>
+                    <div className="no-print" style={{background:'#fee2e2', padding:5}}>Paint Cost: <input value={fin.paint} onChange={e=>setFin({...fin, paint:e.target.value})} style={{width:50}}/> | Profit: <b>£{totals.jobProfit.toFixed(2)}</b></div>
                 </div>
                 {mode.includes('INVOICE') && <div style={{marginTop:40, display:'flex', justifyContent:'space-between'}}><div><b>Pay:</b> {cfg.companyName}<br/>80-22-60 / 06163462</div><div style={{textAlign:'center'}}><canvas ref={canvasRef} width={200} height={80} style={{border:'1px dashed #ccc'}} onTouchStart={startD} onTouchMove={moveD} onTouchEnd={()=>setDraw(false)} onMouseDown={startD} onMouseMove={moveD} onMouseUp={()=>setDraw(false)} /><br/>Signed</div></div>}
             </>}
@@ -157,7 +159,8 @@ const EstimateApp = ({ userId }) => {
 
             <div className="no-print" style={{marginTop:80, paddingBottom:50}}>
                 <div style={{display:'flex', justifyContent:'space-between'}}><input placeholder="Search..." value={sys.search} onChange={e=>setSys({...sys, search:e.target.value})} style={{padding:5}}/><button onClick={actions.csv}>CSV</button></div>
-                {sys.jobs.filter(j=>(j.customer+j.reg).toLowerCase().includes(sys.search.toLowerCase())).map(j=><div key={j.id} style={{padding:10, borderBottom:'1px solid #eee', background:j.status==='PAID'?'#f0fdf4':'#fff'}} onClick={()=>actions.load(j)}><b>{j.customer}</b> ({j.reg}) <span style={{float:'right'}}>£{j.totals?.due.toFixed(2)}</span><br/><small>{j.type}</small> <button onClick={(e)=>{e.stopPropagation(); actions.delJob(j.id)}} style={{color:'red', border:'none', background:'none'}}>x</button> <button onClick={(e)=>{e.stopPropagation(); actions.pay(j.id, j.status)}}>{j.status}</button></div>)}
+                {/* LIST - COMPATIBILITY FIX: Reading .finalDue */}
+                {sys.jobs.filter(j=>(j.customer+j.reg).toLowerCase().includes(sys.search.toLowerCase())).map(j=><div key={j.id} style={{padding:10, borderBottom:'1px solid #eee', background:j.status==='PAID'?'#f0fdf4':'#fff'}} onClick={()=>actions.load(j)}><b>{j.customer}</b> ({j.reg}) <span style={{float:'right'}}>£{(j.totals?.finalDue || j.totals?.due || 0).toFixed(2)}</span><br/><small>{j.type}</small> <button onClick={(e)=>{e.stopPropagation(); actions.delJob(j.id)}} style={{color:'red', border:'none', background:'none'}}>x</button> <button onClick={(e)=>{e.stopPropagation(); actions.pay(j.id, j.status)}}>{j.status}</button></div>)}
             </div>
             <style>{`@media print { .no-print { display: none !important; } body { padding: 0; margin: 0; } input, textarea, select { border: none !important; resize: none; padding: 0 !important; font-family: inherit; color: black !important; } input::placeholder { color: transparent; } }`}</style>
         </div>
@@ -166,4 +169,4 @@ const EstimateApp = ({ userId }) => {
 
 const App = () => { const [u,s]=useState(null); useEffect(()=>onAuthStateChanged(auth,x=>s(x?x.uid:signInAnonymously(auth))),[]); return u?<EstimateApp userId={u}/>:<div>Loading...</div>; };
 export default App;
-// END OF CODE
+// END
