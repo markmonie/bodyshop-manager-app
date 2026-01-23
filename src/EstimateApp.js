@@ -52,17 +52,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v13'); 
+            const d = localStorage.getItem('draft_v14'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v13'); }
+        } catch(e) { localStorage.removeItem('draft_v14'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v13', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v14', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -116,6 +116,7 @@ const EstimateApp = ({ userId }) => {
         addItem: () => { if(!item.d) return; const c=parseFloat(item.c)||0; setItem(p=>({...p, d:'', c:'', list:[...p.list, {desc:p.d, c, p: c*(1+(parseFloat(cfg.markup)||0)/100)}]})); },
         delItem: (i) => setItem(p=>({...p, list:p.list.filter((_,x)=>x!==i)})),
         
+        // --- PROXY DVLA LOOKUP ---
         lookup: async () => { 
             if(veh.r.length < 2) return alert("Enter Reg");
             setSys(p=>({...p, lookupStatus:'SEARCHING...'}));
@@ -138,10 +139,20 @@ const EstimateApp = ({ userId }) => {
             }
         },
         
+        // --- SMART PARTS (WITH FALLBACK) ---
         parts: () => { 
-            if(!veh.v && !veh.r) return alert("Enter Reg or VIN first");
-            window.open(`https://7zap.com/en/search/?q=${veh.v || veh.r}`, '_blank'); 
+            const cleanVin = (veh.v||'').replace(/\s/g, '');
+            // 1. Try 7zap with VIN
+            if(cleanVin.length > 5) {
+                window.open(`https://7zap.com/en/search/?q=${cleanVin}`, '_blank'); 
+            } else {
+                // 2. Fallback to eBay if VIN missing
+                if(window.confirm("Full Chassis Number is missing (DVLA limits this). Search eBay Parts by Reg instead?")) {
+                    window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.r}+parts`, '_blank');
+                }
+            }
         },
+        
         paint: () => { 
             if(!veh.mm) return alert("Enter Make/Model first");
             const make = veh.mm.split(' ')[0].toUpperCase();
@@ -166,7 +177,7 @@ const EstimateApp = ({ userId }) => {
         delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
         pay: async (id, currentStatus) => { const s = currentStatus === 'PAID' ? 'UNPAID' : 'PAID'; await updateDoc(doc(db,'estimates',id), {status: s}); },
 
-        // --- EXPENSES WITH RECEIPT UPLOAD ---
+        // --- EXPENSES WITH RECEIPT ---
         setReceipt: (e) => { setSys(p=>({...p, receiptFile: e.target.files[0]})); },
         addExp: async () => { 
             if(!sys.expD) return; 
@@ -181,7 +192,6 @@ const EstimateApp = ({ userId }) => {
         },
         delExp: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'expenses',id)); },
         csvIncome: () => { const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.finalDue}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="Income.csv"; a.click(); },
-        // UPDATED CSV: Now includes Receipt Link
         csvExp: () => { const l = "data:text/csv;charset=utf-8,Date,Desc,Category,Amount,ReceiptLink\n"+sys.exps.map(j=>`${new Date(j.date?.seconds*1000).toLocaleDateString()},${j.desc},${j.category},${j.amount},${j.receipt||''}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="Expenses.csv"; a.click(); },
         
         newJob: () => { if(window.confirm("New?")) { setMode('ESTIMATE'); setSys(p=>({...p, id:null, photos:[], stages:{}, notes:[], invNum:''})); setCust({n:'', a:'', p:'', e:'', c:'', nc:'', ic:'', ia:''}); setVeh({r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00'}); setItem({d:'', c:'', list:[]}); } }
