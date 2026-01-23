@@ -36,7 +36,7 @@ const EstimateApp = ({ userId }) => {
     const [veh, setVeh] = useState({ r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00' });
     const [item, setItem] = useState({ d:'', c:'', list:[] }); 
     const [fin, setFin] = useState({ lh:'0', lr:'50', vat:'0', ex:'0', paint:'0' });
-    const [sys, setSys] = useState({ photos:[], upload:false, expD:'', expA:'', expC:'Stock', save:'IDLE', search:'', jobs:[], exps:[], id:null, stages:{}, notes:[], note:'', invNum:'', lookupStatus:'IDLE' });
+    const [sys, setSys] = useState({ photos:[], upload:false, expD:'', expA:'', expC:'Stock', save:'IDLE', search:'', jobs:[], exps:[], id:null, stages:{}, notes:[], note:'', invNum:'', lookupStatus:'IDLE', receiptFile:null });
     
     const canvasRef = useRef(null); const [draw, setDraw] = useState(false);
     const activeJob = useMemo(() => sys.jobs.find(j => j.id === sys.id), [sys.jobs, sys.id]);
@@ -52,17 +52,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v12'); 
+            const d = localStorage.getItem('draft_v13'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v12'); }
+        } catch(e) { localStorage.removeItem('draft_v13'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v12', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v13', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -116,25 +116,20 @@ const EstimateApp = ({ userId }) => {
         addItem: () => { if(!item.d) return; const c=parseFloat(item.c)||0; setItem(p=>({...p, d:'', c:'', list:[...p.list, {desc:p.d, c, p: c*(1+(parseFloat(cfg.markup)||0)/100)}]})); },
         delItem: (i) => setItem(p=>({...p, list:p.list.filter((_,x)=>x!==i)})),
         
-        // --- PROXY DVLA LOOKUP ---
         lookup: async () => { 
             if(veh.r.length < 2) return alert("Enter Reg");
             setSys(p=>({...p, lookupStatus:'SEARCHING...'}));
             const cleanReg = veh.r.replace(/\s/g, '');
             try {
-                // Using CORS Proxy to ensure it works on mobile
                 const proxyUrl = "https://corsproxy.io/?";
                 const targetUrl = "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles";
-                
                 const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
                     method: "POST",
                     headers: { "x-api-key": cfg.dvlaKey, "Content-Type": "application/json" },
                     body: JSON.stringify({ registrationNumber: cleanReg })
                 });
-
-                if (!response.ok) throw new Error("Check API Key in Settings");
+                if (!response.ok) throw new Error("Check API Key");
                 const data = await response.json();
-                
                 setVeh(p=>({...p, mm:`${data.make} ${data.colour}`, v: data.vin || ''})); 
                 setSys(p=>({...p, lookupStatus:'FOUND'}));
             } catch(e) { 
@@ -143,24 +138,19 @@ const EstimateApp = ({ userId }) => {
             }
         },
         
-        // --- SMART PORTAL LINKS ---
         parts: () => { 
-            // Prioritize VIN (Chassis), fallback to Reg
             if(!veh.v && !veh.r) return alert("Enter Reg or VIN first");
             window.open(`https://7zap.com/en/search/?q=${veh.v || veh.r}`, '_blank'); 
         },
         paint: () => { 
             if(!veh.mm) return alert("Enter Make/Model first");
             const make = veh.mm.split(' ')[0].toUpperCase();
-            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?make=${make}`; // Default Fallback
-
-            // Manufacturer Specific Portals
+            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?make=${make}`; 
             if(make === 'FORD') url = 'https://www.ford.co.uk/support/vehicle-dashboard'; 
             if(make === 'BMW') url = 'https://bimmer.work/'; 
             if(make === 'MERCEDES') url = 'https://www.lastvin.com/'; 
             if(make === 'VOLKSWAGEN' || make === 'VW' || make === 'AUDI') url = 'https://erwin.volkswagen.de/erwin/showHome.do'; 
             if(make === 'TOYOTA') url = 'https://www.toyota-tech.eu/'; 
-            
             window.open(url, '_blank'); 
         },
         emailIns: () => { window.location.href = `mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}`; },
@@ -176,10 +166,24 @@ const EstimateApp = ({ userId }) => {
         delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
         pay: async (id, currentStatus) => { const s = currentStatus === 'PAID' ? 'UNPAID' : 'PAID'; await updateDoc(doc(db,'estimates',id), {status: s}); },
 
-        addExp: async () => { if(!sys.expD) return; await addDoc(collection(db,'expenses'), {desc:sys.expD, amount:parseFloat(sys.expA), category:sys.expC, date:serverTimestamp()}); setSys(p=>({...p, expD:'', expA:''})); },
+        // --- EXPENSES WITH RECEIPT UPLOAD ---
+        setReceipt: (e) => { setSys(p=>({...p, receiptFile: e.target.files[0]})); },
+        addExp: async () => { 
+            if(!sys.expD) return; 
+            let receiptUrl = '';
+            if(sys.receiptFile) {
+                const r = ref(storage, `receipts/${Date.now()}_${sys.receiptFile.name}`);
+                await uploadBytes(r, sys.receiptFile);
+                receiptUrl = await getDownloadURL(r);
+            }
+            await addDoc(collection(db,'expenses'), {desc:sys.expD, amount:parseFloat(sys.expA), category:sys.expC, receipt: receiptUrl, date:serverTimestamp()}); 
+            setSys(p=>({...p, expD:'', expA:'', receiptFile:null})); 
+        },
         delExp: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'expenses',id)); },
         csvIncome: () => { const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.finalDue}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="Income.csv"; a.click(); },
-        csvExp: () => { const l = "data:text/csv;charset=utf-8,Date,Desc,Category,Amount\n"+sys.exps.map(j=>`${new Date(j.date?.seconds*1000).toLocaleDateString()},${j.desc},${j.category},${j.amount}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="Expenses.csv"; a.click(); },
+        // UPDATED CSV: Now includes Receipt Link
+        csvExp: () => { const l = "data:text/csv;charset=utf-8,Date,Desc,Category,Amount,ReceiptLink\n"+sys.exps.map(j=>`${new Date(j.date?.seconds*1000).toLocaleDateString()},${j.desc},${j.category},${j.amount},${j.receipt||''}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="Expenses.csv"; a.click(); },
+        
         newJob: () => { if(window.confirm("New?")) { setMode('ESTIMATE'); setSys(p=>({...p, id:null, photos:[], stages:{}, notes:[], invNum:''})); setCust({n:'', a:'', p:'', e:'', c:'', nc:'', ic:'', ia:''}); setVeh({r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00'}); setItem({d:'', c:'', list:[]}); } }
     };
 
@@ -228,7 +232,7 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
     
-    if(mode==='DASHBOARD') return <div style={{padding:'20px'}}><button onClick={()=>setMode('ESTIMATE')} style={{marginBottom:20, padding:10}}>← Back</button><h2>Dashboard</h2><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:20}}><div style={{background:'#e0f2fe', padding:'15px', borderRadius:'8px'}}><h3>Sales</h3>£{sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.finalDue||b.totals?.due||0),0).toFixed(0)}</div><div style={{background:'#fee2e2', padding:'15px', borderRadius:'8px'}}><h3>Costs</h3>£{sys.exps.reduce((a,b)=>a+(b.amount||0),0).toFixed(0)}</div></div><div style={{display:'flex', gap:10, marginBottom:20}}><button style={{...s.btn, background:'#0f766e', flex:1}} onClick={actions.csvIncome}>📥 Income CSV</button><button style={{...s.btn, background:'#be123c', flex:1}} onClick={actions.csvExp}>📥 Expense CSV</button></div><h3>Add Expense</h3><div style={{display:'flex', gap:5, marginBottom:20}}><input style={{...s.inp, marginBottom:0}} placeholder="Desc" value={sys.expD} onChange={e=>setSys({...sys, expD:e.target.value})}/><input style={{...s.inp, marginBottom:0, width:80}} placeholder="£" value={sys.expA} onChange={e=>setSys({...sys, expA:e.target.value})}/><button style={{...s.btn, background:'#333'}} onClick={actions.addExp}>+</button></div>{sys.exps.map(x=><div key={x.id} style={{padding:10, borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between'}}><span>{x.desc}</span><span>£{x.amount} <button onClick={()=>actions.delExp(x.id)} style={{color:'red', border:'none', background:'none'}}>x</button></span></div>)}</div>;
+    if(mode==='DASHBOARD') return <div style={{padding:'20px'}}><button onClick={()=>setMode('ESTIMATE')} style={{marginBottom:20, padding:10}}>← Back</button><h2>Dashboard</h2><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:20}}><div style={{background:'#e0f2fe', padding:'15px', borderRadius:'8px'}}><h3>Sales</h3>£{sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.finalDue||b.totals?.due||0),0).toFixed(0)}</div><div style={{background:'#fee2e2', padding:'15px', borderRadius:'8px'}}><h3>Costs</h3>£{sys.exps.reduce((a,b)=>a+(b.amount||0),0).toFixed(0)}</div></div><div style={{display:'flex', gap:10, marginBottom:20}}><button style={{...s.btn, background:'#0f766e', flex:1}} onClick={actions.csvIncome}>📥 Income CSV</button><button style={{...s.btn, background:'#be123c', flex:1}} onClick={actions.csvExp}>📥 Expense CSV</button></div><h3>Add Expense</h3><div style={{display:'flex', gap:5, marginBottom:20}}><input style={{...s.inp, marginBottom:0}} placeholder="Desc" value={sys.expD} onChange={e=>setSys({...sys, expD:e.target.value})}/><input style={{...s.inp, marginBottom:0, width:80}} placeholder="£" value={sys.expA} onChange={e=>setSys({...sys, expA:e.target.value})}/><div style={{width:40, overflow:'hidden', position:'relative'}}><input type="file" onChange={actions.setReceipt} style={{position:'absolute', opacity:0, top:0, left:0, height:'100%'}}/><button style={{...s.btn, background:sys.receiptFile?'green':'#666'}}>📷</button></div><button style={{...s.btn, background:'#333'}} onClick={actions.addExp}>+</button></div>{sys.exps.map(x=><div key={x.id} style={{padding:10, borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between'}}><span>{x.desc} {x.receipt && <a href={x.receipt} target="_blank">📎</a>}</span><span>£{x.amount} <button onClick={()=>actions.delExp(x.id)} style={{color:'red', border:'none', background:'none'}}>x</button></span></div>)}</div>;
 
     return (
         <div style={{padding:'15px', paddingBottom:'100px', maxWidth:'600px', margin:'0 auto', fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'}}>
