@@ -29,9 +29,9 @@ const s = {
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
     const [mode, setMode] = useState('ESTIMATE');
-    const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1' });
+    const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1', logo:'' });
     
-    // Core Data - Added 'ie' for Insurer Email
+    // Core Data
     const [cust, setCust] = useState({ n:'', a:'', p:'', e:'', ie:'', c:'', nc:'', ic:'', ia:'' }); 
     const [veh, setVeh] = useState({ r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00' });
     const [item, setItem] = useState({ d:'', c:'', list:[] }); 
@@ -52,17 +52,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v8'); 
+            const d = localStorage.getItem('draft_v9'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v8'); }
+        } catch(e) { localStorage.removeItem('draft_v9'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v8', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v9', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -96,13 +96,11 @@ const EstimateApp = ({ userId }) => {
             try {
                 let n = sys.invNum, t = type;
                 let currentNotes = [...sys.notes];
-                
                 if(type.includes('INVOICE') && !n) { n = `INV-${1000+sys.jobs.length+1}`; setSys(p=>({...p, invNum:n})); }
                 
                 if(type === 'INVOICE_MAIN') { setMode('INVOICE'); t='INVOICE'; } 
                 else if (type === 'INVOICE_EXCESS') { 
                     setMode('INVOICE'); t='INVOICE (EXCESS)'; 
-                    // AUTO-NOTE: Paste into Deal File
                     currentNotes.push({text: `Excess Invoice ${n} Generated`, date: new Date().toLocaleDateString(), resolved: true});
                     setSys(p=>({...p, notes: currentNotes}));
                 } 
@@ -128,20 +126,19 @@ const EstimateApp = ({ userId }) => {
             } catch(e) { alert("Check DVLA Key in Settings"); } 
         },
         
-        // --- ACTIONS ---
         parts: () => { window.open(`https://7zap.com/en/search/?q=${veh.v || veh.r}`, '_blank'); },
         paint: () => { window.open(`https://www.google.com/search?q=${encodeURIComponent(veh.mm + " paint code location")}`, '_blank'); },
         emailIns: () => { window.location.href = `mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}`; },
         
         stage: async (k, done) => { if(!sys.id) return alert("Save First"); const ns = {...sys.stages, [k]: {completed:done, date:done?new Date().toLocaleDateString():''}}; setSys(p=>({...p, stages:ns})); await updateDoc(doc(db, 'estimates', sys.id), {stages:ns}); },
         note: async () => { if(!sys.note || !sys.id) return; const nn = [...sys.notes, {text:sys.note, date:new Date().toLocaleDateString(), resolved:false}]; setSys(p=>({...p, notes:nn, note:''})); await updateDoc(doc(db, 'estimates', sys.id), {notes:nn}); },
-        
         toggleNote: async (i) => { if(!sys.id) return; const nn = [...sys.notes]; nn[i].resolved = !nn[i].resolved; setSys(p=>({...p, notes:nn})); await updateDoc(doc(db, 'estimates', sys.id), {notes:nn}); },
 
         upload: async (type, file) => { if(!sys.id || !file) return alert("Save First"); const r = ref(storage, `docs/${sys.id}/${type}_${file.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, file); const u = await getDownloadURL(s.ref); await updateDoc(doc(db, 'estimates', sys.id), { [`dealFile.${type}`]: { name:file.name, url:u, date:new Date().toLocaleDateString() } }); setSys(p=>({...p, save:'IDLE'})); alert("Uploaded"); },
         uploadPhoto: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `photos/${Date.now()}_${f.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, f); const u = await getDownloadURL(r); setSys(p=>({...p, save:'IDLE', photos:[...p.photos,u]})); } },
-        delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
+        uploadLogo: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `settings/logo_${Date.now()}`); await uploadBytes(r, f); const u = await getDownloadURL(r); setCfg(p=>({...p, logo:u})); await setDoc(doc(db,'settings','global'), {...cfg, logo:u}); } },
         
+        delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
         pay: async (id, currentStatus) => { const s = currentStatus === 'PAID' ? 'UNPAID' : 'PAID'; await updateDoc(doc(db,'estimates',id), {status: s}); },
 
         addExp: async () => { if(!sys.expD) return; await addDoc(collection(db,'expenses'), {desc:sys.expD, amount:parseFloat(sys.expA), category:sys.expC, date:serverTimestamp()}); setSys(p=>({...p, expD:'', expA:''})); },
@@ -163,6 +160,11 @@ const EstimateApp = ({ userId }) => {
         <div style={{padding:'20px'}}>
             <button onClick={()=>setMode('ESTIMATE')} style={{marginBottom:20, padding:10}}>← Back</button>
             <h2>Settings</h2>
+            <div style={{marginBottom:15}}>
+                <label style={s.label}>COMPANY LOGO</label>
+                <input type="file" onChange={actions.uploadLogo} style={s.inp}/>
+                {cfg.logo && <img src={cfg.logo} style={{height:50, marginTop:5, border:'1px solid #ccc'}}/>}
+            </div>
             <div style={{marginBottom:15}}>
                 <label style={s.label}>DVLA API KEY</label>
                 <input style={{...s.inp, border:'2px solid #0284c7'}} value={cfg.dvlaKey} onChange={e=>setCfg({...cfg, dvlaKey:e.target.value})}/>
@@ -197,7 +199,7 @@ const EstimateApp = ({ userId }) => {
         <div style={{padding:'15px', paddingBottom:'100px', maxWidth:'600px', margin:'0 auto', fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'}}>
             {mode!=='ESTIMATE' && <button className="no-print" onClick={()=>setMode('ESTIMATE')} style={{marginBottom:15, padding:'8px 12px', background:'#eee', border:'none', borderRadius:'4px'}}>← Back</button>}
             <div style={{borderBottom:'4px solid #cc0000', marginBottom:'20px', paddingBottom:'10px', display:'flex', justifyContent:'space-between', alignItems:'end'}}>
-                <h1 style={{margin:0, fontSize:'24px'}}>TRIPLE <span style={{color:'#cc0000'}}>MMM</span></h1>
+                {cfg.logo ? <img src={cfg.logo} style={{height:60, maxWidth:'200px', objectFit:'contain'}} alt="Logo"/> : <h1 style={{margin:0, fontSize:'24px'}}>TRIPLE <span style={{color:'#cc0000'}}>MMM</span></h1>}
                 <div style={{textAlign:'right', fontSize:'12px', color:'#666'}}><b>{cfg.phone}</b><br/>{cfg.address}</div>
             </div>
 
@@ -212,7 +214,7 @@ const EstimateApp = ({ userId }) => {
                     <input style={s.inp} placeholder="Claim #" value={cust.c} onChange={e=>setCust({...cust, c:e.target.value})}/>
                     <input style={s.inp} placeholder="Insurer Name" value={cust.ic} onChange={e=>setCust({...cust, ic:e.target.value})}/>
                 </div>
-                {/* NEW INSURER EMAIL BOX */}
+                {/* INSURER EMAIL BOX */}
                 <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
                     <input style={{...s.inp, marginBottom:0}} placeholder="Insurer Email" value={cust.ie} onChange={e=>setCust({...cust, ie:e.target.value})}/>
                     <button onClick={actions.emailIns} style={{...s.btn, background:'#6366f1'}}>✉️ INS</button>
