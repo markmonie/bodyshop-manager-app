@@ -189,3 +189,4 @@ const EstimateApp = ({ userId }) => {
 const App = () => { const [u,setU]=useState(null); useEffect(()=>onAuthStateChanged(auth,x=>setU(x?x.uid:signInAnonymously(auth))),[]); return u?<EstimateApp userId={u}/>:<div>Loading...</div>; };
 export default App;
 // END OF CODE
+
