@@ -31,8 +31,8 @@ const EstimateApp = ({ userId }) => {
     const [mode, setMode] = useState('ESTIMATE');
     const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1' });
     
-    // Core Data
-    const [cust, setCust] = useState({ n:'', a:'', p:'', e:'', c:'', nc:'', ic:'', ia:'' }); 
+    // Core Data - Added 'ie' for Insurer Email
+    const [cust, setCust] = useState({ n:'', a:'', p:'', e:'', ie:'', c:'', nc:'', ic:'', ia:'' }); 
     const [veh, setVeh] = useState({ r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00' });
     const [item, setItem] = useState({ d:'', c:'', list:[] }); 
     const [fin, setFin] = useState({ lh:'0', lr:'50', vat:'0', ex:'0', paint:'0' });
@@ -52,17 +52,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v6'); 
+            const d = localStorage.getItem('draft_v8'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v6'); }
+        } catch(e) { localStorage.removeItem('draft_v8'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v6', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v8', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -85,7 +85,7 @@ const EstimateApp = ({ userId }) => {
     const actions = {
         load: (j) => { 
             setSys(p=>({...p, id:j.id, photos:j.photos||[], stages:j.stages||{}, notes:j.notes||[], invNum:j.invoiceNumber||''})); 
-            setCust({n:j.customer||'', a:j.address||'', p:j.phone||'', e:j.email||'', c:j.claimNum||'', nc:j.networkCode||'', ic:j.insuranceCo||'', ia:j.insuranceAddr||''}); 
+            setCust({n:j.customer||'', a:j.address||'', p:j.phone||'', e:j.email||'', ie:j.insEmail||'', c:j.claimNum||'', nc:j.networkCode||'', ic:j.insuranceCo||'', ia:j.insuranceAddr||''}); 
             setVeh({r:j.reg||'', m:j.mileage||'', mm:j.makeModel||'', v:j.vin||'', pc:j.paintCode||'', bd:j.bookingDate||'', bt:j.bookingTime||'09:00'}); 
             setItem({...item, list: Array.isArray(j.items) ? j.items : [] }); 
             setFin({lh:j.laborHours||'', lr:j.laborRate||cfg.laborRate, vat:j.vatRate||'0', ex:j.excess||'', paint:j.paintAllocated||''}); 
@@ -95,12 +95,20 @@ const EstimateApp = ({ userId }) => {
             if(!cust.n || !veh.r) return alert("Name/Reg required"); setSys(p=>({...p, save:'SAVING'}));
             try {
                 let n = sys.invNum, t = type;
+                let currentNotes = [...sys.notes];
+                
                 if(type.includes('INVOICE') && !n) { n = `INV-${1000+sys.jobs.length+1}`; setSys(p=>({...p, invNum:n})); }
+                
                 if(type === 'INVOICE_MAIN') { setMode('INVOICE'); t='INVOICE'; } 
-                else if (type === 'INVOICE_EXCESS') { setMode('INVOICE'); t='INVOICE (EXCESS)'; } 
+                else if (type === 'INVOICE_EXCESS') { 
+                    setMode('INVOICE'); t='INVOICE (EXCESS)'; 
+                    // AUTO-NOTE: Paste into Deal File
+                    currentNotes.push({text: `Excess Invoice ${n} Generated`, date: new Date().toLocaleDateString(), resolved: true});
+                    setSys(p=>({...p, notes: currentNotes}));
+                } 
                 else setMode(type);
                 
-                const data = { type: t, status: 'UNPAID', invoiceNumber: n, customer: cust.n, address: cust.a, phone: cust.p, email: cust.e, claimNum: cust.c, networkCode: cust.nc, insuranceCo: cust.ic, insuranceAddr: cust.ia, reg: veh.r, mileage: veh.m, makeModel: veh.mm, vin: veh.v, paintCode: veh.pc, items: item.list, laborHours: fin.lh, laborRate: fin.lr, vatRate: fin.vat, excess: fin.ex, photos: sys.photos, bookingDate: veh.bd, bookingTime: veh.bt, totals: calc(), createdAt: serverTimestamp(), createdBy: userId, stages: sys.stages, notes: sys.notes, paintAllocated: fin.paint };
+                const data = { type: t, status: 'UNPAID', invoiceNumber: n, customer: cust.n, address: cust.a, phone: cust.p, email: cust.e, insEmail: cust.ie, claimNum: cust.c, networkCode: cust.nc, insuranceCo: cust.ic, insuranceAddr: cust.ia, reg: veh.r, mileage: veh.m, makeModel: veh.mm, vin: veh.v, paintCode: veh.pc, items: item.list, laborHours: fin.lh, laborRate: fin.lr, vatRate: fin.vat, excess: fin.ex, photos: sys.photos, bookingDate: veh.bd, bookingTime: veh.bt, totals: calc(), createdAt: serverTimestamp(), createdBy: userId, stages: sys.stages, notes: currentNotes, paintAllocated: fin.paint };
                 
                 if(sys.id) { await updateDoc(doc(db, 'estimates', sys.id), data); setSys(p=>({...p, save:'SUCCESS'})); }
                 else { const r = await addDoc(collection(db, 'estimates'), data); setSys(p=>({...p, id:r.id, save:'SUCCESS'})); }
@@ -120,15 +128,22 @@ const EstimateApp = ({ userId }) => {
             } catch(e) { alert("Check DVLA Key in Settings"); } 
         },
         
-        // --- LOOKUP ACTIONS ---
+        // --- ACTIONS ---
         parts: () => { window.open(`https://7zap.com/en/search/?q=${veh.v || veh.r}`, '_blank'); },
         paint: () => { window.open(`https://www.google.com/search?q=${encodeURIComponent(veh.mm + " paint code location")}`, '_blank'); },
-
+        emailIns: () => { window.location.href = `mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}`; },
+        
         stage: async (k, done) => { if(!sys.id) return alert("Save First"); const ns = {...sys.stages, [k]: {completed:done, date:done?new Date().toLocaleDateString():''}}; setSys(p=>({...p, stages:ns})); await updateDoc(doc(db, 'estimates', sys.id), {stages:ns}); },
         note: async () => { if(!sys.note || !sys.id) return; const nn = [...sys.notes, {text:sys.note, date:new Date().toLocaleDateString(), resolved:false}]; setSys(p=>({...p, notes:nn, note:''})); await updateDoc(doc(db, 'estimates', sys.id), {notes:nn}); },
+        
+        toggleNote: async (i) => { if(!sys.id) return; const nn = [...sys.notes]; nn[i].resolved = !nn[i].resolved; setSys(p=>({...p, notes:nn})); await updateDoc(doc(db, 'estimates', sys.id), {notes:nn}); },
+
         upload: async (type, file) => { if(!sys.id || !file) return alert("Save First"); const r = ref(storage, `docs/${sys.id}/${type}_${file.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, file); const u = await getDownloadURL(s.ref); await updateDoc(doc(db, 'estimates', sys.id), { [`dealFile.${type}`]: { name:file.name, url:u, date:new Date().toLocaleDateString() } }); setSys(p=>({...p, save:'IDLE'})); alert("Uploaded"); },
         uploadPhoto: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `photos/${Date.now()}_${f.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, f); const u = await getDownloadURL(r); setSys(p=>({...p, save:'IDLE', photos:[...p.photos,u]})); } },
         delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
+        
+        pay: async (id, currentStatus) => { const s = currentStatus === 'PAID' ? 'UNPAID' : 'PAID'; await updateDoc(doc(db,'estimates',id), {status: s}); },
+
         addExp: async () => { if(!sys.expD) return; await addDoc(collection(db,'expenses'), {desc:sys.expD, amount:parseFloat(sys.expA), category:sys.expC, date:serverTimestamp()}); setSys(p=>({...p, expD:'', expA:''})); },
         delExp: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'expenses',id)); },
         csvIncome: () => { const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.finalDue}`).join('\n'); const a=document.createElement("a"); a.href=encodeURI(l); a.download="Income.csv"; a.click(); },
@@ -195,7 +210,12 @@ const EstimateApp = ({ userId }) => {
                 <input style={s.inp} placeholder="Email Address" value={cust.e} onChange={e=>setCust({...cust, e:e.target.value})}/>
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
                     <input style={s.inp} placeholder="Claim #" value={cust.c} onChange={e=>setCust({...cust, c:e.target.value})}/>
-                    <input style={s.inp} placeholder="Insurer" value={cust.ic} onChange={e=>setCust({...cust, ic:e.target.value})}/>
+                    <input style={s.inp} placeholder="Insurer Name" value={cust.ic} onChange={e=>setCust({...cust, ic:e.target.value})}/>
+                </div>
+                {/* NEW INSURER EMAIL BOX */}
+                <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
+                    <input style={{...s.inp, marginBottom:0}} placeholder="Insurer Email" value={cust.ie} onChange={e=>setCust({...cust, ie:e.target.value})}/>
+                    <button onClick={actions.emailIns} style={{...s.btn, background:'#6366f1'}}>✉️ INS</button>
                 </div>
 
                 <h4 style={s.head}>VEHICLE DETAILS</h4>
@@ -239,7 +259,7 @@ const EstimateApp = ({ userId }) => {
                 <div>
                     <h4 style={{borderBottom:'1px solid #ddd', paddingBottom:5}}>Snag List</h4>
                     <div style={{display:'flex', gap:5, marginBottom:10}}><input style={{...s.inp, marginBottom:0}} value={sys.note} onChange={e=>setSys({...sys, note:e.target.value})} placeholder="Add snag..."/><button onClick={actions.note} style={{...s.btn, background:'#333'}}>+</button></div>
-                    {sys.notes.map((n,i)=><div key={i} style={{padding:8, background:'#fee2e2', borderLeft:'4px solid red', marginBottom:5, fontSize:'14px'}}>{n.text}</div>)}
+                    {sys.notes.map((n,i)=><div key={i} style={{padding:8, background:n.resolved?'#dcfce7':'#fee2e2', borderLeft:n.resolved?'4px solid green':'4px solid red', marginBottom:5, fontSize:'14px', display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>{n.text}</span><button onClick={()=>actions.toggleNote(i)} style={{border:'none', background:'none', fontSize:'16px'}}>✅</button></div>)}
                 </div>
             </div>}
 
@@ -255,7 +275,8 @@ const EstimateApp = ({ userId }) => {
                         <div style={{marginBottom:10}}>Sat Note: <input type="file" onChange={e=>actions.upload('sat',e.target.files[0])}/> {activeJob?.dealFile?.sat && '✅'}</div>
                     </div>
                     <div style={s.card}><b>Checklist</b><br/>📸 Photos: {sys.photos.length}<br/>📄 Invoice: {sys.invNum||'Pending'}</div>
-                    <a href={`mailto:?subject=${encodeURIComponent(`Repair Info: ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for ${veh.r}. Invoice: ${sys.invNum}`)}`} style={{...s.btn, background:'#2563eb', textAlign:'center', display:'block', textDecoration:'none'}}>📧 Create Email Pack</a>
+                    <a href={`mailto:?subject=${encodeURIComponent(`Repair Info: ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for ${veh.r}. Invoice: ${sys.invNum}`)}`} style={{...s.btn, background:'#2563eb', textAlign:'center', display:'block', textDecoration:'none', marginBottom:10}}>📧 Create Client Email Pack</a>
+                    {cust.ie && <a href={`mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for Claim ${cust.c}.`)}`} style={{...s.btn, background:'#6366f1', textAlign:'center', display:'block', textDecoration:'none'}}>✉️ Create Insurer Email</a>}
                 </div>
             </div>}
 
@@ -317,7 +338,11 @@ const EstimateApp = ({ userId }) => {
                 <input placeholder="🔍 Search Jobs..." value={sys.search} onChange={e=>setSys({...sys, search:e.target.value})} style={{...s.inp, borderRadius:'20px', padding:'12px 20px', border:'1px solid #ccc'}}/>
                 {sys.jobs.filter(j=>(j.customer+j.reg).toLowerCase().includes(sys.search.toLowerCase())).map(j=><div key={j.id} style={{padding:'15px', borderBottom:'1px solid #eee', background:j.status==='PAID'?'#f0fdf4':'#fff', display:'flex', justifyContent:'space-between', alignItems:'center'}} onClick={()=>actions.load(j)}>
                     <div><b>{j.customer}</b> <span style={{color:'#666', fontSize:'14px'}}>({j.reg})</span><div style={{fontSize:'12px', color:'#999', marginTop:'2px'}}>{new Date(j.createdAt?.seconds*1000).toLocaleDateString()}</div></div>
-                    <div style={{textAlign:'right'}}><b>£{(j.totals?.finalDue || j.totals?.due || 0).toFixed(0)}</b><br/><button onClick={(e)=>{e.stopPropagation(); actions.delJob(j.id)}} style={{background:'none', border:'none', color:'#cc0000', fontSize:'18px', padding:0}}>×</button></div>
+                    <div style={{textAlign:'right'}}>
+                        <b>£{(j.totals?.finalDue || j.totals?.due || 0).toFixed(0)}</b><br/>
+                        <button onClick={(e)=>{e.stopPropagation(); actions.pay(j.id, j.status)}} style={{border:'none', background:'none', cursor:'pointer', marginRight:'10px'}}>{j.status==='PAID'?'✅':'💰'}</button>
+                        <button onClick={(e)=>{e.stopPropagation(); actions.delJob(j.id)}} style={{background:'none', border:'none', color:'#cc0000', fontSize:'18px', padding:0}}>×</button>
+                    </div>
                 </div>)}
             </div>
             
