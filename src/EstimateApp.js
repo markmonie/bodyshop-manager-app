@@ -17,13 +17,30 @@ class ErrorBoundary extends React.Component {
   render() { if (this.state.hasError) return <div style={{padding:20}}><h2>System Pause</h2><button onClick={()=>window.location.reload()} style={{padding:15, background:'red', color:'white'}}>Restart App</button></div>; return this.props.children; }
 }
 
-// --- STYLES ---
+// --- CLASSY STYLES ---
 const s = { 
-    inp: {width:'100%', padding:'12px', marginBottom:'10px', border:'1px solid #ddd', borderRadius:'8px', fontSize:'16px', boxSizing:'border-box'}, 
-    head: {borderBottom:'2px solid #cc0000', paddingBottom:'5px', marginBottom:'15px', color:'#cc0000', fontSize:'18px', fontWeight:'bold', marginTop:'20px'}, 
-    btn: {padding:'12px', color:'#fff', border:'none', borderRadius:'8px', fontWeight:'bold', fontSize:'14px', cursor:'pointer', minWidth:'60px'},
-    card: {background:'#fff', padding:'15px', border:'1px solid #eee', borderRadius:'8px', marginBottom:'10px', boxShadow:'0 2px 4px rgba(0,0,0,0.05)'},
-    label: {display:'block', fontSize:'12px', color:'#666', marginBottom:'2px', fontWeight:'bold'}
+    inp: {width:'100%', padding:'12px', marginBottom:'12px', border:'1px solid #e2e8f0', borderRadius:'10px', fontSize:'16px', boxSizing:'border-box', outline:'none', transition:'border 0.2s', backgroundColor:'#f8fafc'}, 
+    head: {borderBottom:'2px solid #cc0000', paddingBottom:'8px', marginBottom:'20px', color:'#1e293b', fontSize:'18px', fontWeight:'700', marginTop:'25px', letterSpacing:'0.5px'}, 
+    
+    // Standard Button
+    btn: {padding:'10px 16px', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'600', fontSize:'14px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', transition:'transform 0.1s', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'},
+    
+    // Action Button (Blue/Interactive)
+    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'},
+    
+    // Success/Save Button (Green)
+    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'},
+    
+    // Danger/Delete Button (Red)
+    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'},
+    
+    // Secondary/Neutral Button (Grey)
+    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'},
+
+    // Cards
+    card: {background:'#fff', padding:'20px', border:'1px solid #e2e8f0', borderRadius:'12px', marginBottom:'15px', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.05)'},
+    
+    label: {display:'block', fontSize:'11px', color:'#64748b', marginBottom:'4px', fontWeight:'bold', textTransform:'uppercase', letterSpacing:'0.5px'}
 };
 
 const EstimateApp = ({ userId }) => {
@@ -52,17 +69,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v15'); 
+            const d = localStorage.getItem('draft_v16'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v15'); }
+        } catch(e) { localStorage.removeItem('draft_v16'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v15', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v16', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -116,7 +133,6 @@ const EstimateApp = ({ userId }) => {
         addItem: () => { if(!item.d) return; const c=parseFloat(item.c)||0; setItem(p=>({...p, d:'', c:'', list:[...p.list, {desc:p.d, c, p: c*(1+(parseFloat(cfg.markup)||0)/100)}]})); },
         delItem: (i) => setItem(p=>({...p, list:p.list.filter((_,x)=>x!==i)})),
         
-        // --- PROXY DVLA LOOKUP ---
         lookup: async () => { 
             if(veh.r.length < 2) return alert("Enter Reg");
             setSys(p=>({...p, lookupStatus:'SEARCHING...'}));
@@ -139,38 +155,28 @@ const EstimateApp = ({ userId }) => {
             }
         },
         
-        // --- IMPROVED PARTS LOOKUP (PartsSouq > eBay) ---
         parts: () => { 
-            const v = (veh.v || '').replace(/\s/g, '');
-            // PartsSouq needs a VIN length > 5 to generally work
-            if (v.length > 5) {
-                window.open(`https://partsouq.com/en/search/all?q=${v}`, '_blank'); 
+            const cleanVin = (veh.v||'').replace(/\s/g, '');
+            if (cleanVin.length > 5) {
+                window.open(`https://partsouq.com/en/search/all?q=${cleanVin}`, '_blank'); 
             } else {
-                if(window.confirm("No VIN found. Search eBay Parts by Make/Model?")) {
-                    window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.mm}+parts`, '_blank'); 
+                if(window.confirm("No VIN found. Search eBay Parts by Reg?")) {
+                    window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.r}+parts`, '_blank'); 
                 }
             }
         },
         
-        // --- IMPROVED PAINT LOOKUP (Smarter Matching) ---
         paint: () => { 
             if(!veh.mm) return alert("Enter Make/Model first");
-            const txt = veh.mm.toUpperCase();
-            
-            // Default: Professional Paint Database (better than Google)
-            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?manuf=${txt.split(' ')[0]}`;
-
-            // Smart Redirects
-            if(txt.includes('FORD')) url = 'https://www.ford.co.uk/support/vehicle-dashboard'; 
-            if(txt.includes('BMW')) url = 'https://bimmer.work/'; 
-            if(txt.includes('MERCEDES')) url = 'https://www.lastvin.com/'; 
-            if(txt.includes('VW') || txt.includes('VOLKSWAGEN') || txt.includes('AUDI') || txt.includes('SEAT') || txt.includes('SKODA')) url = 'https://erwin.volkswagen.de/erwin/showHome.do'; 
-            if(txt.includes('TOYOTA')) url = 'https://www.toyota-tech.eu/'; 
-            if(txt.includes('VAUXHALL') || txt.includes('OPEL')) url = 'https://public.servicebox.peugeot.com/pages/index.jsp';
-            
+            const make = veh.mm.split(' ')[0].toUpperCase();
+            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?manuf=${make}`; 
+            if(make.includes('FORD')) url = 'https://www.ford.co.uk/support/vehicle-dashboard'; 
+            if(make.includes('BMW')) url = 'https://bimmer.work/'; 
+            if(make.includes('MERCEDES')) url = 'https://www.lastvin.com/'; 
+            if(make.includes('VOLKSWAGEN') || make.includes('VW') || make.includes('AUDI') || make.includes('SEAT') || make.includes('SKODA')) url = 'https://erwin.volkswagen.de/erwin/showHome.do'; 
+            if(make.includes('TOYOTA')) url = 'https://www.toyota-tech.eu/'; 
             window.open(url, '_blank'); 
         },
-        
         emailIns: () => { window.location.href = `mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}`; },
         
         stage: async (k, done) => { if(!sys.id) return alert("Save First"); const ns = {...sys.stages, [k]: {completed:done, date:done?new Date().toLocaleDateString():''}}; setSys(p=>({...p, stages:ns})); await updateDoc(doc(db, 'estimates', sys.id), {stages:ns}); },
@@ -184,7 +190,6 @@ const EstimateApp = ({ userId }) => {
         delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
         pay: async (id, currentStatus) => { const s = currentStatus === 'PAID' ? 'UNPAID' : 'PAID'; await updateDoc(doc(db,'estimates',id), {status: s}); },
 
-        // --- EXPENSES WITH RECEIPT ---
         setReceipt: (e) => { setSys(p=>({...p, receiptFile: e.target.files[0]})); },
         addExp: async () => { 
             if(!sys.expD) return; 
@@ -204,206 +209,337 @@ const EstimateApp = ({ userId }) => {
         newJob: () => { if(window.confirm("New?")) { setMode('ESTIMATE'); setSys(p=>({...p, id:null, photos:[], stages:{}, notes:[], invNum:''})); setCust({n:'', a:'', p:'', e:'', c:'', nc:'', ic:'', ia:''}); setVeh({r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00'}); setItem({d:'', c:'', list:[]}); } }
     };
 
-    // --- CANVAS ---
     const startD = (e) => { const {offsetX, offsetY} = e.nativeEvent.touches ? {offsetX:e.nativeEvent.touches[0].clientX-e.target.getBoundingClientRect().left, offsetY:e.nativeEvent.touches[0].clientY-e.target.getBoundingClientRect().top} : e.nativeEvent; const c = canvasRef.current.getContext('2d'); c.lineWidth=3; c.beginPath(); c.moveTo(offsetX, offsetY); setDraw(true); };
     const moveD = (e) => { if(!draw) return; const {offsetX, offsetY} = e.nativeEvent.touches ? {offsetX:e.nativeEvent.touches[0].clientX-e.target.getBoundingClientRect().left, offsetY:e.nativeEvent.touches[0].clientY-e.target.getBoundingClientRect().top} : e.nativeEvent; const c = canvasRef.current.getContext('2d'); c.lineTo(offsetX, offsetY); c.stroke(); };
     useEffect(() => { if(canvasRef.current) canvasRef.current.getContext('2d').clearRect(0,0,300,100); }, [mode]);
 
-    const Stage = ({k, l}) => { const x = sys.stages[k]||{}; return <div style={{padding:'10px', background:x.completed?'#f0fdf4':'#fff', border:'1px solid #ddd', borderRadius:'6px', marginBottom:'5px'}}><div style={{display:'flex', gap:'10px', alignItems:'center'}}><input type="checkbox" style={{transform:'scale(1.5)'}} checked={x.completed||false} onChange={e=>actions.stage(k,e.target.checked)}/><b>{l}</b></div></div> };
+    const Stage = ({k, l}) => { const x = sys.stages[k]||{}; return <div style={{padding:'12px', background:x.completed?'#f0fdf4':'#fff', border:'1px solid #e2e8f0', borderRadius:'10px', marginBottom:'8px', display:'flex', alignItems:'center', gap:'10px', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'}}><input type="checkbox" style={{transform:'scale(1.5)', accentColor:'#16a34a'}} checked={x.completed||false} onChange={e=>actions.stage(k,e.target.checked)}/><b style={{color:x.completed?'#16a34a':'#334155'}}>{l}</b></div> };
 
     // --- SETTINGS VIEW ---
     if(mode==='SETTINGS') return (
-        <div style={{padding:'20px'}}>
-            <button onClick={()=>setMode('ESTIMATE')} style={{marginBottom:20, padding:10}}>← Back</button>
-            <h2>Settings</h2>
-            <div style={{marginBottom:15}}>
-                <label style={s.label}>COMPANY LOGO</label>
-                <input type="file" onChange={actions.uploadLogo} style={s.inp}/>
-                {cfg.logo && <img src={cfg.logo} style={{height:60, maxWidth:'200px', objectFit:'contain'}} alt="Logo"/>}
+        <div style={{padding:'20px', maxWidth:'600px', margin:'0 auto'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+                <button onClick={()=>setMode('ESTIMATE')} style={{...s.btn, ...s.secondaryBtn}}>← Back</button>
+                <h2 style={{margin:0, color:'#1e293b'}}>Settings</h2>
             </div>
-            <div style={{marginBottom:15}}>
-                <label style={s.label}>DVLA API KEY</label>
-                <input style={{...s.inp, border:'2px solid #0284c7'}} value={cfg.dvlaKey} onChange={e=>setCfg({...cfg, dvlaKey:e.target.value})}/>
+            
+            <div style={s.card}>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>COMPANY LOGO</label>
+                    <input type="file" onChange={actions.uploadLogo} style={s.inp}/>
+                    {cfg.logo && <div style={{textAlign:'center', marginTop:10}}><img src={cfg.logo} style={{height:80, borderRadius:8, border:'1px solid #eee'}} alt="Logo"/></div>}
+                </div>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>DVLA API KEY</label>
+                    <input style={{...s.inp, border:'1px solid #3b82f6', background:'#eff6ff'}} value={cfg.dvlaKey} onChange={e=>setCfg({...cfg, dvlaKey:e.target.value})}/>
+                </div>
             </div>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-                <div><label style={s.label}>LABOR RATE (£)</label><input style={s.inp} value={cfg.laborRate} onChange={e=>setCfg({...cfg, laborRate:e.target.value})}/></div>
-                <div><label style={s.label}>VAT RATE (%)</label><input style={s.inp} value={cfg.vatRate} onChange={e=>setCfg({...cfg, vatRate:e.target.value})}/></div>
+
+            <div style={s.card}>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:15}}>
+                    <div><label style={s.label}>LABOR RATE (£)</label><input style={s.inp} value={cfg.laborRate} onChange={e=>setCfg({...cfg, laborRate:e.target.value})}/></div>
+                    <div><label style={s.label}>VAT RATE (%)</label><input style={s.inp} value={cfg.vatRate} onChange={e=>setCfg({...cfg, vatRate:e.target.value})}/></div>
+                </div>
             </div>
-            <div style={{marginBottom:15}}>
-                <label style={s.label}>COMPANY NAME</label>
-                <input style={s.inp} value={cfg.companyName} onChange={e=>setCfg({...cfg, companyName:e.target.value})}/>
+
+            <div style={s.card}>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>COMPANY NAME</label>
+                    <input style={s.inp} value={cfg.companyName} onChange={e=>setCfg({...cfg, companyName:e.target.value})}/>
+                </div>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>ADDRESS</label>
+                    <textarea style={{...s.inp, height:80}} value={cfg.address} onChange={e=>setCfg({...cfg, address:e.target.value})}/>
+                </div>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>PHONE</label>
+                    <input style={s.inp} value={cfg.phone} onChange={e=>setCfg({...cfg, phone:e.target.value})}/>
+                </div>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>TECHS (Comma separated)</label>
+                    <input style={s.inp} value={cfg.techs} onChange={e=>setCfg({...cfg, techs:e.target.value})}/>
+                </div>
             </div>
-            <div style={{marginBottom:15}}>
-                <label style={s.label}>ADDRESS</label>
-                <textarea style={{...s.inp, height:60}} value={cfg.address} onChange={e=>setCfg({...cfg, address:e.target.value})}/>
-            </div>
-            <div style={{marginBottom:15}}>
-                <label style={s.label}>PHONE</label>
-                <input style={s.inp} value={cfg.phone} onChange={e=>setCfg({...cfg, phone:e.target.value})}/>
-            </div>
-            <div style={{marginBottom:15}}>
-                <label style={s.label}>TECHS (Comma separated)</label>
-                <input style={s.inp} value={cfg.techs} onChange={e=>setCfg({...cfg, techs:e.target.value})}/>
-            </div>
-            <button style={{...s.btn, background:'#16a34a', width:'100%', fontSize:'18px'}} onClick={()=>setDoc(doc(db,'settings','global'), cfg)}>SAVE SETTINGS</button>
+            
+            <button style={{...s.btn, ...s.saveBtn, width:'100%', fontSize:'16px', padding:'15px'}} onClick={()=>setDoc(doc(db,'settings','global'), cfg)}>💾 SAVE SETTINGS</button>
         </div>
     );
     
-    if(mode==='DASHBOARD') return <div style={{padding:'20px'}}><button onClick={()=>setMode('ESTIMATE')} style={{marginBottom:20, padding:10}}>← Back</button><h2>Dashboard</h2><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:20}}><div style={{background:'#e0f2fe', padding:'15px', borderRadius:'8px'}}><h3>Sales</h3>£{sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.finalDue||b.totals?.due||0),0).toFixed(0)}</div><div style={{background:'#fee2e2', padding:'15px', borderRadius:'8px'}}><h3>Costs</h3>£{sys.exps.reduce((a,b)=>a+(b.amount||0),0).toFixed(0)}</div></div><div style={{display:'flex', gap:10, marginBottom:20}}><button style={{...s.btn, background:'#0f766e', flex:1}} onClick={actions.csvIncome}>📥 Income CSV</button><button style={{...s.btn, background:'#be123c', flex:1}} onClick={actions.csvExp}>📥 Expense CSV</button></div><h3>Add Expense</h3><div style={{display:'flex', gap:5, marginBottom:20}}><input style={{...s.inp, marginBottom:0}} placeholder="Desc" value={sys.expD} onChange={e=>setSys({...sys, expD:e.target.value})}/><input style={{...s.inp, marginBottom:0, width:80}} placeholder="£" value={sys.expA} onChange={e=>setSys({...sys, expA:e.target.value})}/><div style={{width:40, overflow:'hidden', position:'relative'}}><input type="file" onChange={actions.setReceipt} style={{position:'absolute', opacity:0, top:0, left:0, height:'100%'}}/><button style={{...s.btn, background:sys.receiptFile?'green':'#666'}}>📷</button></div><button style={{...s.btn, background:'#333'}} onClick={actions.addExp}>+</button></div>{sys.exps.map(x=><div key={x.id} style={{padding:10, borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between'}}><span>{x.desc} {x.receipt && <a href={x.receipt} target="_blank">📎</a>}</span><span>£{x.amount} <button onClick={()=>actions.delExp(x.id)} style={{color:'red', border:'none', background:'none'}}>x</button></span></div>)}</div>;
+    if(mode==='DASHBOARD') return <div style={{padding:'20px', maxWidth:'600px', margin:'0 auto'}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+            <button onClick={()=>setMode('ESTIMATE')} style={{...s.btn, ...s.secondaryBtn}}>← Back</button>
+            <h2 style={{margin:0, color:'#1e293b'}}>Dashboard</h2>
+        </div>
+        
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginBottom:25}}>
+            <div style={{background:'linear-gradient(135deg, #3b82f6, #2563eb)', padding:'20px', borderRadius:'12px', color:'white', boxShadow:'0 4px 6px rgba(37, 99, 235, 0.2)'}}>
+                <div style={{fontSize:'12px', opacity:0.8, fontWeight:'bold', marginBottom:5}}>TOTAL SALES</div>
+                <div style={{fontSize:'28px', fontWeight:'bold'}}>£{sys.jobs.filter(j=>j.type?.includes('INV')).reduce((a,b)=>a+(b.totals?.finalDue||b.totals?.due||0),0).toFixed(0)}</div>
+            </div>
+            <div style={{background:'linear-gradient(135deg, #ef4444, #dc2626)', padding:'20px', borderRadius:'12px', color:'white', boxShadow:'0 4px 6px rgba(220, 38, 38, 0.2)'}}>
+                <div style={{fontSize:'12px', opacity:0.8, fontWeight:'bold', marginBottom:5}}>TOTAL COSTS</div>
+                <div style={{fontSize:'28px', fontWeight:'bold'}}>£{sys.exps.reduce((a,b)=>a+(b.amount||0),0).toFixed(0)}</div>
+            </div>
+        </div>
+
+        <div style={{display:'flex', gap:10, marginBottom:25}}>
+            <button style={{...s.btn, background:'#0f766e', flex:1}} onClick={actions.csvIncome}>📥 Income CSV</button>
+            <button style={{...s.btn, background:'#be123c', flex:1}} onClick={actions.csvExp}>📥 Expense CSV</button>
+        </div>
+
+        <div style={s.card}>
+            <h3 style={{marginTop:0, marginBottom:15, color:'#334155'}}>Add Expense</h3>
+            <div style={{display:'flex', gap:10, marginBottom:10}}>
+                <input style={{...s.inp, marginBottom:0, flex:2}} placeholder="Description" value={sys.expD} onChange={e=>setSys({...sys, expD:e.target.value})}/>
+                <input style={{...s.inp, marginBottom:0, width:90}} placeholder="£" value={sys.expA} onChange={e=>setSys({...sys, expA:e.target.value})}/>
+            </div>
+            <div style={{display:'flex', gap:10}}>
+                <div style={{position:'relative', overflow:'hidden', flex:1}}>
+                    <input type="file" onChange={actions.setReceipt} style={{position:'absolute', opacity:0, top:0, left:0, width:'100%', height:'100%', cursor:'pointer'}}/>
+                    <button style={{...s.btn, ...s.secondaryBtn, width:'100%'}}>{sys.receiptFile ? '✅ Receipt Attached' : '📷 Snap Receipt'}</button>
+                </div>
+                <button style={{...s.btn, ...s.actionBtn, width:60}} onClick={actions.addExp}>➕</button>
+            </div>
+        </div>
+
+        <div style={{marginTop:20}}>
+            <h4 style={{color:'#64748b'}}>Recent Expenses</h4>
+            {sys.exps.map(x=><div key={x.id} style={{padding:15, borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center', background:'#fff'}}>
+                <div>
+                    <div style={{fontWeight:'600', color:'#334155'}}>{x.desc}</div>
+                    <div style={{fontSize:'12px', color:'#94a3b8'}}>{new Date(x.date?.seconds*1000).toLocaleDateString()}</div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                    {x.receipt && <a href={x.receipt} target="_blank" style={{textDecoration:'none', fontSize:'18px'}}>📎</a>}
+                    <span style={{fontWeight:'bold'}}>£{x.amount}</span>
+                    <button onClick={()=>actions.delExp(x.id)} style={{color:'#ef4444', border:'none', background:'none', cursor:'pointer', padding:5}}>×</button>
+                </div>
+            </div>)}
+        </div>
+    </div>;
 
     return (
-        <div style={{padding:'15px', paddingBottom:'100px', maxWidth:'600px', margin:'0 auto', fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'}}>
-            {mode!=='ESTIMATE' && <button className="no-print" onClick={()=>setMode('ESTIMATE')} style={{marginBottom:15, padding:'8px 12px', background:'#eee', border:'none', borderRadius:'4px'}}>← Back</button>}
-            <div style={{borderBottom:'4px solid #cc0000', marginBottom:'20px', paddingBottom:'10px', display:'flex', justifyContent:'space-between', alignItems:'end'}}>
-                {cfg.logo ? <img src={cfg.logo} style={{height:60, maxWidth:'200px', objectFit:'contain'}} alt="Logo"/> : <h1 style={{margin:0, fontSize:'24px'}}>TRIPLE <span style={{color:'#cc0000'}}>MMM</span></h1>}
-                <div style={{textAlign:'right', fontSize:'12px', color:'#666'}}><b>{cfg.phone}</b><br/>{cfg.address}</div>
+        <div style={{padding:'15px', paddingBottom:'100px', maxWidth:'600px', margin:'0 auto', fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color:'#334155', background:'#f1f5f9', minHeight:'100vh'}}>
+            {mode!=='ESTIMATE' && <button className="no-print" onClick={()=>setMode('ESTIMATE')} style={{...s.btn, ...s.secondaryBtn, marginBottom:15}}>← Back</button>}
+            
+            {/* HEADER */}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px 0', marginBottom:10, borderBottom:'1px solid #cbd5e1'}}>
+                {cfg.logo ? <img src={cfg.logo} style={{height:50, objectFit:'contain'}} alt="Logo"/> : <h1 style={{margin:0, fontSize:'22px', color:'#1e293b'}}>TRIPLE <span style={{color:'#cc0000'}}>MMM</span></h1>}
+                <div style={{display:'flex', gap:10}}>
+                    <button className="no-print" onClick={()=>setMode('SETTINGS')} style={{...s.btn, ...s.secondaryBtn, padding:8}}>⚙️</button>
+                    <button className="no-print" onClick={handlePrint} style={{...s.btn, ...s.secondaryBtn, padding:8}}>🖨️</button>
+                    <button className="no-print" onClick={actions.newJob} style={{...s.btn, ...s.actionBtn, padding:'8px 12px'}}>➕ New</button>
+                </div>
             </div>
 
             {/* MAIN ESTIMATE FORM */}
             {mode==='ESTIMATE' && <div>
-                <h4 style={s.head}>CLIENT DETAILS</h4>
-                <input style={s.inp} placeholder="Full Name" value={cust.n} onChange={e=>setCust({...cust, n:e.target.value})}/>
-                <textarea style={{...s.inp, height:80}} placeholder="Full Address" value={cust.a} onChange={e=>setCust({...cust, a:e.target.value})}/>
-                <input style={s.inp} placeholder="Phone Number" value={cust.p} onChange={e=>setCust({...cust, p:e.target.value})}/>
-                <input style={s.inp} placeholder="Email Address" value={cust.e} onChange={e=>setCust({...cust, e:e.target.value})}/>
-                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-                    <input style={s.inp} placeholder="Claim #" value={cust.c} onChange={e=>setCust({...cust, c:e.target.value})}/>
-                    <input style={s.inp} placeholder="Insurer Name" value={cust.ic} onChange={e=>setCust({...cust, ic:e.target.value})}/>
-                </div>
-                <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
-                    <input style={{...s.inp, marginBottom:0}} placeholder="Insurer Email" value={cust.ie} onChange={e=>setCust({...cust, ie:e.target.value})}/>
-                    <button onClick={actions.emailIns} style={{...s.btn, background:'#6366f1'}}>✉️ INS</button>
+                <div style={s.card}>
+                    <h4 style={s.head}>👤 CLIENT</h4>
+                    <input style={s.inp} placeholder="Full Name" value={cust.n} onChange={e=>setCust({...cust, n:e.target.value})}/>
+                    <textarea style={{...s.inp, height:80}} placeholder="Full Address" value={cust.a} onChange={e=>setCust({...cust, a:e.target.value})}/>
+                    <div style={{display:'flex', gap:10}}>
+                        <input style={s.inp} placeholder="Phone" value={cust.p} onChange={e=>setCust({...cust, p:e.target.value})}/>
+                        <input style={s.inp} placeholder="Email" value={cust.e} onChange={e=>setCust({...cust, e:e.target.value})}/>
+                    </div>
+                    
+                    <h4 style={s.head}>🏢 INSURANCE</h4>
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                        <input style={s.inp} placeholder="Claim #" value={cust.c} onChange={e=>setCust({...cust, c:e.target.value})}/>
+                        <input style={s.inp} placeholder="Insurer" value={cust.ic} onChange={e=>setCust({...cust, ic:e.target.value})}/>
+                    </div>
+                    <div style={{display:'flex', gap:'5px'}}>
+                        <input style={{...s.inp, marginBottom:0}} placeholder="Insurer Email" value={cust.ie} onChange={e=>setCust({...cust, ie:e.target.value})}/>
+                        <button onClick={actions.emailIns} style={{...s.btn, ...s.secondaryBtn}}>✉️</button>
+                    </div>
                 </div>
 
-                <h4 style={s.head}>VEHICLE DETAILS</h4>
-                <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                    <input style={{...s.inp, marginBottom:0, background:'#e0f2fe', fontWeight:'bold', textAlign:'center', fontSize:'20px'}} placeholder="REG" value={veh.r} onChange={e=>setVeh({...veh, r:e.target.value.toUpperCase()})}/>
-                    <button onClick={actions.lookup} style={{...s.btn, background:sys.lookupStatus==='SEARCHING...'?'#999':'#0284c7', minWidth:'80px'}}>{sys.lookupStatus==='SEARCHING...'?'...':'FIND'}</button>
-                </div>
-                <input style={s.inp} placeholder="Make / Model" value={veh.mm} onChange={e=>setVeh({...veh, mm:e.target.value})}/>
-                <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
-                    <input style={{...s.inp, marginBottom:0, flex:2}} placeholder="VIN / Chassis" value={veh.v} onChange={e=>setVeh({...veh, v:e.target.value})}/>
-                    <button onClick={actions.parts} style={{...s.btn, background:'#f59e0b', fontSize:'12px'}}>PARTS</button>
-                </div>
-                <div style={{display:'flex', gap:'5px', marginBottom:'10px'}}>
-                    <input style={{...s.inp, marginBottom:0, flex:2}} placeholder="Paint Code" value={veh.pc} onChange={e=>setVeh({...veh, pc:e.target.value})}/>
-                    <button onClick={actions.paint} style={{...s.btn, background:'#6366f1', fontSize:'12px'}}>FIND</button>
-                </div>
-                <div style={{display:'flex', gap:'10px'}}>
-                    <div style={{flex:1}}><label style={s.label}>Booking Date</label><input type="date" style={s.inp} value={veh.bd} onChange={e=>setVeh({...veh, bd:e.target.value})}/></div>
-                    <div style={{width:'100px'}}><label style={s.label}>Time</label><input type="time" style={s.inp} value={veh.bt} onChange={e=>setVeh({...veh, bt:e.target.value})}/></div>
-                </div>
-                <button style={{...s.btn, background:'#666', width:'100%', marginBottom:'20px'}} onClick={actions.cal}>📅 Add to Google Calendar</button>
-
-                <h4 style={s.head}>PHOTOS</h4>
-                <div style={{background:'#f9f9f9', padding:'15px', borderRadius:'8px', border:'2px dashed #ddd', textAlign:'center', marginBottom:'20px'}}>
-                    <input type="file" onChange={actions.uploadPhoto} id="ph" style={{display:'none'}}/>
-                    <label htmlFor="ph" style={{...s.btn, background:'#333', display:'inline-block'}}>+ Upload Photo</label>
-                    <div style={{marginTop:'10px', fontSize:'12px', color:'#666'}}>{sys.photos.length} photos attached</div>
+                <div style={s.card}>
+                    <h4 style={s.head}>🚗 VEHICLE</h4>
+                    <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                        <input style={{...s.inp, marginBottom:0, background:'#e0f2fe', fontWeight:'bold', textAlign:'center', fontSize:'22px', border:'2px solid #3b82f6', color:'#1e3a8a'}} placeholder="ENTER REG" value={veh.r} onChange={e=>setVeh({...veh, r:e.target.value.toUpperCase()})}/>
+                        <button onClick={actions.lookup} style={{...s.btn, ...s.actionBtn, minWidth:'80px'}}>{sys.lookupStatus==='SEARCHING...'?'...':'🔍 FIND'}</button>
+                    </div>
+                    <input style={s.inp} placeholder="Make / Model" value={veh.mm} onChange={e=>setVeh({...veh, mm:e.target.value})}/>
+                    
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10}}>
+                        <div style={{display:'flex', gap:5}}>
+                            <input style={{...s.inp, marginBottom:0}} placeholder="VIN" value={veh.v} onChange={e=>setVeh({...veh, v:e.target.value})}/>
+                            <button onClick={actions.parts} style={{...s.btn, background:'#f59e0b'}}>🔩</button>
+                        </div>
+                        <div style={{display:'flex', gap:5}}>
+                            <input style={{...s.inp, marginBottom:0}} placeholder="Paint Code" value={veh.pc} onChange={e=>setVeh({...veh, pc:e.target.value})}/>
+                            <button onClick={actions.paint} style={{...s.btn, background:'#8b5cf6'}}>🎨</button>
+                        </div>
+                    </div>
+                    
+                    <div style={{display:'flex', gap:'10px'}}>
+                        <div style={{flex:1}}><label style={s.label}>Booking Date</label><input type="date" style={s.inp} value={veh.bd} onChange={e=>setVeh({...veh, bd:e.target.value})}/></div>
+                        <div style={{width:'100px'}}><label style={s.label}>Time</label><input type="time" style={s.inp} value={veh.bt} onChange={e=>setVeh({...veh, bt:e.target.value})}/></div>
+                    </div>
+                    <button style={{...s.btn, ...s.secondaryBtn, width:'100%', marginTop:10}} onClick={actions.cal}>📅 Add to Calendar</button>
+                    
+                    <div style={{marginTop:15, padding:15, background:'#f8fafc', borderRadius:10, border:'2px dashed #cbd5e1', textAlign:'center'}}>
+                        <div style={{marginBottom:10, fontSize:'12px', color:'#64748b'}}>{sys.photos.length} photos attached</div>
+                        <div style={{position:'relative', overflow:'hidden', display:'inline-block'}}>
+                            <input type="file" onChange={actions.uploadPhoto} style={{position:'absolute', opacity:0, top:0, left:0, width:'100%', height:'100%', cursor:'pointer'}}/>
+                            <button style={{...s.btn, ...s.secondaryBtn}}>📸 Upload Photos</button>
+                        </div>
+                    </div>
                 </div>
             </div>}
             
             {/* PHOTOS STRIP */}
-            {sys.photos.length>0 && mode!=='DEAL_FILE' && mode!=='JOBCARD' && <div style={{display:'flex', gap:10, overflowX:'auto', paddingBottom:10}}>{sys.photos.map((u,i)=><img key={i} src={u} style={{height:80, borderRadius:6, border:'1px solid #ddd'}}/>)}</div>}
+            {sys.photos.length>0 && mode!=='DEAL_FILE' && mode!=='JOBCARD' && <div style={{display:'flex', gap:10, overflowX:'auto', paddingBottom:15, paddingLeft:5}}>{sys.photos.map((u,i)=><img key={i} src={u} style={{height:100, borderRadius:8, border:'1px solid #ddd', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'}}/>)}</div>}
 
             {/* JOBCARD VIEW */}
-            {mode==='JOBCARD' && <div style={{background:'#f8fafc', padding:'15px', borderRadius:'8px', border:'1px solid #ddd'}}>
-                <h3 style={{marginTop:0}}>{veh.r} <small style={{color:'#666', fontWeight:'normal'}}>{veh.mm}</small></h3>
-                <div style={{marginBottom:'20px'}}>
-                    <h4 style={{borderBottom:'1px solid #ddd', paddingBottom:5}}>Workflow</h4>
-                    <Stage k="met" l="MET Strip"/><Stage k="panel" l="Panel"/><Stage k="paint" l="Paint"/><Stage k="fit" l="Fit"/><Stage k="valet" l="Valet"/><Stage k="qc" l="QC"/>
+            {mode==='JOBCARD' && <div style={s.card}>
+                <h3 style={{marginTop:0, borderBottom:'1px solid #eee', paddingBottom:10}}>{veh.r} <span style={{fontSize:'14px', color:'#64748b', fontWeight:'normal'}}>{veh.mm}</span></h3>
+                
+                <h4 style={{color:'#64748b', marginBottom:10}}>STAGES</h4>
+                <Stage k="met" l="MET Strip"/><Stage k="panel" l="Panel"/><Stage k="paint" l="Paint"/><Stage k="fit" l="Fit"/><Stage k="valet" l="Valet"/><Stage k="qc" l="QC"/>
+                
+                <h4 style={{color:'#64748b', marginTop:25, marginBottom:10}}>SNAG LIST</h4>
+                <div style={{display:'flex', gap:10, marginBottom:15}}>
+                    <input style={{...s.inp, marginBottom:0}} value={sys.note} onChange={e=>setSys({...sys, note:e.target.value})} placeholder="Add snag..."/>
+                    <button onClick={actions.note} style={{...s.btn, ...s.actionBtn}}>Add</button>
                 </div>
-                <div>
-                    <h4 style={{borderBottom:'1px solid #ddd', paddingBottom:5}}>Snag List</h4>
-                    <div style={{display:'flex', gap:5, marginBottom:10}}><input style={{...s.inp, marginBottom:0}} value={sys.note} onChange={e=>setSys({...sys, note:e.target.value})} placeholder="Add snag..."/><button onClick={actions.note} style={{...s.btn, background:'#333'}}>+</button></div>
-                    {sys.notes.map((n,i)=><div key={i} style={{padding:8, background:n.resolved?'#dcfce7':'#fee2e2', borderLeft:n.resolved?'4px solid green':'4px solid red', marginBottom:5, fontSize:'14px', display:'flex', justifyContent:'space-between', alignItems:'center'}}><span>{n.text}</span><button onClick={()=>actions.toggleNote(i)} style={{border:'none', background:'none', fontSize:'16px'}}>✅</button></div>)}
-                </div>
+                {sys.notes.map((n,i)=><div key={i} style={{padding:12, background:n.resolved?'#f0fdf4':'#fef2f2', borderLeft:n.resolved?'4px solid #22c55e':'4px solid #ef4444', borderRadius:6, marginBottom:8, fontSize:'14px', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'}}>
+                    <span style={{color:n.resolved?'#15803d':'#b91c1c', fontWeight:'500'}}>{n.text}</span>
+                    <button onClick={()=>actions.toggleNote(i)} style={{border:'none', background:'none', fontSize:'18px', cursor:'pointer'}}>{n.resolved?'✅':'⬜'}</button>
+                </div>)}
             </div>}
 
             {/* DEAL FILE VIEW */}
-            {mode==='DEAL_FILE' && <div style={{background:'#f0f9ff', padding:'15px', borderRadius:'8px', border:'1px solid #bae6fd'}}>
-                <h3 style={{marginTop:0, color:'#0369a1'}}>Deal File: {veh.r}</h3>
-                {!sys.id && <div style={{padding:10, background:'#fee2e2', color:'red', borderRadius:4, marginBottom:10}}>⚠️ Please SAVE the job first</div>}
-                <div style={{display:'grid', gap:'15px'}}>
-                    <div style={s.card}><b>Documents</b><br/><br/>
-                        <div style={{marginBottom:10}}>Terms: <input type="file" onChange={e=>actions.upload('terms',e.target.files[0])}/> {activeJob?.dealFile?.terms && '✅'}</div>
-                        <div style={{marginBottom:10}}>Auth: <input type="file" onChange={e=>actions.upload('auth',e.target.files[0])}/> {activeJob?.dealFile?.auth && '✅'}</div>
-                        <div style={{marginBottom:10}}>Method: <input type="file" onChange={e=>actions.upload('method',e.target.files[0])}/> {activeJob?.dealFile?.method && '✅'}</div>
-                        <div style={{marginBottom:10}}>Sat Note: <input type="file" onChange={e=>actions.upload('sat',e.target.files[0])}/> {activeJob?.dealFile?.sat && '✅'}</div>
-                    </div>
-                    <div style={s.card}><b>Checklist</b><br/>📸 Photos: {sys.photos.length}<br/>📄 Invoice: {sys.invNum||'Pending'}</div>
-                    <a href={`mailto:?subject=${encodeURIComponent(`Repair Info: ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for ${veh.r}. Invoice: ${sys.invNum}`)}`} style={{...s.btn, background:'#2563eb', textAlign:'center', display:'block', textDecoration:'none', marginBottom:10}}>📧 Create Client Email Pack</a>
-                    {cust.ie && <a href={`mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for Claim ${cust.c}.`)}`} style={{...s.btn, background:'#6366f1', textAlign:'center', display:'block', textDecoration:'none'}}>✉️ Create Insurer Email</a>}
+            {mode==='DEAL_FILE' && <div style={{...s.card, background:'#f0f9ff', borderColor:'#bae6fd'}}>
+                <h3 style={{marginTop:0, color:'#0369a1'}}>📁 Deal File: {veh.r}</h3>
+                {!sys.id && <div style={{padding:12, background:'#fef2f2', color:'#b91c1c', borderRadius:8, marginBottom:15, fontWeight:'bold', border:'1px solid #fecaca'}}>⚠️ Please SAVE the job first</div>}
+                
+                <div style={{background:'white', padding:15, borderRadius:10, marginBottom:15}}>
+                    <div style={{fontSize:'12px', color:'#64748b', fontWeight:'bold', marginBottom:10}}>DOCUMENTS</div>
+                    {['terms','auth','method','sat'].map(k => (
+                        <div key={k} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #f1f5f9'}}>
+                            <span style={{textTransform:'capitalize', fontWeight:'500'}}>{k === 'sat' ? 'Satisfaction Note' : k}</span>
+                            <div style={{display:'flex', alignItems:'center', gap:10}}>
+                                {activeJob?.dealFile?.[k] && <span style={{color:'#16a34a'}}>✅</span>}
+                                <input type="file" onChange={e=>actions.upload(k,e.target.files[0])} style={{width:90, fontSize:'10px'}}/>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                    <a href={`mailto:?subject=${encodeURIComponent(`Repair Info: ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for ${veh.r}. Invoice: ${sys.invNum}`)}`} style={{...s.btn, ...s.actionBtn, textDecoration:'none'}}>📧 Client Pack</a>
+                    {cust.ie && <a href={`mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for Claim ${cust.c}.`)}`} style={{...s.btn, background:'#6366f1', textDecoration:'none'}}>✉️ Insurer Pack</a>}
                 </div>
             </div>}
 
-            {/* FINANCIALS & ITEMS */}
-            {mode!=='SATISFACTION' && mode!=='DEAL_FILE' && mode!=='JOBCARD' && <div style={{marginTop:'30px'}}>
-                <h4 style={s.head}>PARTS & LABOR</h4>
-                <div className="no-print" style={{background:'#f8fafc', padding:'15px', borderRadius:'8px', border:'1px solid #eee', marginBottom:'15px'}}>
-                    <input style={s.inp} placeholder="Description (e.g. Bumper)" value={item.d} onChange={e=>setItem({...item, d:e.target.value})}/>
-                    <div style={{display:'flex', gap:'10px'}}>
-                        <input type="number" style={s.inp} placeholder="Cost £" value={item.c} onChange={e=>setItem({...item, c:e.target.value})}/>
-                        <button onClick={actions.addItem} style={{...s.btn, background:'#16a34a', minWidth:'80px', height:'46px'}}>ADD</button>
+            {/* FINANCIALS */}
+            {mode!=='SATISFACTION' && mode!=='DEAL_FILE' && mode!=='JOBCARD' && <div style={{marginTop:30}}>
+                <h4 style={s.head}>🛠️ PARTS & LABOR</h4>
+                <div className="no-print" style={s.card}>
+                    <div style={{display:'flex', gap:10}}>
+                        <input style={{...s.inp, flex:2, marginBottom:0}} placeholder="Item Description" value={item.d} onChange={e=>setItem({...item, d:e.target.value})}/>
+                        <input type="number" style={{...s.inp, flex:1, marginBottom:0}} placeholder="£ Cost" value={item.c} onChange={e=>setItem({...item, c:e.target.value})}/>
+                        <button onClick={actions.addItem} style={{...s.btn, ...s.saveBtn}}>ADD</button>
                     </div>
                 </div>
 
-                <table style={{width:'100%', borderCollapse:'collapse', marginBottom:'20px'}}>
-                    <thead><tr style={{borderBottom:'2px solid #333', textAlign:'left', fontSize:'12px', color:'#666'}}><th>DESCRIPTION</th><th style={{textAlign:'right'}}>PRICE</th></tr></thead>
-                    <tbody>
-                        {(item.list||[]).map((i,x)=><tr key={x} style={{borderBottom:'1px solid #eee'}}>
-                            <td style={{padding:'10px 0'}}>{i.desc}</td>
-                            <td style={{textAlign:'right'}}>£{(i.p||0).toFixed(2)} <span className="no-print" onClick={()=>actions.delItem(x)} style={{color:'red', marginLeft:'10px', fontSize:'18px', cursor:'pointer'}}>×</span></td>
-                        </tr>)}
-                    </tbody>
-                </table>
+                <div style={s.card}>
+                    <table style={{width:'100%', borderCollapse:'collapse', marginBottom:'20px'}}>
+                        <thead><tr style={{borderBottom:'2px solid #e2e8f0', textAlign:'left', fontSize:'12px', color:'#64748b'}}><th>DESCRIPTION</th><th style={{textAlign:'right'}}>PRICE</th></tr></thead>
+                        <tbody>
+                            {(item.list||[]).map((i,x)=><tr key={x} style={{borderBottom:'1px solid #f1f5f9'}}>
+                                <td style={{padding:'12px 0', color:'#334155'}}>{i.desc}</td>
+                                <td style={{textAlign:'right', fontWeight:'500'}}>£{(i.p||0).toFixed(2)} <span className="no-print" onClick={()=>actions.delItem(x)} style={{color:'#ef4444', marginLeft:'10px', cursor:'pointer', fontWeight:'bold'}}>×</span></td>
+                            </tr>)}
+                        </tbody>
+                    </table>
 
-                <div style={{background:'#fff', padding:'15px', borderRadius:'8px', border:'1px solid #ddd'}}>
-                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}><span>Labor Hours:</span> <input type="number" value={fin.lh} onChange={e=>setFin({...fin, lh:e.target.value})} style={{width:'60px', padding:'5px', border:'1px solid #ccc', borderRadius:'4px', textAlign:'right'}}/></div>
-                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px', color:'#666'}}><span>Labor Rate:</span> <span>£{fin.lr}/hr</span></div>
-                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}><span>VAT Rate:</span> <input type="number" value={cfg.vatRate} onChange={e=>setCfg({...cfg, vatRate:e.target.value})} style={{width:'40px'}}/>%</div>
-                    <hr style={{border:'none', borderTop:'1px solid #eee', margin:'10px 0'}}/>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'18px', fontWeight:'bold'}}><span>TOTAL:</span> <span>£{totals.invoiceTotal.toFixed(2)}</span></div>
-                    <div className="no-print" style={{marginTop:'15px', paddingTop:'10px', borderTop:'2px dashed #eee', display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                        <div style={{flex:1}}><label style={s.label}>Paint Cost</label><input style={{...s.inp, marginBottom:0}} value={fin.paint} onChange={e=>setFin({...fin, paint:e.target.value})}/></div>
-                        <div style={{flex:1}}><label style={s.label}>Excess</label><input style={{...s.inp, marginBottom:0}} value={fin.ex} onChange={e=>setFin({...fin, ex:e.target.value})}/></div>
+                    <div style={{background:'#f8fafc', padding:15, borderRadius:10}}>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:8, alignItems:'center'}}>
+                            <span style={{color:'#64748b'}}>Labor Hours</span>
+                            <div style={{display:'flex', alignItems:'center', gap:5}}>
+                                <input type="number" value={fin.lh} onChange={e=>setFin({...fin, lh:e.target.value})} style={{width:'60px', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'6px', textAlign:'center'}}/>
+                                <span style={{fontSize:'12px', color:'#94a3b8'}}>@ £{fin.lr}/hr</span>
+                            </div>
+                        </div>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:8, alignItems:'center'}}>
+                            <span style={{color:'#64748b'}}>Paint Materials</span>
+                            <input type="number" value={fin.paint} onChange={e=>setFin({...fin, paint:e.target.value})} style={{width:'80px', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'6px', textAlign:'right'}} placeholder="£"/>
+                        </div>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:15, alignItems:'center'}}>
+                            <span style={{color:'#64748b'}}>VAT ({cfg.vatRate}%)</span>
+                            <span style={{fontWeight:'600'}}>£{totals.vat.toFixed(2)}</span>
+                        </div>
+                        
+                        <div style={{borderTop:'2px dashed #cbd5e1', paddingTop:15, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                            <span style={{fontSize:'18px', fontWeight:'800', color:'#1e293b'}}>TOTAL</span>
+                            <span style={{fontSize:'24px', fontWeight:'800', color:'#16a34a'}}>£{totals.invoiceTotal.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div className="no-print" style={{marginTop:20, paddingTop:15, borderTop:'1px solid #e2e8f0'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
+                            <label style={{...s.label, marginBottom:0}}>LESS EXCESS:</label>
+                            <input style={{...s.inp, marginBottom:0, width:100, textAlign:'right'}} placeholder="- £" value={fin.ex} onChange={e=>setFin({...fin, ex:e.target.value})}/>
+                        </div>
+                        
+                        {/* INVOICE GENERATION BUTTONS */}
+                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                            <button onClick={()=>actions.save('INVOICE_MAIN')} style={{...s.btn, background:'#2563eb', padding:'12px'}}>🏢 Invoice Company</button>
+                            <button onClick={()=>actions.save('INVOICE_EXCESS')} style={{...s.btn, background:'#ea580c', padding:'12px'}}>👤 Invoice Excess</button>
+                        </div>
                     </div>
                 </div>
 
-                {mode.includes('INVOICE') && <div style={{marginTop:40, padding:20, border:'1px solid #ccc'}}>
+                {mode.includes('INVOICE') && <div style={{marginTop:40, padding:20, border:'1px solid #e2e8f0', background:'#fff', borderRadius:10}}>
                     <div style={{display:'flex', justifyContent:'space-between'}}>
                         <div><b>PAYMENT INFO</b><br/>{cfg.companyName}<br/>Sort: 80-22-60<br/>Acc: 06163462</div>
-                        <div style={{textAlign:'center'}}><canvas ref={canvasRef} width={200} height={80} style={{border:'1px dashed #ccc', background:'#f9f9f9'}} onTouchStart={startD} onTouchMove={moveD} onTouchEnd={()=>setDraw(false)} onMouseDown={startD} onMouseMove={moveD} onMouseUp={()=>setDraw(false)} /><br/><small>Customer Signature</small></div>
+                        <div style={{textAlign:'center'}}><canvas ref={canvasRef} width={200} height={80} style={{border:'1px dashed #ccc', background:'#f9f9f9', borderRadius:6}} onTouchStart={startD} onTouchMove={moveD} onTouchEnd={()=>setDraw(false)} onMouseDown={startD} onMouseMove={moveD} onMouseUp={()=>setDraw(false)} /><br/><small style={{color:'#94a3b8'}}>Customer Signature</small></div>
                     </div>
                 </div>}
             </div>}
 
-            {/* FLOATING ACTION BAR */}
-            <div className="no-print" style={{position:'fixed', bottom:0, left:0, right:0, background:'white', padding:'10px', boxShadow:'0 -2px 10px rgba(0,0,0,0.1)', display:'flex', gap:'8px', overflowX:'auto', zIndex:100}}>
-                <button onClick={()=>actions.save('ESTIMATE')} style={{...s.btn, background:sys.save==='SUCCESS'?'#16a34a':'#333', flex:'1 0 auto'}}>{sys.save==='SAVING'?'...':'SAVE'}</button>
-                {mode==='ESTIMATE' && <><button onClick={()=>actions.save('INVOICE_MAIN')} style={{...s.btn, background:'#2563eb'}}>INV</button><button onClick={()=>actions.save('INVOICE_EXCESS')} style={{...s.btn, background:'#ea580c'}}>XS</button></>}
-                <button onClick={()=>setMode('JOBCARD')} style={{...s.btn, background:'#475569'}}>JOB</button>
-                <button onClick={()=>setMode('DEAL_FILE')} style={{...s.btn, background:'#7c3aed'}}>FILE</button>
-                <button onClick={actions.newJob} style={{...s.btn, background:'#dc2626'}}>NEW</button>
-                <button onClick={()=>setMode('SETTINGS')} style={{...s.btn, background:'#fff', color:'#333', border:'1px solid #ccc'}}>⚙️</button>
-                <button onClick={()=>setMode('DASHBOARD')} style={{...s.btn, background:'#0f766e'}}>📊</button>
-                <button onClick={handlePrint} style={{...s.btn, background:'#fff', color:'#333', border:'1px solid #ccc'}}>🖨️</button>
+            {/* BOTTOM NAV DOCK */}
+            <div className="no-print" style={{position:'fixed', bottom:0, left:0, right:0, background:'#fff', padding:'12px 15px', paddingBottom:'25px', boxShadow:'0 -4px 20px rgba(0,0,0,0.05)', display:'flex', justifyContent:'space-around', alignItems:'center', borderTop:'1px solid #e2e8f0', zIndex:100}}>
+                <button onClick={()=>setMode('ESTIMATE')} style={{background:'none', border:'none', color:mode==='ESTIMATE'?'#cc0000':'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:4}}>
+                    <span style={{fontSize:'20px'}}>📝</span> Estimate
+                </button>
+                <button onClick={()=>setMode('JOBCARD')} style={{background:'none', border:'none', color:mode==='JOBCARD'?'#cc0000':'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:4}}>
+                    <span style={{fontSize:'20px'}}>🔧</span> Job Card
+                </button>
+                
+                {/* BIG SAVE BUTTON */}
+                <button onClick={()=>actions.save('ESTIMATE')} style={{background:'linear-gradient(135deg, #1e293b, #0f172a)', color:'white', border:'none', width:55, height:55, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'24px', boxShadow:'0 4px 10px rgba(0,0,0,0.3)', marginTop:-25}}>💾</button>
+                
+                <button onClick={()=>setMode('DEAL_FILE')} style={{background:'none', border:'none', color:mode==='DEAL_FILE'?'#cc0000':'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:4}}>
+                    <span style={{fontSize:'20px'}}>📁</span> File
+                </button>
+                <button onClick={()=>setMode('DASHBOARD')} style={{background:'none', border:'none', color:mode==='DASHBOARD'?'#cc0000':'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:4}}>
+                    <span style={{fontSize:'20px'}}>📊</span> Dash
+                </button>
             </div>
 
-            {/* SEARCH & LIST */}
-            <div className="no-print" style={{marginTop:60, paddingBottom:80}}>
-                <input placeholder="🔍 Search Jobs..." value={sys.search} onChange={e=>setSys({...sys, search:e.target.value})} style={{...s.inp, borderRadius:'20px', padding:'12px 20px', border:'1px solid #ccc'}}/>
-                {sys.jobs.filter(j=>(j.customer+j.reg).toLowerCase().includes(sys.search.toLowerCase())).map(j=><div key={j.id} style={{padding:'15px', borderBottom:'1px solid #eee', background:j.status==='PAID'?'#f0fdf4':'#fff', display:'flex', justifyContent:'space-between', alignItems:'center'}} onClick={()=>actions.load(j)}>
-                    <div><b>{j.customer}</b> <span style={{color:'#666', fontSize:'14px'}}>({j.reg})</span><div style={{fontSize:'12px', color:'#999', marginTop:'2px'}}>{new Date(j.createdAt?.seconds*1000).toLocaleDateString()}</div></div>
+            {/* SEARCH LIST (Moved to its own card style) */}
+            <div className="no-print" style={{marginTop:40, paddingBottom:80}}>
+                <input placeholder="🔍 Search Jobs..." value={sys.search} onChange={e=>setSys({...sys, search:e.target.value})} style={{...s.inp, borderRadius:'25px', padding:'12px 20px', border:'1px solid #cbd5e1', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}/>
+                {sys.jobs.filter(j=>(j.customer+j.reg).toLowerCase().includes(sys.search.toLowerCase())).map(j=><div key={j.id} style={{padding:'15px', borderBottom:'1px solid #f1f5f9', background:j.status==='PAID'?'#f0fdf4':'#fff', display:'flex', justifyContent:'space-between', alignItems:'center', borderRadius:10, marginBottom:8, boxShadow:'0 1px 2px rgba(0,0,0,0.02)'}} onClick={()=>actions.load(j)}>
+                    <div>
+                        <div style={{fontWeight:'700', color:'#1e293b'}}>{j.customer}</div>
+                        <div style={{fontSize:'12px', color:'#64748b'}}>{j.reg} • {new Date(j.createdAt?.seconds*1000).toLocaleDateString()}</div>
+                    </div>
                     <div style={{textAlign:'right'}}>
-                        <b>£{(j.totals?.finalDue || j.totals?.due || 0).toFixed(0)}</b><br/>
-                        <button onClick={(e)=>{e.stopPropagation(); actions.pay(j.id, j.status)}} style={{border:'none', background:'none', cursor:'pointer', marginRight:'10px'}}>{j.status==='PAID'?'✅':'💰'}</button>
-                        <button onClick={(e)=>{e.stopPropagation(); actions.delJob(j.id)}} style={{background:'none', border:'none', color:'#cc0000', fontSize:'18px', padding:0}}>×</button>
+                        <div style={{fontWeight:'800', color:'#1e293b', fontSize:'16px'}}>£{(j.totals?.finalDue || j.totals?.due || 0).toFixed(0)}</div>
+                        <div style={{display:'flex', gap:10, marginTop:5, justifyContent:'flex-end'}}>
+                            <button onClick={(e)=>{e.stopPropagation(); actions.pay(j.id, j.status)}} style={{border:'none', background:'none', cursor:'pointer', fontSize:'16px'}}>{j.status==='PAID'?'✅':'💰'}</button>
+                            <button onClick={(e)=>{e.stopPropagation(); actions.delJob(j.id)}} style={{border:'none', background:'none', cursor:'pointer', fontSize:'16px', color:'#ef4444'}}>🗑️</button>
+                        </div>
                     </div>
                 </div>)}
             </div>
             
-            <style>{`@media print { .no-print { display: none !important; } body { padding: 0; margin: 0; } input, textarea { border: none !important; resize: none; padding: 0 !important; } }`}</style>
+            <style>{`@media print { .no-print { display: none !important; } body { padding: 0; margin: 0; background: white; } input, textarea { border: none !important; resize: none; padding: 0 !important; background: transparent !important; } }`}</style>
         </div>
     );
 };
