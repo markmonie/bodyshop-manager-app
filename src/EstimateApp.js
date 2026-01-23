@@ -4,6 +4,8 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import axios from 'axios';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 // --- CONFIG ---
 const firebaseConfig = { apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ", authDomain: "triple-mmm-body-repairs.firebaseapp.com", projectId: "triple-mmm-body-repairs", storageBucket: "triple-mmm-body-repairs.firebasestorage.app", messagingSenderId: "110018101133", appId: "1:110018101133:web:63b0996c7050c4967147c4", measurementId: "G-NRDPCR0SR2" };
@@ -21,34 +23,28 @@ class ErrorBoundary extends React.Component {
 const s = { 
     inp: {width:'100%', padding:'12px', marginBottom:'12px', border:'1px solid #e2e8f0', borderRadius:'10px', fontSize:'16px', boxSizing:'border-box', outline:'none', transition:'border 0.2s', backgroundColor:'#f8fafc'}, 
     head: {borderBottom:'2px solid #cc0000', paddingBottom:'8px', marginBottom:'20px', color:'#1e293b', fontSize:'18px', fontWeight:'700', marginTop:'25px', letterSpacing:'0.5px'}, 
-    
-    // Buttons
     btn: {padding:'10px 16px', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'600', fontSize:'14px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', transition:'transform 0.1s', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'},
-    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'}, // Blue
-    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'}, // Green
-    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'}, // Red
-    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'}, // Grey
+    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'}, 
+    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'}, 
+    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'}, 
+    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'}, 
     backBtn: {width:'100%', padding:'15px', background:'#e2e8f0', color:'#1e293b', border:'none', borderRadius:'8px', fontWeight:'bold', marginBottom:'20px', fontSize:'16px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', cursor:'pointer'},
-
-    // Cards
     card: {background:'#fff', padding:'20px', border:'1px solid #e2e8f0', borderRadius:'12px', marginBottom:'15px', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.05)'},
     label: {display:'block', fontSize:'11px', color:'#64748b', marginBottom:'4px', fontWeight:'bold', textTransform:'uppercase', letterSpacing:'0.5px'},
-    
-    // Bottom Dock Item
     dockItem: {background:'none', border:'none', color:'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:'4px', minWidth:'60px', cursor:'pointer', whiteSpace:'nowrap'}
 };
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
     const [mode, setMode] = useState('ESTIMATE');
-    const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1', logo:'' });
+    const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1', logo:'', terms:'' });
     
     // Core Data
     const [cust, setCust] = useState({ n:'', a:'', p:'', e:'', ie:'', c:'', nc:'', ic:'', ia:'' }); 
     const [veh, setVeh] = useState({ r:'', m:'', mm:'', v:'', pc:'', bd:'', bt:'09:00' });
     const [item, setItem] = useState({ d:'', c:'', list:[] }); 
     const [fin, setFin] = useState({ lh:'0', lr:'50', vat:'0', ex:'0', paint:'0' });
-    const [sys, setSys] = useState({ photos:[], upload:false, expD:'', expA:'', expC:'Stock', save:'IDLE', search:'', jobs:[], exps:[], id:null, stages:{}, notes:[], note:'', invNum:'', lookupStatus:'IDLE', receiptFile:null });
+    const [sys, setSys] = useState({ photos:[], upload:false, expD:'', expA:'', expC:'Stock', save:'IDLE', search:'', jobs:[], exps:[], id:null, stages:{}, notes:[], note:'', invNum:'', lookupStatus:'IDLE', receiptFile:null, downloading: false });
     
     const canvasRef = useRef(null); const [draw, setDraw] = useState(false);
     const activeJob = useMemo(() => sys.jobs.find(j => j.id === sys.id), [sys.jobs, sys.id]);
@@ -64,31 +60,30 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v19'); 
+            const d = localStorage.getItem('draft_v21'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v19'); }
+        } catch(e) { localStorage.removeItem('draft_v21'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v19', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v21', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
             const list = Array.isArray(item.list) ? item.list : [];
             const pp = list.reduce((a,i)=>a+(parseFloat(i.p)||0),0); 
-            const pc = list.reduce((a,i)=>a+(parseFloat(i.c)||0),0); 
             const l = (parseFloat(fin.lh)||0)*(parseFloat(fin.lr)||0); 
             const paint = parseFloat(fin.paint)||0; 
             const sub = pp + l + paint;
             const vat = sub * (parseFloat(cfg.vatRate||0)/100);
             const tot = sub + vat; 
             const ex = parseFloat(fin.ex)||0;
-            return { partsPrice: pp, partsCost: pc, labor: l, paintCost: paint, vat: vat, invoiceTotal: tot, totalJobCost: pc+paint, jobProfit: (sub) - (pc+paint), excessAmount: ex, finalDue: tot-ex };
-        } catch (err) { return { partsPrice:0, finalDue:0, jobProfit:0, invoiceTotal:0, excessAmount:0 }; }
+            return { partsPrice: pp, labor: l, paintCost: paint, vat: vat, invoiceTotal: tot, finalDue: tot-ex };
+        } catch (err) { return { partsPrice:0, finalDue:0, invoiceTotal:0 }; }
     };
     const totals = calc();
 
@@ -154,13 +149,8 @@ const EstimateApp = ({ userId }) => {
         // --- SMART PARTS (WITH FALLBACK) ---
         parts: () => { 
             const cleanVin = (veh.v||'').replace(/\s/g, '');
-            if (cleanVin.length > 5) {
-                window.open(`https://partsouq.com/en/search/all?q=${cleanVin}`, '_blank'); 
-            } else {
-                if(window.confirm("No VIN found. Search eBay Parts by Reg?")) {
-                    window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.r}+parts`, '_blank'); 
-                }
-            }
+            if (cleanVin.length > 5) window.open(`https://partsouq.com/en/search/all?q=${cleanVin}`, '_blank'); 
+            else if(window.confirm("No VIN found. Search eBay Parts by Reg?")) window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.r}+parts`, '_blank'); 
         },
         
         paint: () => { 
@@ -182,6 +172,42 @@ const EstimateApp = ({ userId }) => {
         toggleNote: async (i) => { if(!sys.id) return; const nn = [...sys.notes]; nn[i].resolved = !nn[i].resolved; setSys(p=>({...p, notes:nn})); await updateDoc(doc(db, 'estimates', sys.id), {notes:nn}); },
 
         upload: async (type, file) => { if(!sys.id || !file) return alert("Save First"); const r = ref(storage, `docs/${sys.id}/${type}_${file.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, file); const u = await getDownloadURL(r); await updateDoc(doc(db, 'estimates', sys.id), { [`dealFile.${type}`]: { name:file.name, url:u, date:new Date().toLocaleDateString() } }); setSys(p=>({...p, save:'IDLE'})); alert("Uploaded"); },
+        
+        generateTerms: async () => {
+            if(!sys.id) return alert("Save job first");
+            if(!cfg.terms) return alert("Please add T&Cs in Settings first.");
+            setSys(p=>({...p, save:'SAVING'}));
+            const blob = new Blob([cfg.terms], {type: 'text/plain'});
+            const fName = `Terms_${Date.now()}.txt`;
+            const r = ref(storage, `docs/${sys.id}/terms_${fName}`);
+            await uploadBytes(r, blob);
+            const u = await getDownloadURL(r);
+            await updateDoc(doc(db, 'estimates', sys.id), { [`dealFile.terms`]: { name:fName, url:u, date:new Date().toLocaleDateString() } });
+            setSys(p=>({...p, save:'IDLE'}));
+        },
+
+        downloadDealPack: async () => {
+            const df = activeJob?.dealFile;
+            if (!df) return;
+            setSys(p=>({...p, downloading: true}));
+            try {
+                const zip = new JSZip();
+                const folder = zip.folder(`${veh.r}_Deal_Pack`);
+                const addFile = async (url, name) => { const r = await axios.get(url, { responseType: 'blob' }); folder.file(name, r.data); };
+                if(df.terms) await addFile(df.terms.url, "Terms_Conditions.txt");
+                if(df.auth) await addFile(df.auth.url, df.auth.name);
+                if(df.method) await addFile(df.method.url, df.method.name);
+                if(df.sat) await addFile(df.sat.url, df.sat.name);
+                if(sys.photos.length > 0) {
+                    const photoFolder = folder.folder("Photos");
+                    for (let i = 0; i < sys.photos.length; i++) { await addFile(sys.photos[i], `photo_${i+1}.jpg`); }
+                }
+                const content = await zip.generateAsync({type:"blob"});
+                saveAs(content, `${veh.r}_Deal_Pack.zip`);
+            } catch (e) { alert("Error creating ZIP. Check connection."); console.error(e); }
+            setSys(p=>({...p, downloading: false}));
+        },
+
         uploadPhoto: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `photos/${Date.now()}_${f.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, f); const u = await getDownloadURL(r); setSys(p=>({...p, save:'IDLE', photos:[...p.photos,u]})); } },
         uploadLogo: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `settings/logo_${Date.now()}`); await uploadBytes(r, f); const u = await getDownloadURL(r); setCfg(p=>({...p, logo:u})); await setDoc(doc(db,'settings','global'), {...cfg, logo:u}); } },
         
@@ -202,7 +228,6 @@ const EstimateApp = ({ userId }) => {
         },
         delExp: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'expenses',id)); },
         
-        // --- FIXED CSV EXPORT ---
         csvIncome: () => { 
             const l = "data:text/csv;charset=utf-8,Date,Inv,Reg,Total\n"+sys.jobs.filter(j=>j.type?.includes('INV')).map(j=>`${new Date(j.createdAt?.seconds*1000).toLocaleDateString()},${j.invoiceNumber},${j.reg},${j.totals?.finalDue || j.totals?.invoiceTotal || 0}`).join('\n'); 
             const a=document.createElement("a"); a.href=encodeURI(l); a.download="Income.csv"; a.click(); 
@@ -217,6 +242,9 @@ const EstimateApp = ({ userId }) => {
     useEffect(() => { if(canvasRef.current) canvasRef.current.getContext('2d').clearRect(0,0,300,100); }, [mode]);
 
     const Stage = ({k, l}) => { const x = sys.stages[k]||{}; return <div style={{padding:'12px', background:x.completed?'#f0fdf4':'#fff', border:'1px solid #e2e8f0', borderRadius:'10px', marginBottom:'8px', display:'flex', alignItems:'center', gap:'10px', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'}}><input type="checkbox" style={{transform:'scale(1.5)', accentColor:'#16a34a'}} checked={x.completed||false} onChange={e=>actions.stage(k,e.target.checked)}/><b style={{color:x.completed?'#16a34a':'#334155'}}>{l}</b></div> };
+
+    // --- CHECK FOR DEAL PACK COMPLETION ---
+    const isDealComplete = activeJob?.dealFile?.terms && activeJob?.dealFile?.auth && activeJob?.dealFile?.method && activeJob?.dealFile?.sat;
 
     // --- SETTINGS VIEW ---
     if(mode==='SETTINGS') return (
@@ -259,6 +287,10 @@ const EstimateApp = ({ userId }) => {
                 <div style={{marginBottom:15}}>
                     <label style={s.label}>TECHS (Comma separated)</label>
                     <input style={s.inp} value={cfg.techs} onChange={e=>setCfg({...cfg, techs:e.target.value})}/>
+                </div>
+                <div style={{marginBottom:15}}>
+                    <label style={s.label}>TERMS & CONDITIONS TEXT</label>
+                    <textarea style={{...s.inp, height:120}} value={cfg.terms} onChange={e=>setCfg({...cfg, terms:e.target.value})} placeholder="Paste T&Cs here..."/>
                 </div>
             </div>
             
@@ -325,7 +357,16 @@ const EstimateApp = ({ userId }) => {
             
             <div style={{background:'white', padding:15, borderRadius:10, marginBottom:15}}>
                 <div style={{fontSize:'12px', color:'#64748b', fontWeight:'bold', marginBottom:10}}>DOCUMENTS</div>
-                {['terms','auth','method','sat'].map(k => (
+                
+                {/* TERMS SPECIFIC ROW */}
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #f1f5f9'}}>
+                    <span style={{fontWeight:'500'}}>Terms & Conditions</span>
+                    <div style={{display:'flex', alignItems:'center', gap:10}}>
+                        {activeJob?.dealFile?.terms ? <span style={{color:'#16a34a'}}>✅</span> : <button onClick={actions.generateTerms} style={{...s.btn, ...s.secondaryBtn, fontSize:'10px', padding:'5px'}}>⚡ Auto Gen</button>}
+                    </div>
+                </div>
+
+                {['auth','method','sat'].map(k => (
                     <div key={k} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #f1f5f9'}}>
                         <span style={{textTransform:'capitalize', fontWeight:'500'}}>{k === 'sat' ? 'Satisfaction Note' : k}</span>
                         <div style={{display:'flex', alignItems:'center', gap:10}}>
@@ -335,6 +376,9 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 ))}
             </div>
+
+            {isDealComplete && <button onClick={actions.downloadDealPack} style={{...s.btn, background:'linear-gradient(135deg, #7c3aed, #6d28d9)', width:'100%', marginBottom:15, padding:15}}>{sys.downloading ? '⏳ Zipping...' : '📥 DOWNLOAD DEAL PACK (ZIP)'}</button>}
+
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
                 <a href={`mailto:?subject=${encodeURIComponent(`Repair Info: ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for ${veh.r}. Invoice: ${sys.invNum}`)}`} style={{...s.btn, ...s.actionBtn, textDecoration:'none'}}>📧 Client Pack</a>
                 {cust.ie && <a href={`mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}&body=${encodeURIComponent(`Please find attached documents for Claim ${cust.c}.`)}`} style={{...s.btn, background:'#6366f1', textDecoration:'none'}}>✉️ Insurer Pack</a>}
