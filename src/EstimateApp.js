@@ -350,7 +350,7 @@ const EstimateApp = ({ userId }) => {
             <Stage k="met" l="MET Strip"/><Stage k="panel" l="Panel"/><Stage k="paint" l="Paint"/><Stage k="fit" l="Fit"/><Stage k="valet" l="Valet"/><Stage k="qc" l="QC"/>
             <h4 style={{color:'#64748b', marginTop:25, marginBottom:10}}>SNAG LIST</h4>
             <div style={{display:'flex', gap:10, marginBottom:15}}>
-                <input style={{...s.inp, marginBottom:0}} value={sys.note} onChange={e=>setSys({...sys, note:e.target.value})} placeholder="Add snag..."/
+                <input style={{...s.inp, marginBottom:0}} value={sys.note} onChange={e=>setSys({...sys, note:e.target.value})} placeholder="Add snag..."/>
                 <button onClick={actions.note} style={{...s.btn, ...s.actionBtn}}>Add</button>
             </div>
             {sys.notes.map((n,i)=><div key={i} style={{padding:12, background:n.resolved?'#f0fdf4':'#fef2f2', borderLeft:n.resolved?'4px solid #22c55e':'4px solid #ef4444', borderRadius:6, marginBottom:8, fontSize:'14px', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'}}>
