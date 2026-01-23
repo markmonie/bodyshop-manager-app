@@ -350,55 +350,38 @@ const EstimateApp = ({ userId }) => {
                     <div style={{textAlign:'right'}}>
                         {invoiceType!=='EXCESS' && <><div className="no-print">Labor: <input value={laborHours} onChange={e=>setLaborHours(e.target.value)} style={{width:'40px'}}/>hrs @ £{laborRate}</div><div style={rowStyle}><span>Labor:</span><span>£{totals.labor.toFixed(2)}</span></div><div style={rowStyle}><span>Parts:</span><span>£{totals.partsPrice.toFixed(2)}</span></div><div style={{borderTop:'2px solid #000', fontWeight:'bold', ...rowStyle}}><span>TOTAL:</span><span>£{totals.invoiceTotal.toFixed(2)}</span></div><div style={{color:'red', ...rowStyle}}><span>Less Excess:</span><span>-£{totals.excessAmount.toFixed(2)}</span></div></>}
                         <h2 style={{borderTop:'2px solid #000', paddingTop:'10px'}}>DUE: £{invoiceType==='EXCESS'?parseFloat(excess).toFixed(2):totals.finalDue.toFixed(2)}</h2>
-                        <div className="no-print" style={{background:'#fef2f2', padding:'10px', marginTop:'10px', border:'1px dashed red'}}>Paint Cost: <input value={paintAllocated} onChange={e=>setPaintAllocated(e.target.value)} style={{width:'50px'}}/> | Profit: <b>£{totals.jobProfit.toFixed(2)}</b></div>
-                    </div>
-                    {mode.includes('INVOICE') && <div style={{marginTop:'40px', display:'flex', justifyContent:'space-between'}}><div><b>Payment Details</b><br/>{settings.companyName}<br/>Sort: 80-22-60<br/>Acc: 06163462</div><div style={{textAlign:'center'}}><div className="no-print" style={{border:'1px dashed #ccc'}}><canvas ref={canvasRef} width={200} height={80} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}/><br/><button onClick={clearSignature}>Clear</button></div><div style={{borderBottom:'1px solid #000', marginTop:'40px'}}>Signed</div></div></div>}
-                </>
-            )}
-
-            {mode==='SATISFACTION' && <div style={{marginTop:'50px', border:'2px solid #000', padding:'20px'}}>I confirm repairs to vehicle <b>{reg}</b> are complete to my satisfaction.<div style={{marginTop:'50px', display:'flex', justifyContent:'space-between'}}><div style={{textAlign:'center'}}><div className="no-print" style={{border:'1px dashed #ccc'}}><canvas ref={canvasRef} width={200} height={80} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}/><br/><button onClick={clearSignature}>Clear</button></div><div style={{borderBottom:'1px solid #000', marginTop:'40px'}}>Customer Sig</div></div><div>Date: {new Date().toLocaleDateString()}</div></div></div>}
-
-            {mode==='DEAL_FILE' && (
-                <div style={{background:'#f0f9ff', padding:'20px', borderRadius:'8px', marginTop:'20px', border:'1px solid #bae6fd'}}>
-                    <h3>Deal File: {reg}</h3>
-                    {!currentJobId && <div style={{color:'red', background:'#fee2e2', padding:'10px'}}>⚠️ Save Job First</div>}
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginTop:'15px'}}>
-                        <div>
-                            <h4>Uploads</h4>
-                            <div style={{marginBottom:'10px'}}>T&Cs: {activeJob?.dealFile?.terms?'✅':'❌'} <input type="file" onChange={(e)=>uploadDoc('terms',e.target.files[0])}/></div>
-                            <div style={{marginBottom:'10px'}}>Auth: {activeJob?.dealFile?.auth?'✅':'❌'} <input type="file" onChange={(e)=>uploadDoc('auth',e.target.files[0])}/></div>
-                            <div style={{marginBottom:'10px'}}>Methods: {methodsRequired?(activeJob?.dealFile?.methods?'✅':'❌'):'N/A'} <input type="checkbox" checked={methodsRequired} onChange={toggleMethods}/> Req? {methodsRequired && <input type="file" onChange={(e)=>uploadDoc('methods',e.target.files[0])}/>}</div>
-                        </div>
-                        <div>
-                            <h4>Checks</h4>
-                            <div>📸 Photos: {photos.length}</div>
-                            <div>💰 Invoice: {invoiceNum||'Pending'}</div>
-                            <div style={{marginBottom:'10px'}}>Sat Note: {activeJob?.dealFile?.satisfaction?'✅':'❌'} <input type="file" onChange={(e)=>uploadDoc('satisfaction',e.target.files[0])}/></div>
-                            <a href={emailLink} style={{display:'block', padding:'10px', background:'#2563eb', color:'white', textAlign:'center', borderRadius:'4px', marginTop:'10px', textDecoration:'none', fontWeight:'bold'}}>📧 Email Pack</a>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+                                    {/* --- BUTTON BAR (Fixed) --- */}
             <div className="no-print" style={{position:'fixed', bottom:0, left:0, right:0, background:'white', padding:'10px', borderTop:'1px solid #ccc', display:'flex', gap:'5px', overflowX:'auto', justifyContent:'center'}}>
-                <button onClick={()=>saveToCloud('ESTIMATE')} style={saveStatus==='SUCCESS'?successBtn:primaryBtn}>{saveStatus==='SAVING'?'...':'SAVE'}</button>
-                {mode==='ESTIMATE' && <>{excess>0 ? <><button onClick={()=>saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background:'#4338ca'}}>INSURER</button><button onClick={()=>saveToCloud('INVOICE_EXCESS')} style={{...secondaryBtn, background:'#be123c'}}>CUST</button></> : <button onClick={()=>saveToCloud('INVOICE')} style={secondaryBtn}>INV</button>}</>}
+                <button onClick={()=>saveToCloud('ESTIMATE')} style={saveStatus==='SUCCESS'?successBtn:primaryBtn}>
+                    {saveStatus==='SAVING'?'...':'SAVE'}
+                </button>
+                
+                {mode==='ESTIMATE' && excess > 0 && (
+                    <>
+                        <button onClick={()=>saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background:'#4338ca'}}>INSURER</button>
+                        <button onClick={()=>saveToCloud('INVOICE_EXCESS')} style={{...secondaryBtn, background:'#be123c'}}>CUST</button>
+                    </>
+                )}
+                
+                {mode==='ESTIMATE' && (!excess || excess <= 0) && (
+                    <button onClick={()=>saveToCloud('INVOICE')} style={secondaryBtn}>INV</button>
+                )}
+
                 <button onClick={()=>setMode('JOBCARD')} style={{...secondaryBtn, background:'#4b5563'}}>JOB</button>
                 <button onClick={()=>setMode('DEAL_FILE')} style={{...secondaryBtn, background:'#7c3aed'}}>FILE</button>
                 <button onClick={handlePrint} style={{...secondaryBtn, background:'#333'}}>PRINT</button>
                 <button onClick={clearForm} style={{...secondaryBtn, background:'#ef4444'}}>NEW</button>
-                <button onClick={()=>setMode('SETTINGS')} style={secondaryBtn}>⚙
+                <button onClick={()=>setMode('SETTINGS')} style={secondaryBtn}>⚙️</button>
+                <button onClick={()=>setMode('DASHBOARD')} style={{...secondaryBtn, background:'#0f766e'}}>📊</button>
+            </div>
 
-
-    // BLOCK 4: RECENT JOBS & FINAL EXPORT (The End)
-
+            {/* --- RECENT JOBS LIST --- */}
             <div className="no-print" style={{marginTop:'80px', paddingBottom:'50px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
                     <input placeholder="Search..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} style={{padding:'8px', width:'60%', border:'1px solid #ccc', borderRadius:'4px'}} />
                     <button onClick={downloadAccountingCSV} style={{background:'#0f766e', color:'white', border:'none', padding:'8px 12px', borderRadius:'4px'}}>CSV</button>
                 </div>
-                
-                {filteredEstimates.map(e => (
+                {filteredEstimates.map(e=>(
                     <div key={e.id} style={{padding:'10px', borderBottom:'1px solid #eee', background:e.status==='PAID'?'#f0fdf4':'#fff', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                         <div onClick={()=>loadJobIntoState(e)} style={{cursor:'pointer'}}>
                             {e.hasFlag&&'🚩 '}<b>{e.customer}</b> ({e.reg}) 
@@ -423,4 +406,5 @@ const EstimateApp = ({ userId }) => {
 const App = () => { const [u,s]=useState(null); useEffect(()=>onAuthStateChanged(auth,x=>s(x?x.uid:signInAnonymously(auth))),[]); return u?<EstimateApp userId={u}/>:<div>Loading System...</div>; };
 export default App;
 // END OF CODE
+
 
