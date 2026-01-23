@@ -52,17 +52,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v14'); 
+            const d = localStorage.getItem('draft_v15'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v14'); }
+        } catch(e) { localStorage.removeItem('draft_v15'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v14', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v15', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -139,31 +139,38 @@ const EstimateApp = ({ userId }) => {
             }
         },
         
-        // --- SMART PARTS (WITH FALLBACK) ---
+        // --- IMPROVED PARTS LOOKUP (PartsSouq > eBay) ---
         parts: () => { 
-            const cleanVin = (veh.v||'').replace(/\s/g, '');
-            // 1. Try 7zap with VIN (needs to be reasonably long)
-            if(cleanVin.length > 5) {
-                window.open(`https://7zap.com/en/search/?q=${cleanVin}`, '_blank'); 
+            const v = (veh.v || '').replace(/\s/g, '');
+            // PartsSouq needs a VIN length > 5 to generally work
+            if (v.length > 5) {
+                window.open(`https://partsouq.com/en/search/all?q=${v}`, '_blank'); 
             } else {
-                // 2. Fallback to eBay if VIN missing
-                if(window.confirm("Full Chassis Number is missing (DVLA limits this). Search eBay Parts by Reg instead?")) {
-                    window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.r}+parts`, '_blank');
+                if(window.confirm("No VIN found. Search eBay Parts by Make/Model?")) {
+                    window.open(`https://www.ebay.co.uk/sch/i.html?_nkw=${veh.mm}+parts`, '_blank'); 
                 }
             }
         },
         
+        // --- IMPROVED PAINT LOOKUP (Smarter Matching) ---
         paint: () => { 
             if(!veh.mm) return alert("Enter Make/Model first");
-            const make = veh.mm.split(' ')[0].toUpperCase();
-            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?make=${make}`; 
-            if(make === 'FORD') url = 'https://www.ford.co.uk/support/vehicle-dashboard'; 
-            if(make === 'BMW') url = 'https://bimmer.work/'; 
-            if(make === 'MERCEDES') url = 'https://www.lastvin.com/'; 
-            if(make === 'VOLKSWAGEN' || make === 'VW' || make === 'AUDI') url = 'https://erwin.volkswagen.de/erwin/showHome.do'; 
-            if(make === 'TOYOTA') url = 'https://www.toyota-tech.eu/'; 
+            const txt = veh.mm.toUpperCase();
+            
+            // Default: Professional Paint Database (better than Google)
+            let url = `https://paintref.com/cgi-bin/colorcodedisplay.cgi?manuf=${txt.split(' ')[0]}`;
+
+            // Smart Redirects
+            if(txt.includes('FORD')) url = 'https://www.ford.co.uk/support/vehicle-dashboard'; 
+            if(txt.includes('BMW')) url = 'https://bimmer.work/'; 
+            if(txt.includes('MERCEDES')) url = 'https://www.lastvin.com/'; 
+            if(txt.includes('VW') || txt.includes('VOLKSWAGEN') || txt.includes('AUDI') || txt.includes('SEAT') || txt.includes('SKODA')) url = 'https://erwin.volkswagen.de/erwin/showHome.do'; 
+            if(txt.includes('TOYOTA')) url = 'https://www.toyota-tech.eu/'; 
+            if(txt.includes('VAUXHALL') || txt.includes('OPEL')) url = 'https://public.servicebox.peugeot.com/pages/index.jsp';
+            
             window.open(url, '_blank'); 
         },
+        
         emailIns: () => { window.location.href = `mailto:${cust.ie}?subject=${encodeURIComponent(`Claim: ${cust.c} - ${veh.r}`)}`; },
         
         stage: async (k, done) => { if(!sys.id) return alert("Save First"); const ns = {...sys.stages, [k]: {completed:done, date:done?new Date().toLocaleDateString():''}}; setSys(p=>({...p, stages:ns})); await updateDoc(doc(db, 'estimates', sys.id), {stages:ns}); },
