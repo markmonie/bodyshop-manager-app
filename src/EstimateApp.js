@@ -3,7 +3,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import axios from 'axios';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -26,24 +25,19 @@ const s = {
     
     // Buttons
     btn: {padding:'10px 16px', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'600', fontSize:'14px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', transition:'transform 0.1s', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'},
-    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'}, // Blue
-    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'}, // Green
-    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'}, // Red
-    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'}, // Grey
+    actionBtn: {background:'linear-gradient(135deg, #3b82f6, #2563eb)', color:'white'}, 
+    saveBtn: {background:'linear-gradient(135deg, #22c55e, #16a34a)', color:'white'}, 
+    dangerBtn: {background:'linear-gradient(135deg, #ef4444, #dc2626)', color:'white'}, 
+    secondaryBtn: {background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', boxShadow:'none'}, 
     backBtn: {width:'100%', padding:'15px', background:'#e2e8f0', color:'#1e293b', border:'none', borderRadius:'8px', fontWeight:'bold', marginBottom:'20px', fontSize:'16px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', cursor:'pointer'},
-
-    // Cards
     card: {background:'#fff', padding:'20px', border:'1px solid #e2e8f0', borderRadius:'12px', marginBottom:'15px', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.05)'},
     label: {display:'block', fontSize:'11px', color:'#64748b', marginBottom:'4px', fontWeight:'bold', textTransform:'uppercase', letterSpacing:'0.5px'},
-    
-    // Bottom Dock Item
     dockItem: {background:'none', border:'none', color:'#64748b', display:'flex', flexDirection:'column', alignItems:'center', fontSize:'10px', gap:'4px', minWidth:'60px', cursor:'pointer', whiteSpace:'nowrap'}
 };
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
     const [mode, setMode] = useState('ESTIMATE');
-    // Default state ensures 'terms' key always exists
     const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1', logo:'', terms:'' });
     
     // Core Data
@@ -58,7 +52,6 @@ const EstimateApp = ({ userId }) => {
 
     // --- LOADERS ---
     useEffect(() => { 
-        // Loads DB data and merges it with default state so 'terms' is never undefined
         getDoc(doc(db, 'settings', 'global')).then(d => d.exists() && setCfg(prev => ({...prev, ...d.data()})));
         const u1 = onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), s => setSys(p => ({...p, jobs: s.docs.map(d => ({id: d.id, ...d.data()}))})));
         const u2 = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), s => setSys(p => ({...p, exps: s.docs.map(d => ({id: d.id, ...d.data()}))})));
@@ -68,17 +61,17 @@ const EstimateApp = ({ userId }) => {
     // --- SAFETY LOADERS ---
     useEffect(() => { 
         try {
-            const d = localStorage.getItem('draft_v23'); 
+            const d = localStorage.getItem('draft_v24'); 
             if(d) { 
                 const p = JSON.parse(d); 
                 if(p.c) setCust(p.c); if(p.v) setVeh(p.v); if(p.f) setFin(p.f); 
                 if(p.ph) setSys(x=>({...x, photos:p.ph}));
                 if(p.i) setItem({ ...p.i, list: Array.isArray(p.i.list) ? p.i.list : [] });
             }
-        } catch(e) { localStorage.removeItem('draft_v23'); }
+        } catch(e) { localStorage.removeItem('draft_v24'); }
     }, []);
 
-    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v23', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
+    useEffect(() => { if(mode==='ESTIMATE') localStorage.setItem('draft_v24', JSON.stringify({ c:cust, v:veh, i:item, f:fin, ph:sys.photos })); }, [cust, veh, item, fin, sys.photos, mode]);
 
     const calc = () => {
         try {
@@ -193,25 +186,41 @@ const EstimateApp = ({ userId }) => {
         },
 
         downloadDealPack: async () => {
-            const df = activeJob?.dealFile;
-            if (!df) return;
-            setSys(p=>({...p, downloading: true}));
+            if (!activeJob?.dealFile) return alert("No deal file documents found.");
+            setSys(p => ({ ...p, downloading: true }));
             try {
                 const zip = new JSZip();
-                const folder = zip.folder(`${veh.r}_Deal_Pack`);
-                const addFile = async (url, name) => { const r = await axios.get(url, { responseType: 'blob' }); folder.file(name, r.data); };
-                if(df.terms) await addFile(df.terms.url, "Terms_Conditions.txt");
-                if(df.auth) await addFile(df.auth.url, df.auth.name);
-                if(df.method) await addFile(df.method.url, df.method.name);
-                if(df.sat) await addFile(df.sat.url, df.sat.name);
-                if(sys.photos.length > 0) {
-                    const photoFolder = folder.folder("Photos");
-                    for (let i = 0; i < sys.photos.length; i++) { await addFile(sys.photos[i], `photo_${i+1}.jpg`); }
+                const folder = zip.folder(`Deal_Pack_${veh.r}`);
+
+                const fetchFile = async (url) => {
+                    const r = await fetch(url);
+                    return r.blob();
+                };
+
+                // Add documents
+                if (activeJob.dealFile.terms) folder.file("Terms_Conditions.txt", await fetchFile(activeJob.dealFile.terms.url));
+                if (activeJob.dealFile.auth) folder.file(`Auth_${activeJob.dealFile.auth.name}`, await fetchFile(activeJob.dealFile.auth.url));
+                if (activeJob.dealFile.method) folder.file(`Method_${activeJob.dealFile.method.name}`, await fetchFile(activeJob.dealFile.method.url));
+                if (activeJob.dealFile.sat) folder.file(`Satisfaction_${activeJob.dealFile.sat.name}`, await fetchFile(activeJob.dealFile.sat.url));
+
+                // Add photos folder
+                if (sys.photos.length > 0) {
+                    const imgFolder = folder.folder("Images");
+                    await Promise.all(sys.photos.map(async (url, i) => {
+                        try {
+                            const blob = await fetchFile(url);
+                            imgFolder.file(`Photo_${i + 1}.jpg`, blob);
+                        } catch (e) { console.error("Photo fail", e); }
+                    }));
                 }
-                const content = await zip.generateAsync({type:"blob"});
-                saveAs(content, `${veh.r}_Deal_Pack.zip`);
-            } catch (e) { alert("Error creating ZIP. Check connection."); console.error(e); }
-            setSys(p=>({...p, downloading: false}));
+
+                const content = await zip.generateAsync({ type: "blob" });
+                saveAs(content, `Deal_Pack_${veh.r}.zip`);
+                setSys(p => ({ ...p, downloading: false }));
+            } catch (e) {
+                alert("Error creating zip: " + e.message);
+                setSys(p => ({ ...p, downloading: false }));
+            }
         },
 
         uploadPhoto: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `photos/${Date.now()}_${f.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, f); const u = await getDownloadURL(r); setSys(p=>({...p, save:'IDLE', photos:[...p.photos,u]})); } },
