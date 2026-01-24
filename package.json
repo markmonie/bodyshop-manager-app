@@ -6,14 +6,13 @@
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.6.7",
-    "file-saver": "^2.0.5",
-    "firebase": "^10.8.0",
-    "jszip": "^3.10.1",
+    "firebase": "^10.7.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "jszip": "^3.10.1",
+    "file-saver": "^2.0.5"
   },
   "scripts": {
     "start": "react-scripts start",
