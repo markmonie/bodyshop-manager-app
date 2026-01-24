@@ -28,9 +28,9 @@ A bespoke estimation and management system built for independent body repair sho
 * **Purpose:** The internal document for the workshop floor.
 * **Content:** Converts the estimate into a task list for technicians, hiding costs and focusing on repair instructions.
 
-### 5. Saving Data
-* **Save Button:** Located at the bottom left.
-* **Storage:** Currently uses Local Storage (browser memory) and connects to Firebase for cloud backup (in progress).
+### 5. Data Export & Backup (The "Zip" Feature)
+* **Function:** Uses `JSZip` to bundle the current job data (images, PDF estimates, and text files) into a single compressed folder.
+* **Action:** Pressing "Save/Export" triggers `FileSaver`, instantly downloading a `.zip` archive to your device for offline storage or email attachments.
 
 ---
 
@@ -40,33 +40,26 @@ A bespoke estimation and management system built for independent body repair sho
 * **Frontend:** React.js (Create React App)
 * **Hosting:** GitHub Pages
 * **Database:** Firebase (Google Cloud)
+* **File Handling:** JSZip & File-Saver (for local backups)
 * **Routing:** React Router DOM
 
+### Security & Secrets
+This repository is configured with **GitHub Actions Secrets** to prevent API key leakage.
+* **API Keys:** Keys for Firebase and VRM Lookups are NOT hardcoded.
+* **Injection:** They are injected at build time via `Settings > Secrets and variables`.
+* **Private vs Public:** The `private: true` flag in `package.json` prevents accidental publishing to the NPM registry, while the repository itself remains Public for GitHub Pages deployment.
+
+### Vehicle Lookup Integration (VRM)
+The app uses a secure server-side request pattern (via injected keys) to fetch vehicle data:
+1.  **Trigger:** User inputs VRM.
+2.  **Process:** App validates the format and sends a request using `process.env.REACT_APP_VRM_KEY`.
+3.  **Result:** Returns standard UK vehicle data (DVLA format) to populate the estimate.
+
 ### Installation (For Developers)
-If you need to download this to a new computer, follow these steps:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/markmonie/bodyshop-manager-app.git](https://github.com/markmonie/bodyshop-manager-app.git)
-    ```
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Run locally:**
-    ```bash
-    npm start
-    ```
-    *Runs on http://localhost:3000*
-
-4.  **Deploy to live site:**
-    ```bash
-    npm run deploy
-    ```
-
-### Troubleshooting
-* **White Screen of Death:** If the screen goes blank after an update, check `package.json` to ensure the `"homepage"` line matches the GitHub URL exactly.
-* **Mobile Cache:** If updates don't appear on mobile, clear Chrome Browser cache (Settings > Site Settings > All Sites > Clear & Reset).
+1.  **Clone:** `git clone https://github.com/markmonie/bodyshop-manager-app.git`
+2.  **Install:** `npm install`
+3.  **Run:** `npm start`
+4.  **Deploy:** `npm run deploy` (Ensure `homepage` in `package.json` is correct).
 
 ---
 
@@ -84,30 +77,3 @@ If you need to download this to a new computer, follow these steps:
 ---
 
 **© 2026 Mark Monie / Triple MMM Body Repairs**
-### 🔧 Vehicle Lookup Integration (VRM)
-
-The application uses an external API to automatically populate vehicle details (Make, Model, Colour, Engine, etc.) based on the Registration Mark (VRM).
-
-#### How it works
-1.  **Trigger:** User enters a registration (e.g., "AB12 CDE") in the estimate form.
-2.  **Request:** The app sends a secure `GET` request to the VRM Provider (e.g., DVLA/UKVD).
-3.  **Security:** The API Key is **not** hardcoded in the application files. It is injected during the build process via GitHub Secrets.
-4.  **Response:** The returned JSON data is mapped to the application state (`setVehicleDetails`) and automatically fills the "Vehicle" section of the Job Card.
-
-#### Security Configuration
-To protect the API usage from unauthorised access, this project uses **GitHub Actions Secrets**:
-* **Storage:** Keys are stored in `Settings > Secrets and variables > Actions`.
-* **Injection:** The workflow file (`.github/workflows/deploy.yml`) injects these secrets into the React build environment as:
-    * `REACT_APP_VRM_API_KEY`
-    * `REACT_APP_FIREBASE_API_KEY`
-
-#### Code Reference (Snippet)
-The lookup function utilizes the environment variable to authenticate the request:
-
-```javascript
-const fetchVehicleDetails = async (registration) => {
-  const apiKey = process.env.REACT_APP_VRM_API_KEY; // Pulled from Secrets
-  const response = await fetch(`https://api.vrm-provider.com/v1/vehicles/${registration}?apikey=${apiKey}`);
-  const data = await response.json();
-  // ... map data to form fields
-};
