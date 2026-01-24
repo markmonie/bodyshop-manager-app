@@ -84,3 +84,30 @@ If you need to download this to a new computer, follow these steps:
 ---
 
 **© 2026 Mark Monie / Triple MMM Body Repairs**
+### 🔧 Vehicle Lookup Integration (VRM)
+
+The application uses an external API to automatically populate vehicle details (Make, Model, Colour, Engine, etc.) based on the Registration Mark (VRM).
+
+#### How it works
+1.  **Trigger:** User enters a registration (e.g., "AB12 CDE") in the estimate form.
+2.  **Request:** The app sends a secure `GET` request to the VRM Provider (e.g., DVLA/UKVD).
+3.  **Security:** The API Key is **not** hardcoded in the application files. It is injected during the build process via GitHub Secrets.
+4.  **Response:** The returned JSON data is mapped to the application state (`setVehicleDetails`) and automatically fills the "Vehicle" section of the Job Card.
+
+#### Security Configuration
+To protect the API usage from unauthorised access, this project uses **GitHub Actions Secrets**:
+* **Storage:** Keys are stored in `Settings > Secrets and variables > Actions`.
+* **Injection:** The workflow file (`.github/workflows/deploy.yml`) injects these secrets into the React build environment as:
+    * `REACT_APP_VRM_API_KEY`
+    * `REACT_APP_FIREBASE_API_KEY`
+
+#### Code Reference (Snippet)
+The lookup function utilizes the environment variable to authenticate the request:
+
+```javascript
+const fetchVehicleDetails = async (registration) => {
+  const apiKey = process.env.REACT_APP_VRM_API_KEY; // Pulled from Secrets
+  const response = await fetch(`https://api.vrm-provider.com/v1/vehicles/${registration}?apikey=${apiKey}`);
+  const data = await response.json();
+  // ... map data to form fields
+};
