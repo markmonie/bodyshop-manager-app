@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver':
+import { saveAs } from 'file-saver';
 import { QRCodeSVG } from 'qrcode.react';
 
 
