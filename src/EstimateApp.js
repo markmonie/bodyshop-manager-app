@@ -536,6 +536,12 @@ const EstimateApp = ({ userId }) => {
                             <span style={{fontSize:'24px', fontWeight:'800', color:'#16a34a'}}>£{totals.invoiceTotal.toFixed(2)}</span>
                         </div>
                     </div>
+                    {/* --- QR CODE START --- */}
+                    <div style={{marginTop: 20, marginBottom: 20, textAlign: 'center', padding: 10, border: '1px dashed #ccc'}}>
+                        <QRCodeSVG value={`https://www.paypal.com/paypalme/markmonie/${totals.invoiceTotal.toFixed(2)}`} size={128} />
+                        <div style={{fontSize: 10, marginTop: 5}}>Scan to Pay £{totals.invoiceTotal.toFixed(2)}</div>
+                    </div>
+                    {/* --- QR CODE END --- */}
 
                     <div className="no-print" style={{marginTop:20, paddingTop:15, borderTop:'1px solid #e2e8f0'}}>
                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
