@@ -20,26 +20,28 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- STYLES (ORANGE THEME) ---
+// --- STYLES ---
 const theme = {
-    primary: '#ea580c', // Logo Orange
-    light: '#fff7ed',   // Light Orange BG
-    dark: '#9a3412',    // Dark Orange Text
-    border: '#fdba74',  // Orange Border
+    primary: '#ea580c', // Orange
+    green: '#16a34a',   // Green
+    red: '#dc2626',     // Red
+    light: '#fff7ed',
+    dark: '#9a3412',
+    border: '#fdba74',
     grey: '#f8fafc',
     text: '#334155'
 };
 
-const inputStyle = { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '1em', boxSizing: 'border-box' };
+const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1em', boxSizing: 'border-box' };
 const headerStyle = { borderBottom: `2px solid ${theme.primary}`, paddingBottom: '5px', marginBottom: '15px', color: theme.primary, fontSize: '0.9em', fontWeight: 'bold', letterSpacing: '1px' };
 const rowStyle = { display: 'flex', justifyContent: 'space-between', padding: '4px 0' };
 
-// Modern Button Styles
+// Buttons
 const btnBase = { padding: '12px 20px', border: 'none', borderRadius: '50px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', fontSize: '0.9em' };
-const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' };
-const successBtn = { ...btnBase, background: '#16a34a', color: 'white' };
+const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' }; 
+const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; // NEW GREEN BUTTON
 const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
-const dangerBtn = { ...btnBase, background: '#ef4444', color: 'white' };
+const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; // Red X
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
@@ -48,7 +50,7 @@ const EstimateApp = ({ userId }) => {
     const [invoiceDate, setInvoiceDate] = useState('');
     const [invoiceType, setInvoiceType] = useState('MAIN');
 
-    // Settings
+    // Settings (Added Terms)
     const [settings, setSettings] = useState({
         laborRate: '50',
         markup: '20',
@@ -56,10 +58,11 @@ const EstimateApp = ({ userId }) => {
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
         email: 'markmonie72@gmail.com',
-        dvlaKey: ''
+        dvlaKey: '',
+        terms: 'Bank: BANK OF SCOTLAND\nAccount: 06163462\nSort: 80-22-60\nName: TRIPLE MMM BODY REPAIRS\n\nPayment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
     });
 
-    // Inputs
+    // Data
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
@@ -68,8 +71,6 @@ const EstimateApp = ({ userId }) => {
     const [networkCode, setNetworkCode] = useState('');
     const [insuranceCo, setInsuranceCo] = useState('');
     const [insuranceAddr, setInsuranceAddr] = useState('');
-    
-    // Vehicle & Booking
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
@@ -78,21 +79,17 @@ const EstimateApp = ({ userId }) => {
     const [bookingDate, setBookingDate] = useState(''); 
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
-
-    // Items
+    
+    // Items & Costs
     const [itemDesc, setItemDesc] = useState('');
     const [itemCostPrice, setItemCostPrice] = useState(''); 
     const [items, setItems] = useState([]);
-    
-    // Photos & Internal
     const [photos, setPhotos] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [paintAllocated, setPaintAllocated] = useState(''); 
     const [expDesc, setExpDesc] = useState('');
     const [expAmount, setExpAmount] = useState('');
     const [expCategory, setExpCategory] = useState('Stock');
-
-    // Financials
     const [laborHours, setLaborHours] = useState('');
     const [laborRate, setLaborRate] = useState('50');
     const [vatRate, setVatRate] = useState('0');
@@ -104,24 +101,19 @@ const EstimateApp = ({ userId }) => {
     const [saveStatus, setSaveStatus] = useState('IDLE');
     const [logoError, setLogoError] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
-
-    // Deal File
     const [currentJobId, setCurrentJobId] = useState(null); 
     const [methodsRequired, setMethodsRequired] = useState(false);
 
-    const activeJob = useMemo(() => {
-        return savedEstimates.find(j => j.id === currentJobId);
-    }, [savedEstimates, currentJobId]);
+    const activeJob = useMemo(() => savedEstimates.find(j => j.id === currentJobId), [savedEstimates, currentJobId]);
 
     // --- LOGIC ---
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => {
             if(snap.exists()) {
                 const s = snap.data();
-                setSettings(s);
+                setSettings(prev => ({...prev, ...s}));
                 setLaborRate(s.laborRate || '50');
                 setVatRate(s.vatRate || '0');
             }
@@ -220,15 +212,8 @@ const EstimateApp = ({ userId }) => {
         } else { alert("Simulated: Vehicle Found!"); setMakeModel("FORD TRANSIT (Simulated)"); }
     };
 
-    const decodeVin = () => {
-        if (!vin || vin.length < 3) return alert("Enter VIN");
-        window.open(`https://www.google.com/search?q=${makeModel}+paint+code+location`, '_blank');
-    };
-
-    const decodeParts = () => {
-        if (!vin || vin.length < 3) return alert("Enter VIN");
-        window.open(`https://partsouq.com/en/catalog/genuine/locate?c=${vin}`, '_blank');
-    };
+    const decodeVin = () => { if (!vin || vin.length < 3) return alert("Enter VIN"); window.open(`https://www.google.com/search?q=${makeModel}+paint+code+location`, '_blank'); };
+    const decodeParts = () => { if (!vin || vin.length < 3) return alert("Enter VIN"); window.open(`https://partsouq.com/en/catalog/genuine/locate?c=${vin}`, '_blank'); };
 
     const addItem = () => {
         if (!itemDesc) return;
@@ -362,7 +347,9 @@ const EstimateApp = ({ userId }) => {
                 <label>Parts Markup (%): <input value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} style={inputStyle} /></label>
                 <label>DVLA API Key: <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={inputStyle} /></label>
                 <label>Address: <textarea value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} style={{...inputStyle, height:'60px'}} /></label>
-                <button onClick={saveSettings} style={primaryBtn}>SAVE SETTINGS</button>
+                <label>Invoice Terms & Bank Details:</label>
+                <textarea value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} style={{...inputStyle, height:'120px'}} />
+                <button onClick={saveSettings} style={greenBtn}>SAVE SETTINGS</button>
             </div>
         </div>
     );
@@ -386,7 +373,7 @@ const EstimateApp = ({ userId }) => {
                     <thead style={{position:'sticky', top:0, background:theme.light}}><tr style={{textAlign:'left', color:theme.dark}}>
                         <th style={{padding:'10px'}}>Reg</th>
                         <th style={{padding:'10px'}}>Total Inv</th>
-                        <th style={{padding:'10px'}}>Paint/Mat Cost (Editable)</th>
+                        <th style={{padding:'10px'}}>Paint/Mat Cost</th>
                         <th style={{padding:'10px'}}>Net Profit</th>
                     </tr></thead>
                     <tbody>
@@ -415,7 +402,7 @@ const EstimateApp = ({ userId }) => {
             <div style={{display:'flex', gap:'10px', marginBottom:'30px'}}>
                 <input placeholder="Desc" value={expDesc} onChange={e => setExpDesc(e.target.value)} style={{flex:1, ...inputStyle}} />
                 <input type="number" placeholder="£" value={expAmount} onChange={e => setExpAmount(e.target.value)} style={{width:'80px', ...inputStyle}} />
-                <button onClick={addGeneralExpense} style={primaryBtn}>Add</button>
+                <button onClick={addGeneralExpense} style={greenBtn}>Add</button>
             </div>
             <button onClick={downloadExpensesCSV} style={secondaryBtn}>📥 Export Expenses</button>
             {generalExpenses.map(ex => (<div key={ex.id} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'10px'}}><span>{ex.desc}</span><strong>£{ex.amount.toFixed(2)}</strong></div>))}
@@ -482,7 +469,7 @@ const EstimateApp = ({ userId }) => {
                     {invoiceType !== 'EXCESS' && (
                         <>
                             <div className="no-print" style={{ background: theme.grey, padding: '15px', marginBottom: '15px', borderRadius: '8px' }}>
-                                <div style={{ display: 'flex', gap: '10px' }}><input placeholder="Item Description" value={itemDesc} onChange={e => setItemDesc(e.target.value)} style={{ flexGrow: 1, ...inputStyle, marginBottom:0 }} /><input type="number" placeholder="Cost £" value={itemCostPrice} onChange={e => setItemCostPrice(e.target.value)} style={{ width: '80px', ...inputStyle, marginBottom:0 }} /><button onClick={addItem} style={secondaryBtn}>Add Item</button></div>
+                                <div style={{ display: 'flex', gap: '10px' }}><input placeholder="Item Description" value={itemDesc} onChange={e => setItemDesc(e.target.value)} style={{ flexGrow: 1, ...inputStyle, marginBottom:0 }} /><input type="number" placeholder="Cost £" value={itemCostPrice} onChange={e => setItemCostPrice(e.target.value)} style={{ width: '80px', ...inputStyle, marginBottom:0 }} /><button onClick={addItem} style={greenBtn}>Add Item</button></div>
                             </div>
                             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}><thead><tr style={{textAlign:'left', borderBottom:`2px solid ${theme.text}`}}><th style={{padding:'10px'}}>DESCRIPTION</th>{mode !== 'JOBCARD' && <th style={{textAlign:'right'}}>PRICE</th>}</tr></thead><tbody>{items.map((item, i) => (<tr key={i} style={{ borderBottom: '1px solid #eee' }}><td style={{padding:'10px'}}>{item.desc}</td>{mode !== 'JOBCARD' && <td style={{textAlign:'right'}}>£{item.price.toFixed(2)}</td>}<td className="no-print"><button onClick={() => removeItem(i)} style={{color:'red', border:'none', background:'none'}}>x</button></td></tr>))}</tbody></table>
                         </>
@@ -501,24 +488,15 @@ const EstimateApp = ({ userId }) => {
                                     </>
                                 )}
                                 <div style={{...rowStyle, fontSize:'1.4em', background: theme.grey, padding:'10px', borderRadius:'6px', marginTop:'10px'}}><span>DUE:</span> <strong>£{invoiceType === 'EXCESS' ? parseFloat(excess).toFixed(2) : totals.finalDue.toFixed(2)}</strong></div>
-                                
-                                {/* PAINT COST INPUT - ON ESTIMATE SHEET AS REQUESTED */}
-                                <div className="no-print" style={{marginTop:'15px', padding:'10px', border:`1px dashed ${theme.primary}`, borderRadius:'6px', background:theme.light}}>
-                                    <label style={{fontSize:'0.8em', fontWeight:'bold', color:theme.primary}}>🎨 Internal Paint Cost</label>
-                                    <div style={{display:'flex', alignItems:'center'}}>
-                                        £<input type="number" value={paintAllocated} onChange={e => setPaintAllocated(e.target.value)} style={{width:'100%', marginLeft:'5px', border:'none', background:'transparent', fontWeight:'bold', fontSize:'1.1em'}} placeholder="0.00" />
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     )}
                     {(mode === 'INVOICE' || mode === 'JOBCARD') && (
                         <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop:'20px' }}>
                             {mode === 'INVOICE' && (
-                                <div style={{width:'60%'}}>
+                                <div style={{width:'60%', whiteSpace: 'pre-wrap'}}>
                                     <h4>PAYMENT DETAILS</h4>
-                                    <p>Bank: <strong>BANK OF SCOTLAND</strong><br/>Account: <strong>06163462</strong><br/>Sort: <strong>80-22-60</strong><br/>Name: <strong>{settings.companyName} BODY REPAIRS</strong></p>
-                                    <p style={{fontSize:'0.8em', marginTop:'10px'}}>Payment Terms: <strong>{invoiceType === 'EXCESS' ? '7 Days' : '30 Days'}</strong>. Title of goods remains with {settings.companyName} until paid in full.</p>
+                                    <div style={{fontSize:'0.9em', color:'#333'}}>{settings.terms}</div>
                                 </div>
                             )}
                             <div style={{textAlign:'center', width:'30%'}}>
@@ -566,7 +544,7 @@ const EstimateApp = ({ userId }) => {
                 boxShadow: '0 -4px 20px rgba(0,0,0,0.1)', 
                 zIndex: 1000 
             }}>
-                <button onClick={() => saveToCloud('ESTIMATE')} style={saveStatus === 'SUCCESS' ? successBtn : primaryBtn}>{saveStatus === 'SAVING' ? '⏳' : 'SAVE'}</button>
+                <button onClick={() => saveToCloud('ESTIMATE')} style={saveStatus === 'SUCCESS' ? successBtn : greenBtn}>{saveStatus === 'SAVING' ? '⏳' : 'SAVE'}</button>
                 {mode === 'ESTIMATE' && (
                     <>
                         <button onClick={() => saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background: '#4f46e5'}}>Inv Insurer</button>
@@ -586,9 +564,9 @@ const EstimateApp = ({ userId }) => {
                 {filteredEstimates.map(est => (
                     <div key={est.id} style={{padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', background: est.status === 'PAID' ? '#f0fdf4' : 'white'}}>
                         <div onClick={() => loadJobIntoState(est)} style={{cursor:'pointer'}}><strong>{est.reg}</strong> - {est.customer} <span style={{color:'#888', fontSize:'0.8em'}}>({est.invoiceNumber || 'Est'})</span></div>
-                        <div>
-                            <button onClick={() => deleteJob(est.id)} style={{...dangerBtn, padding:'5px 12px', marginRight:'5px'}}>X</button>
-                            <button onClick={() => togglePaid(est.id, est.status)} style={{border:'1px solid #ccc', background:'white', borderRadius:'4px', padding:'5px 10px'}}>{est.status === 'PAID' ? 'PAID' : 'PAY'}</button>
+                        <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
+                            <button onClick={() => deleteJob(est.id)} style={{...dangerBtn, fontSize:'0.8em', padding:'5px 10px'}}>X</button>
+                            <button onClick={() => togglePaid(est.id, est.status)} style={{border:'1px solid #ccc', background: est.status === 'PAID' ? theme.green : 'white', color: est.status === 'PAID' ? 'white' : '#333', borderRadius:'4px', padding:'5px 10px'}}>{est.status === 'PAID' ? 'PAID' : 'PAY'}</button>
                         </div>
                     </div>
                 ))}
