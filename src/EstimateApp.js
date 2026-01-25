@@ -116,7 +116,23 @@ const EstimateApp = ({ userId }) => {
                 } 
                 else setMode(type);
                 
-                const data = { type: t, status: 'UNPAID', invoiceNumber: n, customer: cust.n, address: cust.a, phone: cust.p, email: cust.e, insEmail: cust.ie, claimNum: cust.c, networkCode: cust.nc, insuranceCo: cust.ic, insuranceAddr: cust.ia, reg: veh.r, mileage: veh.m, makeModel: veh.mm, vin: veh.v, paintCode: veh.pc, items: item.list, laborHours: fin.lh, laborRate: fin.lr, vatRate: fin.vat, excess: fin.ex, photos: sys.photos, bookingDate: veh.bd, bookingTime: veh.bt, totals: calc(), createdAt: serverTimestamp(), createdBy: userId, stages: sys.stages, notes: currentNotes, paintAllocated: fin.paint };
+                            const data = {
+                type: t,
+                status: 'UNPAID',
+                invoiceNumber: n,
+                date: new Date().toISOString(),
+                ...cust,
+                ...veh,
+                ...fin,
+                items: item.list,
+                notes: currentNotes,
+                // --- SAFETY FIXES ---
+                insEmail: cust.ie || '',
+                ins: cust.ins || '',
+                claim: cust.c || '',
+                excess: cust.ex || '0'
+            };
+
                 
                 if(sys.id) { await updateDoc(doc(db, 'estimates', sys.id), data); setSys(p=>({...p, save:'SUCCESS'})); }
                 else { const r = await addDoc(collection(db, 'estimates'), data); setSys(p=>({...p, id:r.id, save:'SUCCESS'})); }
