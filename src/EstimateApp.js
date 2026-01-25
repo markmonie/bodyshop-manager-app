@@ -42,8 +42,8 @@ const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' };
 const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; 
 const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
 const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; 
-// FIXED: Restored successBtn definition so the build passes
-const successBtn = { ...btnBase, background: '#15803d', color: 'white', border: '2px solid #22c55e', boxShadow: '0 0 10px #22c55e' };
+// Legacy mapping to prevent crashes
+const successBtn = { ...greenBtn, border: '2px solid #14532d' };
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
@@ -52,7 +52,7 @@ const EstimateApp = ({ userId }) => {
     const [invoiceDate, setInvoiceDate] = useState('');
     const [invoiceType, setInvoiceType] = useState('MAIN');
 
-    // Settings (Added Terms)
+    // Settings (With T&Cs)
     const [settings, setSettings] = useState({
         laborRate: '50',
         markup: '20',
@@ -73,11 +73,14 @@ const EstimateApp = ({ userId }) => {
     const [networkCode, setNetworkCode] = useState('');
     const [insuranceCo, setInsuranceCo] = useState('');
     const [insuranceAddr, setInsuranceAddr] = useState('');
+    
+    // Vehicle & Stats (Detailed Info Included)
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
     const [vin, setVin] = useState(''); 
     const [paintCode, setPaintCode] = useState('');
+    const [vehicleInfo, setVehicleInfo] = useState(null); 
     const [bookingDate, setBookingDate] = useState(''); 
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
@@ -141,6 +144,7 @@ const EstimateApp = ({ userId }) => {
         setItems(est.items || []); setLaborHours(est.laborHours || ''); setLaborRate(est.laborRate || settings.laborRate); setVatRate(est.vatRate || settings.vatRate);
         setExcess(est.excess || ''); setPhotos(est.photos || []); setBookingDate(est.bookingDate || ''); setBookingTime(est.bookingTime || '09:00'); 
         setPaintAllocated(est.paintAllocated || ''); setInvoiceNum(est.invoiceNumber || '');
+        setVehicleInfo(est.vehicleInfo || null); // Load saved vehicle data
         setMethodsRequired(est.dealFile?.methodsRequired || false); 
         setMode('DEAL_FILE'); window.scrollTo(0, 0);
     };
@@ -187,6 +191,7 @@ const EstimateApp = ({ userId }) => {
                 const prev = querySnapshot.docs[0].data();
                 setMakeModel(prev.makeModel || ''); setName(prev.customer || ''); setPhone(prev.phone || ''); setEmail(prev.email || '');
                 setAddress(prev.address || ''); setVin(prev.vin || ''); setPaintCode(prev.paintCode || '');
+                setVehicleInfo(prev.vehicleInfo || null); // Load previous vehicle data
                 if(prev.insuranceCo) setInsuranceCo(prev.insuranceCo);
                 setFoundHistory(true);
             }
@@ -209,12 +214,40 @@ const EstimateApp = ({ userId }) => {
                 });
                 const data = await response.json();
                 if (data.errors) throw new Error("Not Found");
-                setMakeModel(`${data.make} ${data.colour}`); alert("Vehicle Found!");
-            } catch (e) { alert("DVLA Error: " + e.message); }
-        } else { alert("Simulated: Vehicle Found!"); setMakeModel("FORD TRANSIT (Simulated)"); }
+                
+                // SAVE FULL DATA
+                setMakeModel(`${data.make} ${data.colour}`);
+                setVehicleInfo(data); 
+                alert("Vehicle Found!");
+            } catch (e) { console.error(e); alert("DVLA Error: Check Key or Connection"); }
+        } else { 
+            alert("Simulated: Vehicle Found!"); 
+            setMakeModel("FORD TRANSIT (Simulated)");
+            setVehicleInfo({ yearOfManufacture: 2019, fuelType: 'DIESEL', make: 'FORD', colour: 'WHITE', engineCapacity: 1995 });
+        }
     };
 
-    const decodeVin = () => { if (!vin || vin.length < 3) return alert("Enter VIN"); window.open(`https://www.google.com/search?q=${makeModel}+paint+code+location`, '_blank'); };
+    // --- UPGRADED: SMART PAINT FINDER ---
+    const decodeVin = () => { 
+        if (!vin && !makeModel) return alert("Enter VIN or Find Vehicle First");
+        
+        // 1. Try Smart VIN Decode for German Brands (Most accurate)
+        if (vin && vin.length > 2) {
+            const wmi = vin.toUpperCase().substring(0, 3);
+            if (wmi.startsWith('WBA') || wmi.startsWith('WMW') || wmi.startsWith('WBS')) {
+                window.open(`https://www.mdecoder.com/decode/${vin}`, '_blank'); return;
+            }
+            if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) {
+                window.open(`https://www.lastvin.com/vin/${vin}`, '_blank'); return;
+            }
+        }
+
+        // 2. Fallback: Search Dedicated UK Paint Code Database
+        // This is much better than Google Images "Location" search
+        const searchTeam = makeModel ? makeModel.split(' ')[0] : 'Car';
+        window.open(`https://www.paintcode.co.uk/search/${searchTeam}`, '_blank'); 
+    };
+
     const decodeParts = () => { if (!vin || vin.length < 3) return alert("Enter VIN"); window.open(`https://partsouq.com/en/catalog/genuine/locate?c=${vin}`, '_blank'); };
 
     const addItem = () => {
@@ -282,6 +315,7 @@ const EstimateApp = ({ userId }) => {
                 customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
                 reg, mileage, makeModel, vin, paintCode, items, laborHours, laborRate, vatRate, excess, photos,
                 bookingDate, bookingTime, paintAllocated,
+                vehicleInfo: vehicleInfo || {}, // SAVE VEHICLE DATA
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
                 dealFile: { methodsRequired: false }
             });
@@ -293,7 +327,7 @@ const EstimateApp = ({ userId }) => {
     const clearForm = () => {
         if(window.confirm("Start fresh?")) {
             setMode('ESTIMATE'); setInvoiceNum(''); setName(''); setReg(''); setItems([]); setPhotos([]); setPaintAllocated(''); 
-            setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); setCurrentJobId(null);
+            setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); setCurrentJobId(null); setVehicleInfo(null);
         }
     };
 
@@ -375,7 +409,7 @@ const EstimateApp = ({ userId }) => {
                     <thead style={{position:'sticky', top:0, background:theme.light}}><tr style={{textAlign:'left', color:theme.dark}}>
                         <th style={{padding:'10px'}}>Reg</th>
                         <th style={{padding:'10px'}}>Total Inv</th>
-                        <th style={{padding:'10px'}}>Paint/Mat Cost (Editable)</th>
+                        <th style={{padding:'10px'}}>Paint/Mat Cost</th>
                         <th style={{padding:'10px'}}>Net Profit</th>
                     </tr></thead>
                     <tbody>
@@ -436,7 +470,7 @@ const EstimateApp = ({ userId }) => {
                     <div style={{display:'flex', gap:'5px'}}><input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /><input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></div>
                     <div style={{display:'flex', gap:'5px'}}><input placeholder="Claim No." value={claimNum} onChange={e => setClaimNum(e.target.value)} style={inputStyle} /><input placeholder="Network Code" value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={inputStyle} /></div>
                     
-                    {/* NEW INVITING INSURANCE BOX */}
+                    {/* INVITING INSURANCE BOX */}
                     {excess > 0 && (
                         <div className="no-print" style={{marginTop:'20px', background:'white', padding:'20px', borderRadius:'12px', borderLeft:`6px solid ${theme.primary}`, boxShadow:'0 4px 15px rgba(0,0,0,0.05)'}}>
                             <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
@@ -454,6 +488,23 @@ const EstimateApp = ({ userId }) => {
                     <h4 style={headerStyle}>VEHICLE</h4>
                     <div style={{display:'flex', gap:'10px'}}><input placeholder="REG" value={reg} onChange={handleRegChange} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background: theme.light}} /><button onClick={lookupReg} className="no-print" style={secondaryBtn}>🔎</button></div>
                     {foundHistory && <div style={{color:'green', fontSize:'0.8em'}}>✓ Customer Found</div>}
+                    
+                    {/* DEDICATED VEHICLE INFO BOX (RESTORED) */}
+                    {vehicleInfo && (
+                        <div style={{background: theme.light, padding:'15px', borderRadius:'8px', border: `1px dashed ${theme.primary}`, marginBottom:'15px'}}>
+                            <h5 style={{margin:'0 0 10px 0', color: theme.dark}}>🚗 Vehicle Report</h5>
+                            <div style={{fontSize:'0.9em', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px'}}>
+                                <div><strong>Make:</strong> {vehicleInfo.make}</div>
+                                <div><strong>Colour:</strong> {vehicleInfo.colour}</div>
+                                <div><strong>Year:</strong> {vehicleInfo.yearOfManufacture}</div>
+                                <div><strong>Fuel:</strong> {vehicleInfo.fuelType}</div>
+                                {vehicleInfo.revenueWeight && <div><strong>Weight:</strong> {vehicleInfo.revenueWeight}kg</div>}
+                                {vehicleInfo.taxStatus && <div><strong>Tax:</strong> {vehicleInfo.taxStatus}</div>}
+                                {vehicleInfo.motStatus && <div><strong>MOT:</strong> {vehicleInfo.motStatus}</div>}
+                            </div>
+                        </div>
+                    )}
+
                     <input placeholder="Make / Model" value={makeModel} onChange={e => setMakeModel(e.target.value)} style={inputStyle} />
                     <div style={{display:'flex', gap:'5px'}}><input placeholder="VIN" value={vin} onChange={e => setVin(e.target.value)} style={inputStyle} /><button onClick={decodeVin} className="no-print" style={secondaryBtn} title="Paint">🎨</button><button onClick={decodeParts} className="no-print" style={{...secondaryBtn, background: theme.primary}} title="Parts">🔧</button></div>
                     <input placeholder="Paint Code" value={paintCode} onChange={e => setPaintCode(e.target.value)} style={inputStyle} />
