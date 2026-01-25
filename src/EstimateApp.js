@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// --- TRIPLE MMM CONFIG ---
+// --- CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -29,13 +29,15 @@ const successBtn = { padding: '12px 24px', background: '#15803d', color: 'white'
 const secondaryBtn = { padding: '12px 24px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' };
 
 const EstimateApp = ({ userId }) => {
-    // Modes
+    // --- STATE MANAGEMENT ---
+    
+    // Modes & Display
     const [mode, setMode] = useState('ESTIMATE');
     const [invoiceNum, setInvoiceNum] = useState('');
     const [invoiceDate, setInvoiceDate] = useState('');
     const [invoiceType, setInvoiceType] = useState('MAIN');
 
-    // Settings
+    // Global Settings
     const [settings, setSettings] = useState({
         laborRate: '50',
         markup: '20',
@@ -46,7 +48,7 @@ const EstimateApp = ({ userId }) => {
         dvlaKey: ''
     });
 
-    // Inputs
+    // Customer Data
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
@@ -56,7 +58,7 @@ const EstimateApp = ({ userId }) => {
     const [insuranceCo, setInsuranceCo] = useState('');
     const [insuranceAddr, setInsuranceAddr] = useState('');
     
-    // Vehicle & Booking
+    // Vehicle Data
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
@@ -66,7 +68,7 @@ const EstimateApp = ({ userId }) => {
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
 
-    // Items
+    // Job Items
     const [itemDesc, setItemDesc] = useState('');
     const [itemCostPrice, setItemCostPrice] = useState(''); 
     const [items, setItems] = useState([]);
@@ -85,27 +87,29 @@ const EstimateApp = ({ userId }) => {
     const [vatRate, setVatRate] = useState('0');
     const [excess, setExcess] = useState('');
     
-    // System
+    // System Lists
     const [savedEstimates, setSavedEstimates] = useState([]);
     const [generalExpenses, setGeneralExpenses] = useState([]);
     const [saveStatus, setSaveStatus] = useState('IDLE');
     const [logoError, setLogoError] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Signature Canvas
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
 
-    // --- NEW: DEAL FILE STATE ---
+    // --- DEAL FILE STATE ---
     const [currentJobId, setCurrentJobId] = useState(null); 
     const [methodsRequired, setMethodsRequired] = useState(false);
 
-    // --- NEW: CALCULATE ACTIVE JOB ---
+    // Calculate Active Job for Deal File View
     const activeJob = useMemo(() => {
         return savedEstimates.find(j => j.id === currentJobId);
     }, [savedEstimates, currentJobId]);
 
-    // LOAD SETTINGS
+    // --- INITIALIZATION ---
     useEffect(() => {
+        // Load Settings
         getDoc(doc(db, 'settings', 'global')).then(snap => {
             if(snap.exists()) {
                 const s = snap.data();
@@ -114,6 +118,7 @@ const EstimateApp = ({ userId }) => {
                 setVatRate(s.vatRate || '0');
             }
         });
+        // Real-time Listeners
         const qEst = query(collection(db, 'estimates'), orderBy('createdAt', 'desc'));
         const unsubEst = onSnapshot(qEst, (snap) => setSavedEstimates(snap.docs.map(d => ({id: d.id, ...d.data()}))));
         const qExp = query(collection(db, 'expenses'), orderBy('date', 'desc'));
@@ -121,7 +126,7 @@ const EstimateApp = ({ userId }) => {
         return () => { unsubEst(); unsubExp(); };
     }, []);
 
-    // AUTO-LOAD & SAVE DRAFT
+    // Auto-Save Draft Logic
     useEffect(() => {
         const savedData = localStorage.getItem('triple_mmm_draft');
         if (savedData) {
@@ -142,9 +147,9 @@ const EstimateApp = ({ userId }) => {
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
     }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, mode]);
 
-    // --- FUNCTIONS ---
+    // --- CORE FUNCTIONS ---
     
-    // NEW: JOB LOADER
+    // LOAD EXISTING JOB
     const loadJobIntoState = (est) => {
         setCurrentJobId(est.id); 
         setName(est.customer);
@@ -177,7 +182,7 @@ const EstimateApp = ({ userId }) => {
         window.scrollTo(0, 0);
     };
 
-    // NEW: UPLOAD LOGIC
+    // DEAL FILE UPLOAD (Async Fix Applied)
     const uploadDoc = async (docType, file) => {
         if (!currentJobId) return alert("Please SAVE the job first before uploading documents.");
         if (!file) return;
@@ -191,7 +196,7 @@ const EstimateApp = ({ userId }) => {
             
             const fileData = { name: file.name, url: url, date: new Date().toLocaleDateString() };
             
-            // Update Firestore with the new file link using dot notation
+            // Dot notation updates nested fields without overwriting the whole object
             await updateDoc(doc(db, 'estimates', currentJobId), {
                 [`dealFile.${docType}`]: fileData
             });
@@ -225,7 +230,6 @@ const EstimateApp = ({ userId }) => {
         window.open(url, '_blank');
     };
 
-    // FIXED: Smart Print Logic
     const handlePrint = () => {
         if (mode === 'DEAL_FILE' || mode === 'DASHBOARD' || mode === 'SETTINGS') {
             setMode('INVOICE');
@@ -235,6 +239,7 @@ const EstimateApp = ({ userId }) => {
         }, 1000);
     };
 
+    // CHECK PREVIOUS JOBS
     const checkHistory = async (regInput) => {
         if(regInput.length < 3) return;
         const q = query(collection(db, 'estimates'), where("reg", "==", regInput), orderBy('createdAt', 'desc'));
@@ -261,7 +266,7 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
-    // --- REPLACED AXIOS WITH FETCH (FIXES BUILD ERROR) ---
+    // DVLA LOOKUP (FETCH VERSION - NO AXIOS)
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Registration");
         if (settings.dvlaKey) {
@@ -277,9 +282,7 @@ const EstimateApp = ({ userId }) => {
 
                 const data = await response.json();
                 
-                if (data.errors) {
-                    throw new Error("Vehicle not found");
-                }
+                if (data.errors) throw new Error("Vehicle not found");
 
                 if (data) {
                     setMakeModel(`${data.make} ${data.colour}`);
@@ -292,38 +295,29 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- VIN DECODER LOGIC (PAINT & SPECS) ---
+    // VIN DECODER
     const decodeVin = () => {
         if (!vin || vin.length < 3) return alert("Enter at least 3 chars of VIN");
         const cleanVin = vin.toUpperCase().trim();
         const wmi = cleanVin.substring(0, 3);
-        
-        let url = `https://www.google.com/search?q=${makeModel}+paint+code+location`; // Default
+        let url = `https://www.google.com/search?q=${makeModel}+paint+code+location`; 
 
-        if (wmi.startsWith('WBA') || wmi.startsWith('WMW')) { // BMW / Mini
-            url = `https://www.mdecoder.com/decode/${cleanVin}`;
-        } else if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) { // Mercedes
-            url = `https://www.lastvin.com/vin/${cleanVin}`;
-        } else if (wmi.startsWith('WVW') || wmi.startsWith('WAU') || wmi.startsWith('VSS') || wmi.startsWith('TMB')) { // VW Group
-            url = `https://7zap.com/en/search/?q=${cleanVin}`;
-        } 
+        if (wmi.startsWith('WBA') || wmi.startsWith('WMW')) url = `https://www.mdecoder.com/decode/${cleanVin}`;
+        else if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) url = `https://www.lastvin.com/vin/${cleanVin}`;
+        else if (wmi.startsWith('WVW') || wmi.startsWith('WAU') || wmi.startsWith('VSS')) url = `https://7zap.com/en/search/?q=${cleanVin}`;
         
         window.open(url, '_blank');
     };
 
-    // --- NEW: PARTS DIAGRAM LOGIC (EPC) ---
+    // PARTS DIAGRAM
     const decodeParts = () => {
         if (!vin || vin.length < 3) return alert("Enter at least 3 chars of VIN");
         const cleanVin = vin.toUpperCase().trim();
         const wmi = cleanVin.substring(0, 3);
-        
-        let url = `https://partsouq.com/en/catalog/genuine/locate?c=${cleanVin}`; // Default for Asian/General
+        let url = `https://partsouq.com/en/catalog/genuine/locate?c=${cleanVin}`; 
 
-        if (wmi.startsWith('WBA') || wmi.startsWith('WMW')) { // BMW / Mini - RealOEM is best
-            url = `https://www.realoem.com/bmw/enUS/select?vin=${cleanVin}`;
-        } else if (wmi.startsWith('WVW') || wmi.startsWith('WAU') || wmi.startsWith('WF0') || wmi.startsWith('WDD')) { // VAG / Ford / Merc
-            url = `https://7zap.com/en/search/?q=${cleanVin}`;
-        } 
+        if (wmi.startsWith('WBA') || wmi.startsWith('WMW')) url = `https://www.realoem.com/bmw/enUS/select?vin=${cleanVin}`;
+        else if (wmi.startsWith('WVW') || wmi.startsWith('WAU') || wmi.startsWith('WF0')) url = `https://7zap.com/en/search/?q=${cleanVin}`;
         
         window.open(url, '_blank');
     };
@@ -356,7 +350,7 @@ const EstimateApp = ({ userId }) => {
 
     const totals = calculateJobFinancials();
 
-    // --- ACTIONS ---
+    // DATABASE ACTIONS
     const saveSettings = async () => {
         await setDoc(doc(db, 'settings', 'global'), settings);
         alert("Settings Saved!");
@@ -394,21 +388,19 @@ const EstimateApp = ({ userId }) => {
             else if (targetType === 'INVOICE_EXCESS') { setMode('INVOICE'); setInvoiceType('EXCESS'); displayType = 'INVOICE (EXCESS)'; } 
             else { setMode(targetType); }
 
-            // UPDATED SAVE LOGIC: CAPTURE ID
+            // SAVE LOGIC WITH SAFETY NETS
             const docRef = await addDoc(collection(db, 'estimates'), {
-                type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum,
+                type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum || '',
                 customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
                 reg, mileage, makeModel, vin, paintCode,
                 items, laborHours, laborRate, vatRate, excess, photos,
                 bookingDate, bookingTime, 
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
-                // Initialize dealFile object so uploads work
+                // Initialize dealFile if not exists
                 dealFile: { methodsRequired: false }
             });
             
-            // Set current ID so we can immediately upload files
             setCurrentJobId(docRef.id);
-
             setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
         } catch (error) { alert("Error saving: " + error.message); setSaveStatus('IDLE'); }
     };
@@ -421,22 +413,19 @@ const EstimateApp = ({ userId }) => {
             setBookingDate(''); setBookingTime('09:00'); setFoundHistory(false);
             setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); 
             
-            // RESET NEW STATE
             setCurrentJobId(null);
             setMethodsRequired(false);
-
             if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
         }
     };
 
-    // --- UPGRADED: BATCH PHOTO UPLOAD ---
+    // BATCH PHOTO UPLOAD (TURBO MODE)
     const handlePhotoUpload = async (e) => {
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
         
         setUploading(true);
         try {
-            // Upload all files in parallel (Fast Mode)
             const uploadPromises = files.map(async (file) => {
                 const storageRef = ref(storage, `damage_photos/${Date.now()}_${Math.random()}_${file.name}`);
                 await uploadBytes(storageRef, file);
@@ -453,6 +442,7 @@ const EstimateApp = ({ userId }) => {
 
     const removePhoto = (index) => setPhotos(photos.filter((_, i) => i !== index));
 
+    // SIGNATURE PAD
     const startDrawing = ({nativeEvent}) => { const {offsetX, offsetY} = getCoordinates(nativeEvent); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth=3; ctx.lineCap='round'; ctx.strokeStyle='#000'; ctx.beginPath(); ctx.moveTo(offsetX, offsetY); setIsDrawing(true); };
     const draw = ({nativeEvent}) => { if(!isDrawing) return; const {offsetX, offsetY} = getCoordinates(nativeEvent); canvasRef.current.getContext('2d').lineTo(offsetX, offsetY); canvasRef.current.getContext('2d').stroke(); };
     const stopDrawing = () => { const ctx = canvasRef.current.getContext('2d'); ctx.closePath(); setIsDrawing(false); };
@@ -460,6 +450,7 @@ const EstimateApp = ({ userId }) => {
     const clearSignature = () => { if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); } };
     useEffect(() => { clearSignature(); }, [mode]);
 
+    // EXPORTS
     const downloadAccountingCSV = () => {
         const invoices = savedEstimates.filter(est => est.type && est.type.includes('INVOICE'));
         let csv = "data:text/csv;charset=utf-8,Date,Type,Invoice,Customer,Reg,Total,Status\n";
@@ -471,17 +462,13 @@ const EstimateApp = ({ userId }) => {
         const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "TripleMMM_Sales_Ledger.csv"; link.click();
     };
 
-    // NEW: Download EXPENSES CSV
     const downloadExpensesCSV = () => {
         let csv = "data:text/csv;charset=utf-8,Date,Category,Description,Amount\n";
         generalExpenses.forEach(ex => {
             const d = ex.date ? new Date(ex.date.seconds * 1000).toLocaleDateString() : 'N/A';
             csv += `${d},${ex.category},${ex.desc},${ex.amount.toFixed(2)}\n`;
         });
-        const link = document.createElement("a"); 
-        link.href = encodeURI(csv); 
-        link.download = "TripleMMM_Purchase_Ledger.csv"; 
-        link.click();
+        const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "TripleMMM_Purchase_Ledger.csv"; link.click();
     };
 
     const togglePaid = async (id, currentStatus) => {
@@ -494,12 +481,14 @@ const EstimateApp = ({ userId }) => {
         return ( (est.customer && est.customer.toLowerCase().includes(search)) || (est.reg && est.reg.toLowerCase().includes(search)) || (est.invoiceNumber && est.invoiceNumber.toLowerCase().includes(search)) );
     });
 
-    // Helper for email link generation (Added Signed T&Cs)
+    // EMAIL LINK GENERATOR
     const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
     const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Signed T&Cs: ${activeJob?.dealFile?.terms ? 'Attached' : 'Pending'}%0D%0A4. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
     const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
     // --- VIEWS ---
+    
+    // 1. SETTINGS
     if(mode === 'SETTINGS') return (
         <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
             <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'20px', padding:'10px', background:'#eee', border:'none', borderRadius:'4px', cursor:'pointer'}}>← Back</button>
@@ -514,6 +503,7 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
 
+    // 2. DASHBOARD
     if(mode === 'DASHBOARD') {
         const totalSales = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.type.includes('EXCESS') ? parseFloat(curr.excess) : curr.totals?.finalDue || 0), 0);
         const totalJobCosts = savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.totalJobCost || 0), 0);
@@ -544,6 +534,7 @@ const EstimateApp = ({ userId }) => {
         );
     }
 
+    // 3. MAIN APP
     return (
         <div style={{ padding: '40px', maxWidth: '900px', margin: '0 auto', fontFamily: 'Arial, sans-serif', background: 'white' }}>
             {mode !== 'ESTIMATE' && <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{marginBottom:'20px', padding:'10px', background:'#eee', border:'none', borderRadius:'4px', cursor:'pointer'}}>← BACK TO ESTIMATE</button>}
@@ -558,7 +549,7 @@ const EstimateApp = ({ userId }) => {
                 {mode !== 'ESTIMATE' && mode !== 'JOBCARD' && mode !== 'DEAL_FILE' && <div style={{ textAlign: 'right' }}><div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>{invoiceNum}</div><div>Date: {invoiceDate || new Date().toLocaleDateString()}</div></div>}
             </div>
 
-            {/* --- MAIN FORM --- */}
+            {/* --- FORM SECTION --- */}
             {mode !== 'DEAL_FILE' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px', border: '1px solid #eee', padding: '20px', borderRadius: '8px' }}>
                 <div>
@@ -573,7 +564,6 @@ const EstimateApp = ({ userId }) => {
                         <input placeholder="Claim No." value={claimNum} onChange={e => setClaimNum(e.target.value)} style={{...inputStyle, border:'1px solid #2563eb'}} />
                         <input placeholder="Network Code" value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={{...inputStyle, border:'1px solid #2563eb'}} />
                     </div>
-                    {/* INSURANCE CO BOX FOR EXCESS JOBS */}
                     {excess > 0 && (
                         <div style={{marginTop:'10px', background:'#fffbeb', padding:'10px', borderRadius:'4px', border:'1px solid #f59e0b'}}>
                             <h5 style={{margin:'0 0 5px 0', color:'#b45309'}}>Insurance Company</h5>
@@ -697,7 +687,7 @@ const EstimateApp = ({ userId }) => {
                 </>
             )}
 
-            {/* --- NEW: DEAL FILE VIEW --- */}
+            {/* --- DEAL FILE VIEW --- */}
             {mode === 'DEAL_FILE' && (
                 <div style={{ marginTop: '20px', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', background: '#f8fafc' }}>
                     <h2 style={{borderBottom:'2px solid #333', paddingBottom:'10px'}}>📂 Digital Deal File: {reg}</h2>
@@ -710,7 +700,7 @@ const EstimateApp = ({ userId }) => {
                         <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.1)'}}>
                             <h4 style={{color:'#333', margin:'0 0 15px 0'}}>1. External Documents</h4>
 
-                             {/* SIGNED T&CS - NEW */}
+                             {/* SIGNED T&CS */}
                             <div style={{marginBottom:'20px', paddingBottom:'15px', borderBottom:'1px dashed #eee'}}>
                                 <div style={{display:'flex', justifyContent:'space-between'}}>
                                     <strong>📝 Signed Contract / T&Cs</strong>
