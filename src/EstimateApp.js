@@ -198,6 +198,13 @@ const EstimateApp = ({ userId }) => {
         } catch(e) { }
     };
 
+    // FIXED: Function Restored
+    const handleRegChange = (e) => {
+        const val = e.target.value.toUpperCase();
+        setReg(val);
+        setFoundHistory(false);
+    };
+
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
         if (settings.dvlaKey) {
@@ -325,6 +332,11 @@ const EstimateApp = ({ userId }) => {
 
     const togglePaid = async (id, currentStatus) => { await updateDoc(doc(db, 'estimates', id), { status: currentStatus === 'PAID' ? 'UNPAID' : 'PAID' }); };
     const filteredEstimates = savedEstimates.filter(est => (est.customer?.toLowerCase().includes(searchTerm.toLowerCase()) || est.reg?.toLowerCase().includes(searchTerm.toLowerCase()) || est.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())));
+
+    // FIXED: Variable Restored
+    const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
+    const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Signed T&Cs: ${activeJob?.dealFile?.terms ? 'Attached' : 'Pending'}%0D%0A4. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
+    const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
     // --- VIEWS ---
     if(mode === 'SETTINGS') return (
