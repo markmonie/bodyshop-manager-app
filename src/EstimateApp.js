@@ -29,7 +29,8 @@ const theme = {
     dark: '#9a3412',
     border: '#fdba74',
     grey: '#f8fafc',
-    text: '#334155'
+    text: '#334155',
+    disabled: '#9ca3af'
 };
 
 const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1em', boxSizing: 'border-box' };
@@ -42,7 +43,6 @@ const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' };
 const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; 
 const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
 const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; 
-// Restored successBtn for legacy code compatibility
 const successBtn = { ...greenBtn, border: '2px solid #14532d' };
 
 const EstimateApp = ({ userId }) => {
@@ -52,7 +52,7 @@ const EstimateApp = ({ userId }) => {
     const [invoiceDate, setInvoiceDate] = useState('');
     const [invoiceType, setInvoiceType] = useState('MAIN');
 
-    // Settings (With T&Cs)
+    // Settings
     const [settings, setSettings] = useState({
         laborRate: '50',
         markup: '20',
@@ -61,7 +61,7 @@ const EstimateApp = ({ userId }) => {
         phone: '07501 728319',
         email: 'markmonie72@gmail.com',
         dvlaKey: '',
-        terms: 'Bank: BANK OF SCOTLAND\nAccount: 06163462\nSort: 80-22-60\nName: TRIPLE MMM BODY REPAIRS\n\nPayment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
+        terms: 'Payment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
     });
 
     // Data
@@ -69,18 +69,21 @@ const EstimateApp = ({ userId }) => {
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
+    
+    // Insurance
     const [claimNum, setClaimNum] = useState('');
     const [networkCode, setNetworkCode] = useState('');
     const [insuranceCo, setInsuranceCo] = useState('');
     const [insuranceAddr, setInsuranceAddr] = useState('');
+    const [insuranceEmail, setInsuranceEmail] = useState('');
     
-    // Vehicle & Stats (Detailed Info Included)
+    // Vehicle & Stats
     const [reg, setReg] = useState('');
     const [mileage, setMileage] = useState('');
     const [makeModel, setMakeModel] = useState('');
     const [vin, setVin] = useState(''); 
     const [paintCode, setPaintCode] = useState('');
-    const [vehicleInfo, setVehicleInfo] = useState(null); // STORES FULL API DATA
+    const [vehicleInfo, setVehicleInfo] = useState(null); 
     const [bookingDate, setBookingDate] = useState(''); 
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
@@ -113,6 +116,12 @@ const EstimateApp = ({ userId }) => {
 
     const activeJob = useMemo(() => savedEstimates.find(j => j.id === currentJobId), [savedEstimates, currentJobId]);
 
+    // Check if Deal File is ready
+    const isDealFileReady = useMemo(() => {
+        if (!activeJob?.dealFile) return false;
+        return activeJob.dealFile.auth && activeJob.dealFile.terms && activeJob.dealFile.satisfaction;
+    }, [activeJob]);
+
     // --- LOGIC ---
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => {
@@ -132,19 +141,25 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         if(mode === 'SETTINGS' || mode === 'DASHBOARD' || mode === 'DEAL_FILE') return;
-        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, mode };
+        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, insuranceEmail, mode };
         localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
-    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, mode]);
+    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, insuranceEmail, mode]);
 
     const loadJobIntoState = (est) => {
         setCurrentJobId(est.id); 
         setName(est.customer); setAddress(est.address || ''); setPhone(est.phone || ''); setEmail(est.email || ''); 
         setReg(est.reg); setMileage(est.mileage || ''); setMakeModel(est.makeModel || ''); setVin(est.vin || ''); setPaintCode(est.paintCode || ''); 
-        setClaimNum(est.claimNum || ''); setNetworkCode(est.networkCode || ''); setInsuranceCo(est.insuranceCo || ''); setInsuranceAddr(est.insuranceAddr || ''); 
+        
+        setClaimNum(est.claimNum || ''); 
+        setNetworkCode(est.networkCode || ''); 
+        setInsuranceCo(est.insuranceCo || ''); 
+        setInsuranceAddr(est.insuranceAddr || ''); 
+        setInsuranceEmail(est.insuranceEmail || '');
+
         setItems(est.items || []); setLaborHours(est.laborHours || ''); setLaborRate(est.laborRate || settings.laborRate); setVatRate(est.vatRate || settings.vatRate);
         setExcess(est.excess || ''); setPhotos(est.photos || []); setBookingDate(est.bookingDate || ''); setBookingTime(est.bookingTime || '09:00'); 
         setPaintAllocated(est.paintAllocated || ''); setInvoiceNum(est.invoiceNumber || '');
-        setVehicleInfo(est.vehicleInfo || null); // Load saved vehicle data
+        setVehicleInfo(est.vehicleInfo || null);
         setMethodsRequired(est.dealFile?.methodsRequired || false); 
         setMode('DEAL_FILE'); window.scrollTo(0, 0);
     };
@@ -191,8 +206,9 @@ const EstimateApp = ({ userId }) => {
                 const prev = querySnapshot.docs[0].data();
                 setMakeModel(prev.makeModel || ''); setName(prev.customer || ''); setPhone(prev.phone || ''); setEmail(prev.email || '');
                 setAddress(prev.address || ''); setVin(prev.vin || ''); setPaintCode(prev.paintCode || '');
-                setVehicleInfo(prev.vehicleInfo || null); // Load previous vehicle data
+                setVehicleInfo(prev.vehicleInfo || null);
                 if(prev.insuranceCo) setInsuranceCo(prev.insuranceCo);
+                if(prev.insuranceEmail) setInsuranceEmail(prev.insuranceEmail);
                 setFoundHistory(true);
             }
         } catch(e) { }
@@ -204,45 +220,48 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
+    // FIXED: DVLA LOOKUP (Real Connection)
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
-        if (settings.dvlaKey) {
-            try {
-                const response = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': settings.dvlaKey },
-                    body: JSON.stringify({ registrationNumber: reg })
-                });
-                const data = await response.json();
-                if (data.errors) throw new Error("Not Found");
-                
-                // SAVE FULL DATA
-                setMakeModel(`${data.make} ${data.colour}`);
-                setVehicleInfo(data); 
-                alert("Vehicle Found!");
-            } catch (e) { console.error(e); alert("DVLA Error: Check Key or Connection"); }
-        } else { 
-            alert("Simulated: Vehicle Found!"); 
-            setMakeModel("FORD TRANSIT (Simulated)");
-            setVehicleInfo({ yearOfManufacture: 2019, fuelType: 'DIESEL', make: 'FORD', colour: 'WHITE', engineCapacity: 1995 });
+        if (!settings.dvlaKey) return alert("⚠️ DVLA Key Missing! Go to Settings and paste your key.");
+
+        try {
+            // Using FETCH to avoid build errors
+            const response = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': settings.dvlaKey
+                },
+                body: JSON.stringify({ registrationNumber: reg })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || "Vehicle Not Found");
+            }
+
+            const data = await response.json();
+            
+            // Success: Populate Data
+            setMakeModel(`${data.make} ${data.colour}`);
+            setVehicleInfo(data); 
+            setVin(data.vin || ''); // Some DVLA responses include VIN, some don't
+            alert("✅ Vehicle Found!");
+
+        } catch (e) { 
+            console.error(e); 
+            alert("DVLA Error: " + e.message + "\n\n(Check your API Key in Settings)"); 
         }
     };
 
-    // --- SMART PAINT FINDER ---
     const decodeVin = () => { 
         if (!vin && !makeModel) return alert("Enter VIN or Find Vehicle First");
-        
-        // 1. Try Smart VIN Decode for German Brands (Most accurate)
         if (vin && vin.length > 2) {
             const wmi = vin.toUpperCase().substring(0, 3);
-            if (wmi.startsWith('WBA') || wmi.startsWith('WMW') || wmi.startsWith('WBS')) {
-                window.open(`https://www.mdecoder.com/decode/${vin}`, '_blank'); return;
-            }
-            if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) {
-                window.open(`https://www.lastvin.com/vin/${vin}`, '_blank'); return;
-            }
+            if (wmi.startsWith('WBA') || wmi.startsWith('WMW') || wmi.startsWith('WBS')) { window.open(`https://www.mdecoder.com/decode/${vin}`, '_blank'); return; }
+            if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) { window.open(`https://www.lastvin.com/vin/${vin}`, '_blank'); return; }
         }
-
-        // 2. Fallback: Search Dedicated UK Paint Code Database
         const searchTeam = makeModel ? makeModel.split(' ')[0] : 'Car';
         window.open(`https://www.paintcode.co.uk/search/${searchTeam}`, '_blank'); 
     };
@@ -311,10 +330,11 @@ const EstimateApp = ({ userId }) => {
 
             const docRef = await addDoc(collection(db, 'estimates'), {
                 type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum || '',
-                customer: name, address, phone, email, claimNum, networkCode, insuranceCo, insuranceAddr,
+                customer: name, address, phone, email, 
+                claimNum, networkCode, insuranceCo, insuranceAddr, insuranceEmail,
                 reg, mileage, makeModel, vin, paintCode, items, laborHours, laborRate, vatRate, excess, photos,
                 bookingDate, bookingTime, paintAllocated,
-                vehicleInfo: vehicleInfo || {}, // SAVE VEHICLE DATA
+                vehicleInfo: vehicleInfo || {}, 
                 totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
                 dealFile: { methodsRequired: false }
             });
@@ -326,6 +346,7 @@ const EstimateApp = ({ userId }) => {
     const clearForm = () => {
         if(window.confirm("Start fresh?")) {
             setMode('ESTIMATE'); setInvoiceNum(''); setName(''); setReg(''); setItems([]); setPhotos([]); setPaintAllocated(''); 
+            setClaimNum(''); setNetworkCode(''); setInsuranceCo(''); setInsuranceAddr(''); setInsuranceEmail('');
             setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); setCurrentJobId(null); setVehicleInfo(null);
         }
     };
@@ -380,7 +401,13 @@ const EstimateApp = ({ userId }) => {
             <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                 <label>Labor Rate (£/hr): <input value={settings.laborRate} onChange={e => setSettings({...settings, laborRate: e.target.value})} style={inputStyle} /></label>
                 <label>Parts Markup (%): <input value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} style={inputStyle} /></label>
-                <label>DVLA API Key: <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={inputStyle} /></label>
+                
+                {/* KEY VISUALIZER */}
+                <div style={{background: settings.dvlaKey ? '#f0fdf4' : '#fef2f2', padding:'10px', borderRadius:'6px', border: `1px solid ${settings.dvlaKey ? 'green' : 'red'}`}}>
+                    <label style={{color: settings.dvlaKey ? 'green' : 'red', fontWeight:'bold'}}>DVLA API Key ({settings.dvlaKey ? 'ACTIVE' : 'MISSING'})</label>
+                    <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={{...inputStyle, borderColor: settings.dvlaKey ? 'green' : 'red'}} placeholder="Paste DVLA Key Here" />
+                </div>
+
                 <label>Address: <textarea value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} style={{...inputStyle, height:'60px'}} /></label>
                 <label>Invoice Terms & Bank Details:</label>
                 <textarea value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} style={{...inputStyle, height:'120px'}} />
@@ -467,19 +494,27 @@ const EstimateApp = ({ userId }) => {
                     <input placeholder="Name" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
                     <textarea placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} style={{...inputStyle, height: '60px', fontFamily: 'inherit'}} />
                     <div style={{display:'flex', gap:'5px'}}><input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /><input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></div>
-                    <div style={{display:'flex', gap:'5px'}}><input placeholder="Claim No." value={claimNum} onChange={e => setClaimNum(e.target.value)} style={inputStyle} /><input placeholder="Network Code" value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={inputStyle} /></div>
                     
-                    {/* INVITING INSURANCE BOX */}
+                    {/* UPGRADED INSURANCE BOX */}
                     {excess > 0 && (
                         <div className="no-print" style={{marginTop:'20px', background:'white', padding:'20px', borderRadius:'12px', borderLeft:`6px solid ${theme.primary}`, boxShadow:'0 4px 15px rgba(0,0,0,0.05)'}}>
                             <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
                                 <span style={{fontSize:'1.5em', marginRight:'10px'}}>🛡️</span>
-                                <h4 style={{margin:0, color:theme.text}}>Insurance Details</h4>
+                                <h4 style={{margin:0, color:theme.text}}>Insurance & Network</h4>
                             </div>
-                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'5px'}}>Insurer Name</label>
+                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'2px'}}>Insurer Name</label>
                             <input placeholder="e.g. Admiral, Direct Line..." value={insuranceCo} onChange={e => setInsuranceCo(e.target.value)} style={{...inputStyle, marginBottom:'10px'}} />
-                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'5px'}}>Insurer Address / Notes</label>
-                            <textarea placeholder="Enter address for invoice..." value={insuranceAddr} onChange={e => setInsuranceAddr(e.target.value)} style={{...inputStyle, height:'60px', marginBottom:0}} />
+                            
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                                <div><label style={{fontSize:'0.8em', color:'#888'}}>Claim No.</label><input value={claimNum} onChange={e => setClaimNum(e.target.value)} style={inputStyle} /></div>
+                                <div><label style={{fontSize:'0.8em', color:'#888'}}>Network Code</label><input value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={inputStyle} /></div>
+                            </div>
+
+                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'2px'}}>Insurer Email (For Deal File)</label>
+                            <input placeholder="engineering@insurer.com" value={insuranceEmail} onChange={e => setInsuranceEmail(e.target.value)} style={{...inputStyle, borderColor: theme.primary}} />
+
+                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'2px'}}>Address / Notes</label>
+                            <textarea placeholder="Billing address..." value={insuranceAddr} onChange={e => setInsuranceAddr(e.target.value)} style={{...inputStyle, height:'50px', marginBottom:0}} />
                         </div>
                     )}
                 </div>
@@ -488,7 +523,7 @@ const EstimateApp = ({ userId }) => {
                     <div style={{display:'flex', gap:'10px'}}><input placeholder="REG" value={reg} onChange={handleRegChange} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background: theme.light}} /><button onClick={lookupReg} className="no-print" style={secondaryBtn}>🔎</button></div>
                     {foundHistory && <div style={{color:'green', fontSize:'0.8em'}}>✓ Customer Found</div>}
                     
-                    {/* DEDICATED VEHICLE INFO BOX (RESTORED) */}
+                    {/* DEDICATED VEHICLE INFO BOX */}
                     {vehicleInfo && (
                         <div style={{background: theme.light, padding:'15px', borderRadius:'8px', border: `1px dashed ${theme.primary}`, marginBottom:'15px'}}>
                             <h5 style={{margin:'0 0 10px 0', color: theme.dark}}>🚗 Vehicle Report</h5>
@@ -541,7 +576,7 @@ const EstimateApp = ({ userId }) => {
                                 )}
                                 <div style={{...rowStyle, fontSize:'1.4em', background: theme.grey, padding:'10px', borderRadius:'6px', marginTop:'10px'}}><span>DUE:</span> <strong>£{invoiceType === 'EXCESS' ? parseFloat(excess).toFixed(2) : totals.finalDue.toFixed(2)}</strong></div>
                                 
-                                {/* PAINT COST INPUT - ON ESTIMATE SHEET AS REQUESTED */}
+                                {/* PAINT COST INPUT - NOW ON INVOICE SCREEN TOO */}
                                 <div className="no-print" style={{marginTop:'15px', padding:'10px', border:`1px dashed ${theme.primary}`, borderRadius:'6px', background:theme.light}}>
                                     <label style={{fontSize:'0.8em', fontWeight:'bold', color:theme.primary}}>🎨 Internal Paint Cost</label>
                                     <div style={{display:'flex', alignItems:'center'}}>
@@ -551,19 +586,32 @@ const EstimateApp = ({ userId }) => {
                             </div>
                         </div>
                     )}
-                    {(mode === 'INVOICE' || mode === 'JOBCARD') && (
+                    
+                    {/* INVOICE FOOTER (Payment Only) */}
+                    {mode === 'INVOICE' && (
                         <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop:'20px' }}>
-                            {mode === 'INVOICE' && (
-                                <div style={{width:'60%', whiteSpace: 'pre-wrap'}}>
-                                    <h4>PAYMENT DETAILS</h4>
-                                    <div style={{fontSize:'0.9em', color:'#333'}}>{settings.terms}</div>
-                                </div>
-                            )}
+                            <div style={{width:'60%'}}>
+                                <h4>PAYMENT DETAILS</h4>
+                                <p>Bank: <strong>BANK OF SCOTLAND</strong><br/>Account: <strong>06163462</strong><br/>Sort: <strong>80-22-60</strong><br/>Name: <strong>{settings.companyName} BODY REPAIRS</strong></p>
+                            </div>
                             <div style={{textAlign:'center', width:'30%'}}>
-                                {mode === 'INVOICE' && <div style={{marginBottom:'10px'}}><img src={process.env.PUBLIC_URL + "/qrcode.png"} alt="QR" style={{width:'80px', height:'80px', opacity:0.5}} /><div style={{fontSize:'0.7em'}}>SCAN TO PAY</div></div>}
+                                <div style={{marginBottom:'10px'}}><img src={process.env.PUBLIC_URL + "/qrcode.png"} alt="QR" style={{width:'80px', height:'80px', opacity:0.5}} /><div style={{fontSize:'0.7em'}}>SCAN TO PAY</div></div>
                                 <div className="no-print" style={{border: '1px dashed #ccc', height: '60px', backgroundColor: '#fff', marginBottom:'5px'}}><canvas ref={canvasRef} width={200} height={60} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} /></div>
                                 <div style={{ borderBottom: '1px solid #333' }}></div>
                                 <div style={{fontSize:'0.8em'}}>SIGNED</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* JOB CARD FOOTER (T&Cs MOVED HERE) */}
+                    {mode === 'JOBCARD' && (
+                        <div style={{ marginTop: '50px', borderTop: '2px solid #ccc', paddingTop:'20px' }}>
+                            <h4>AUTHORITY & TERMS</h4>
+                            <div style={{fontSize:'0.8em', color:'#333', whiteSpace: 'pre-wrap', marginBottom:'30px'}}>{settings.terms}</div>
+                            
+                            <div style={{display:'flex', justifyContent:'space-between', marginTop:'40px'}}>
+                                <div style={{textAlign:'center', width:'40%'}}><div style={{borderBottom:'1px solid #333', height:'40px'}}></div><div>CUSTOMER SIGNATURE</div></div>
+                                <div style={{textAlign:'center', width:'40%'}}><div style={{borderBottom:'1px solid #333', height:'40px'}}></div><div>TECHNICIAN SIGNATURE</div></div>
                             </div>
                         </div>
                     )}
@@ -576,7 +624,7 @@ const EstimateApp = ({ userId }) => {
                     <h2 style={{borderBottom:`2px solid ${theme.primary}`, paddingBottom:'10px', color: theme.dark}}>📂 Digital Deal File</h2>
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
                         <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>Documents</h4>
+                            <h4 style={{color: theme.primary}}>1. Checklist</h4>
                             {['terms', 'auth', 'satisfaction', 'methods'].map(type => (
                                 <div key={type} style={{marginBottom:'10px', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>
                                     <div style={{display:'flex', justifyContent:'space-between'}}><strong>{type.toUpperCase()}</strong><span>{activeJob?.dealFile?.[type] ? '✅' : '❌'}</span></div>
@@ -586,16 +634,31 @@ const EstimateApp = ({ userId }) => {
                             ))}
                         </div>
                         <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>Summary</h4>
+                            <h4 style={{color: theme.primary}}>2. Actions</h4>
                             <div>📸 Photos: {photos.length}</div>
                             <div>💰 Invoice: {invoiceNum || 'Pending'}</div>
-                            <button onClick={() => window.location.href = emailLink} style={{...primaryBtn, width:'100%', marginTop:'10px'}}>📧 Email Pack</button>
+                            
+                            <div style={{marginTop:'20px', paddingTop:'10px', borderTop:'1px dashed #ccc'}}>
+                                <div style={{fontSize:'0.8em', color:'#666', marginBottom:'5px'}}>SEND TO: <strong>{insuranceEmail || 'No Email Set'}</strong></div>
+                                <button 
+                                    onClick={() => window.location.href = emailLink} 
+                                    disabled={!isDealFileReady}
+                                    style={{
+                                        ...primaryBtn, 
+                                        width:'100%', 
+                                        background: isDealFileReady ? theme.green : theme.disabled,
+                                        cursor: isDealFileReady ? 'pointer' : 'not-allowed'
+                                    }}
+                                >
+                                    {isDealFileReady ? '📧 SEND EMAIL PACK' : '⚠️ COMPLETE CHECKLIST FIRST'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* SLIDING BOTTOM BAR (THE MAGIC) */}
+            {/* SLIDING BOTTOM BAR */}
             <div className="no-print" style={{ 
                 position: 'fixed', bottom: 0, left: 0, right: 0, 
                 background: 'white', borderTop: '1px solid #ddd', 
