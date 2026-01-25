@@ -40,7 +40,7 @@ const s = {
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
     const [mode, setMode] = useState('ESTIMATE');
-    const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', techs:'Mark,Tech1', logo:'', terms:'' });
+    const [cfg, setCfg] = useState({ laborRate:'50', markup:'20', vatRate:'0', companyName:'TRIPLE MMM', address:'20A New Street, Stonehouse, ML9 3LT', phone:'07501 728319', email:'markmonie72@gmail.com', dvlaKey:'', techs:'Mark,Tech1', logo:'', terms:'' });
     
     // Core Data
     const [cust, setCust] = useState({ n:'', a:'', p:'', e:'', ie:'', c:'', nc:'', ic:'', ia:'' }); 
