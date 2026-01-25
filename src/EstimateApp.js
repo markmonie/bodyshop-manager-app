@@ -126,7 +126,7 @@ const EstimateApp = ({ userId }) => {
         addItem: () => { if(!item.d) return; const c=parseFloat(item.c)||0; setItem(p=>({...p, d:'', c:'', list:[...p.list, {desc:p.d, c, p: c*(1+(parseFloat(cfg.markup)||0)/100)}]})); },
         delItem: (i) => setItem(p=>({...p, list:p.list.filter((_,x)=>x!==i)})),
         
-        lookup: async () => { 
+                lookup: async () => { 
             if(veh.r.length < 2) return alert("Enter Reg");
             setSys(p=>({...p, lookupStatus:'SEARCHING...'}));
             const cleanReg = veh.r.replace(/\s/g, '');
@@ -138,15 +138,32 @@ const EstimateApp = ({ userId }) => {
                     headers: { "x-api-key": cfg.dvlaKey, "Content-Type": "application/json" },
                     body: JSON.stringify({ registrationNumber: cleanReg })
                 });
-                if (!response.ok) throw new Error("Check API Key");
+                
+                if (!response.ok) throw new Error("Check API Key or Reg");
                 const data = await response.json();
-                setVeh(p=>({...p, mm:`${data.make} ${data.colour}`, v: data.vin || ''})); 
+                
+                // --- SAVE ALL DATA ---
+                setVeh(p=>({
+                    ...p, 
+                    mm: `${data.make} ${data.colour}`, 
+                    v: data.vin || '',
+                    // We now save the full report here:
+                    info: {
+                        year: data.yearOfManufacture,
+                        fuel: data.fuelType,
+                        engine: data.engineCapacity,
+                        co2: data.co2Emissions,
+                        tax: data.taxStatus,
+                        mot: data.motStatus
+                    }
+                })); 
                 setSys(p=>({...p, lookupStatus:'FOUND'}));
             } catch(e) { 
                 alert("Lookup Error: " + e.message); 
                 setSys(p=>({...p, lookupStatus:'FAILED'}));
             }
         },
+
         
         parts: () => { 
             const cleanVin = (veh.v||'').replace(/\s/g, '');
@@ -461,7 +478,21 @@ const EstimateApp = ({ userId }) => {
                         <button onClick={actions.lookup} style={{...s.btn, ...s.actionBtn, minWidth:'80px'}}>{sys.lookupStatus==='SEARCHING...'?'...':'🔍 FIND'}</button>
                     </div>
                     <input style={s.inp} placeholder="Make / Model" value={veh.mm} onChange={e=>setVeh({...veh, mm:e.target.value})}/>
-                    
+                                      {/* --- NEW DATA DISPLAY --- */}
+                    {veh.info && (
+                        <div style={{marginTop: 5, marginBottom: 15, padding: 10, background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', fontSize: '12px', color: '#1e3a8a'}}>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:5}}>
+                                <div>📅 <b>Year:</b> {veh.info.year}</div>
+                                <div>⛽ <b>Fuel:</b> {veh.info.fuel}</div>
+                                <div>⚙️ <b>Engine:</b> {veh.info.engine} cc</div>
+                                <div>💨 <b>CO2:</b> {veh.info.co2} g/km</div>
+                                <div>🧾 <b>Tax:</b> {veh.info.tax}</div>
+                                <div>🔧 <b>MOT:</b> {veh.info.mot}</div>
+                            </div>
+                        </div>
+                    )}
+                    {/* ----------------------- */}
+  
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10}}>
                         <div style={{display:'flex', gap:5}}>
                             <input style={{...s.inp, marginBottom:0}} placeholder="VIN" value={veh.v} onChange={e=>setVeh({...veh, v:e.target.value})}/>
