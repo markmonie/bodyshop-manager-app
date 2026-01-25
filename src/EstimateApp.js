@@ -20,7 +20,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- STYLES ---
+// --- STYLES (ORANGE THEME) ---
 const theme = {
     primary: '#ea580c', // Orange
     green: '#16a34a',   // Green
@@ -39,9 +39,11 @@ const rowStyle = { display: 'flex', justifyContent: 'space-between', padding: '4
 // Buttons
 const btnBase = { padding: '12px 20px', border: 'none', borderRadius: '50px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', fontSize: '0.9em' };
 const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' }; 
-const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; // NEW GREEN BUTTON
+const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; 
 const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
-const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; // Red X
+const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; 
+// FIXED: Restored successBtn definition so the build passes
+const successBtn = { ...btnBase, background: '#15803d', color: 'white', border: '2px solid #22c55e', boxShadow: '0 0 10px #22c55e' };
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
@@ -373,7 +375,7 @@ const EstimateApp = ({ userId }) => {
                     <thead style={{position:'sticky', top:0, background:theme.light}}><tr style={{textAlign:'left', color:theme.dark}}>
                         <th style={{padding:'10px'}}>Reg</th>
                         <th style={{padding:'10px'}}>Total Inv</th>
-                        <th style={{padding:'10px'}}>Paint/Mat Cost</th>
+                        <th style={{padding:'10px'}}>Paint/Mat Cost (Editable)</th>
                         <th style={{padding:'10px'}}>Net Profit</th>
                     </tr></thead>
                     <tbody>
@@ -488,6 +490,14 @@ const EstimateApp = ({ userId }) => {
                                     </>
                                 )}
                                 <div style={{...rowStyle, fontSize:'1.4em', background: theme.grey, padding:'10px', borderRadius:'6px', marginTop:'10px'}}><span>DUE:</span> <strong>£{invoiceType === 'EXCESS' ? parseFloat(excess).toFixed(2) : totals.finalDue.toFixed(2)}</strong></div>
+                                
+                                {/* PAINT COST INPUT - ON ESTIMATE SHEET AS REQUESTED */}
+                                <div className="no-print" style={{marginTop:'15px', padding:'10px', border:`1px dashed ${theme.primary}`, borderRadius:'6px', background:theme.light}}>
+                                    <label style={{fontSize:'0.8em', fontWeight:'bold', color:theme.primary}}>🎨 Internal Paint Cost</label>
+                                    <div style={{display:'flex', alignItems:'center'}}>
+                                        £<input type="number" value={paintAllocated} onChange={e => setPaintAllocated(e.target.value)} style={{width:'100%', marginLeft:'5px', border:'none', background:'transparent', fontWeight:'bold', fontSize:'1.1em'}} placeholder="0.00" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
