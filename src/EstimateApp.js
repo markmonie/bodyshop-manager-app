@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// --- TRIPLE MMM CONFIG ---
+// --- CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -30,7 +30,7 @@ const theme = {
     text: '#334155'
 };
 
-const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1em' };
+const inputStyle = { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '1em', boxSizing: 'border-box' };
 const headerStyle = { borderBottom: `2px solid ${theme.primary}`, paddingBottom: '5px', marginBottom: '15px', color: theme.primary, fontSize: '0.9em', fontWeight: 'bold', letterSpacing: '1px' };
 const rowStyle = { display: 'flex', justifyContent: 'space-between', padding: '4px 0' };
 
@@ -39,6 +39,7 @@ const btnBase = { padding: '12px 20px', border: 'none', borderRadius: '50px', fo
 const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' };
 const successBtn = { ...btnBase, background: '#16a34a', color: 'white' };
 const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
+const dangerBtn = { ...btnBase, background: '#ef4444', color: 'white' };
 
 const EstimateApp = ({ userId }) => {
     // --- STATE ---
@@ -198,7 +199,6 @@ const EstimateApp = ({ userId }) => {
         } catch(e) { }
     };
 
-    // FIXED: Function Restored
     const handleRegChange = (e) => {
         const val = e.target.value.toUpperCase();
         setReg(val);
@@ -260,6 +260,21 @@ const EstimateApp = ({ userId }) => {
     const addGeneralExpense = async () => { if(!expDesc || !expAmount) return; await addDoc(collection(db, 'expenses'), { desc: expDesc, amount: parseFloat(expAmount), category: expCategory, date: serverTimestamp() }); setExpDesc(''); setExpAmount(''); };
     const deleteJob = async (id) => { if(window.confirm("Delete permanently?")) try { await deleteDoc(doc(db, 'estimates', id)); } catch (e) { alert("Error: " + e.message); } };
     const deleteExpense = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, 'expenses', id)); };
+
+    const updatePaintCost = async (id, newCost) => {
+        if(!id) return;
+        const cost = parseFloat(newCost) || 0;
+        await updateDoc(doc(db, 'estimates', id), { paintAllocated: cost });
+        const updated = savedEstimates.map(j => {
+            if(j.id === id) {
+                const newTotalCost = (j.totals?.partsCost || 0) + cost;
+                const newProfit = (j.totals?.invoiceTotal || 0) - newTotalCost;
+                return { ...j, paintAllocated: cost, totals: { ...j.totals, totalJobCost: newTotalCost, jobProfit: newProfit } };
+            }
+            return j;
+        });
+        setSavedEstimates(updated);
+    };
 
     const saveToCloud = async (targetType) => {
         if (!name || !reg) return alert("Enter Customer & Reg");
@@ -333,7 +348,6 @@ const EstimateApp = ({ userId }) => {
     const togglePaid = async (id, currentStatus) => { await updateDoc(doc(db, 'estimates', id), { status: currentStatus === 'PAID' ? 'UNPAID' : 'PAID' }); };
     const filteredEstimates = savedEstimates.filter(est => (est.customer?.toLowerCase().includes(searchTerm.toLowerCase()) || est.reg?.toLowerCase().includes(searchTerm.toLowerCase()) || est.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())));
 
-    // FIXED: Variable Restored
     const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
     const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Signed T&Cs: ${activeJob?.dealFile?.terms ? 'Attached' : 'Pending'}%0D%0A4. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
     const emailLink = `mailto:?subject=${emailSubject}&body=${emailBody}`;
@@ -356,18 +370,54 @@ const EstimateApp = ({ userId }) => {
     if(mode === 'DASHBOARD') return (
         <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Arial' }}>
             <button onClick={() => setMode('ESTIMATE')} style={secondaryBtn}>← Back</button>
-            <h2 style={{color: theme.primary}}>📊 Dashboard</h2>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <h2 style={{color: theme.primary}}>📊 Financial Dashboard</h2>
+                <button onClick={downloadAccountingCSV} style={{...primaryBtn, fontSize:'0.8em'}}>📥 Export Sales CSV</button>
+            </div>
+            
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'30px'}}>
                 <div style={{padding:'20px', background: theme.light, borderRadius:'8px', border: `1px solid ${theme.border}`}}><h3>Total Sales</h3><div style={{fontSize:'2em', fontWeight:'bold', color: theme.dark}}>£{savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.finalDue || 0), 0).toFixed(2)}</div></div>
                 <div style={{padding:'20px', background: '#ecfccb', borderRadius:'8px'}}><h3>Net Profit</h3><div style={{fontSize:'2em', fontWeight:'bold', color: '#166534'}}>£{(savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.finalDue || 0), 0) - savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.totalJobCost || 0), 0) - generalExpenses.reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}</div></div>
             </div>
-            <h3>Expenses</h3>
+            
+            <h3 style={{color:theme.dark}}>Job Costing & Profit</h3>
+            <div style={{marginBottom:'30px', maxHeight:'400px', overflowY:'auto', border:`1px solid ${theme.border}`, borderRadius:'8px'}}>
+                <table style={{width:'100%', borderCollapse:'collapse'}}>
+                    <thead style={{position:'sticky', top:0, background:theme.light}}><tr style={{textAlign:'left', color:theme.dark}}>
+                        <th style={{padding:'10px'}}>Reg</th>
+                        <th style={{padding:'10px'}}>Total Inv</th>
+                        <th style={{padding:'10px'}}>Paint/Mat Cost (Editable)</th>
+                        <th style={{padding:'10px'}}>Net Profit</th>
+                    </tr></thead>
+                    <tbody>
+                    {savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).map(job => (
+                        <tr key={job.id} style={{borderBottom:'1px solid #eee', background:'white'}}>
+                            <td style={{padding:'10px', fontWeight:'bold'}}>{job.reg}</td>
+                            <td style={{padding:'10px'}}>£{job.totals?.finalDue.toFixed(0)}</td>
+                            <td style={{padding:'10px'}}>
+                                <div style={{display:'flex', alignItems:'center'}}>
+                                    £<input 
+                                        type="number" 
+                                        defaultValue={job.paintAllocated} 
+                                        onBlur={(e) => updatePaintCost(job.id, e.target.value)}
+                                        style={{width:'60px', padding:'5px', marginLeft:'5px', border:`1px solid ${theme.border}`, borderRadius:'4px'}} 
+                                    />
+                                </div>
+                            </td>
+                            <td style={{padding:'10px', fontWeight:'bold', color: job.totals?.jobProfit > 0 ? 'green' : 'red'}}>£{job.totals?.jobProfit.toFixed(0)}</td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Shop Expenses</h3>
             <div style={{display:'flex', gap:'10px', marginBottom:'30px'}}>
                 <input placeholder="Desc" value={expDesc} onChange={e => setExpDesc(e.target.value)} style={{flex:1, ...inputStyle}} />
                 <input type="number" placeholder="£" value={expAmount} onChange={e => setExpAmount(e.target.value)} style={{width:'80px', ...inputStyle}} />
                 <button onClick={addGeneralExpense} style={primaryBtn}>Add</button>
             </div>
-            <button onClick={downloadExpensesCSV} style={secondaryBtn}>📥 CSV</button>
+            <button onClick={downloadExpensesCSV} style={secondaryBtn}>📥 Export Expenses</button>
             {generalExpenses.map(ex => (<div key={ex.id} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'10px'}}><span>{ex.desc}</span><strong>£{ex.amount.toFixed(2)}</strong></div>))}
         </div>
     );
@@ -396,7 +446,20 @@ const EstimateApp = ({ userId }) => {
                     <textarea placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} style={{...inputStyle, height: '60px', fontFamily: 'inherit'}} />
                     <div style={{display:'flex', gap:'5px'}}><input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /><input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></div>
                     <div style={{display:'flex', gap:'5px'}}><input placeholder="Claim No." value={claimNum} onChange={e => setClaimNum(e.target.value)} style={inputStyle} /><input placeholder="Network Code" value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={inputStyle} /></div>
-                    {excess > 0 && <div style={{background: theme.light, padding:'10px', borderRadius:'6px', border: `1px solid ${theme.border}`}}><h5 style={{margin:'0 0 5px 0', color: theme.dark}}>Insurance Co.</h5><input placeholder="Insurer" value={insuranceCo} onChange={e => setInsuranceCo(e.target.value)} style={{...inputStyle, background:'white'}} /></div>}
+                    
+                    {/* NEW INVITING INSURANCE BOX */}
+                    {excess > 0 && (
+                        <div className="no-print" style={{marginTop:'20px', background:'white', padding:'20px', borderRadius:'12px', borderLeft:`6px solid ${theme.primary}`, boxShadow:'0 4px 15px rgba(0,0,0,0.05)'}}>
+                            <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
+                                <span style={{fontSize:'1.5em', marginRight:'10px'}}>🛡️</span>
+                                <h4 style={{margin:0, color:theme.text}}>Insurance Details</h4>
+                            </div>
+                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'5px'}}>Insurer Name</label>
+                            <input placeholder="e.g. Admiral, Direct Line..." value={insuranceCo} onChange={e => setInsuranceCo(e.target.value)} style={{...inputStyle, marginBottom:'10px'}} />
+                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'5px'}}>Insurer Address / Notes</label>
+                            <textarea placeholder="Enter address for invoice..." value={insuranceAddr} onChange={e => setInsuranceAddr(e.target.value)} style={{...inputStyle, height:'60px', marginBottom:0}} />
+                        </div>
+                    )}
                 </div>
                 <div>
                     <h4 style={headerStyle}>VEHICLE</h4>
@@ -439,20 +502,33 @@ const EstimateApp = ({ userId }) => {
                                 )}
                                 <div style={{...rowStyle, fontSize:'1.4em', background: theme.grey, padding:'10px', borderRadius:'6px', marginTop:'10px'}}><span>DUE:</span> <strong>£{invoiceType === 'EXCESS' ? parseFloat(excess).toFixed(2) : totals.finalDue.toFixed(2)}</strong></div>
                                 
-                                {/* FINANCIAL FOLDER (ORANGE & SEPARATE PAINT) */}
-                                <div className="no-print" style={{marginTop:'20px', padding:'15px', background: theme.light, borderRadius:'8px', border: `2px solid ${theme.border}`, textAlign:'left'}}>
-                                    <h4 style={{margin:'0 0 10px 0', color: theme.dark, borderBottom:`1px solid ${theme.border}`, paddingBottom:'5px'}}>📂 JOB COSTING FOLDER</h4>
-                                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px'}}>
-                                        <span style={{fontWeight:'bold', color: theme.primary}}>🎨 Paint & Materials Cost:</span>
-                                        <div style={{display:'flex', alignItems:'center'}}>£<input type="number" value={paintAllocated} onChange={e => setPaintAllocated(e.target.value)} style={{width:'80px', padding:'5px', marginLeft:'5px', border:`1px solid ${theme.primary}`, borderRadius:'4px', fontWeight:'bold'}} /></div>
+                                {/* PAINT COST INPUT - ON ESTIMATE SHEET AS REQUESTED */}
+                                <div className="no-print" style={{marginTop:'15px', padding:'10px', border:`1px dashed ${theme.primary}`, borderRadius:'6px', background:theme.light}}>
+                                    <label style={{fontSize:'0.8em', fontWeight:'bold', color:theme.primary}}>🎨 Internal Paint Cost</label>
+                                    <div style={{display:'flex', alignItems:'center'}}>
+                                        £<input type="number" value={paintAllocated} onChange={e => setPaintAllocated(e.target.value)} style={{width:'100%', marginLeft:'5px', border:'none', background:'transparent', fontWeight:'bold', fontSize:'1.1em'}} placeholder="0.00" />
                                     </div>
-                                    <div style={rowStyle}><span>Parts Cost:</span> <span>£{totals.partsCost.toFixed(2)}</span></div>
-                                    <div style={{...rowStyle, borderTop:`1px solid ${theme.border}`, paddingTop:'5px', marginTop:'5px', fontWeight:'bold', color: totals.jobProfit > 0 ? 'green' : 'red'}}><span>NET PROFIT:</span> <span>£{totals.jobProfit.toFixed(2)}</span></div>
                                 </div>
                             </div>
                         </div>
                     )}
-                    {(mode === 'INVOICE' || mode === 'JOBCARD') && <div style={{ marginTop: '50px', padding: '20px', background: theme.grey, borderRadius: '8px', border: '1px solid #ccc' }}><div style={{textAlign:'center', width:'300px', float:'right'}}><div className="no-print" style={{border: '1px dashed #ccc', height: '80px', backgroundColor: '#fff'}}><canvas ref={canvasRef} width={300} height={80} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} /></div><div style={{ borderBottom: '1px solid #333', height: '30px' }}></div><div style={{fontSize:'0.8em'}}>SIGNED</div></div><div style={{clear:'both'}}></div></div>}
+                    {(mode === 'INVOICE' || mode === 'JOBCARD') && (
+                        <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop:'20px' }}>
+                            {mode === 'INVOICE' && (
+                                <div style={{width:'60%'}}>
+                                    <h4>PAYMENT DETAILS</h4>
+                                    <p>Bank: <strong>BANK OF SCOTLAND</strong><br/>Account: <strong>06163462</strong><br/>Sort: <strong>80-22-60</strong><br/>Name: <strong>{settings.companyName} BODY REPAIRS</strong></p>
+                                    <p style={{fontSize:'0.8em', marginTop:'10px'}}>Payment Terms: <strong>{invoiceType === 'EXCESS' ? '7 Days' : '30 Days'}</strong>. Title of goods remains with {settings.companyName} until paid in full.</p>
+                                </div>
+                            )}
+                            <div style={{textAlign:'center', width:'30%'}}>
+                                {mode === 'INVOICE' && <div style={{marginBottom:'10px'}}><img src={process.env.PUBLIC_URL + "/qrcode.png"} alt="QR" style={{width:'80px', height:'80px', opacity:0.5}} /><div style={{fontSize:'0.7em'}}>SCAN TO PAY</div></div>}
+                                <div className="no-print" style={{border: '1px dashed #ccc', height: '60px', backgroundColor: '#fff', marginBottom:'5px'}}><canvas ref={canvasRef} width={200} height={60} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} /></div>
+                                <div style={{ borderBottom: '1px solid #333' }}></div>
+                                <div style={{fontSize:'0.8em'}}>SIGNED</div>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
 
@@ -510,7 +586,10 @@ const EstimateApp = ({ userId }) => {
                 {filteredEstimates.map(est => (
                     <div key={est.id} style={{padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', background: est.status === 'PAID' ? '#f0fdf4' : 'white'}}>
                         <div onClick={() => loadJobIntoState(est)} style={{cursor:'pointer'}}><strong>{est.reg}</strong> - {est.customer} <span style={{color:'#888', fontSize:'0.8em'}}>({est.invoiceNumber || 'Est'})</span></div>
-                        <div><button onClick={() => deleteJob(est.id)} style={{border:'none', background:'none', color:'red'}}>🗑️</button><button onClick={() => togglePaid(est.id, est.status)} style={{border:'1px solid #ccc', background:'white', borderRadius:'4px', marginLeft:'5px'}}>{est.status === 'PAID' ? 'PAID' : 'PAY'}</button></div>
+                        <div>
+                            <button onClick={() => deleteJob(est.id)} style={{...dangerBtn, padding:'5px 12px', marginRight:'5px'}}>X</button>
+                            <button onClick={() => togglePaid(est.id, est.status)} style={{border:'1px solid #ccc', background:'white', borderRadius:'4px', padding:'5px 10px'}}>{est.status === 'PAID' ? 'PAID' : 'PAY'}</button>
+                        </div>
                     </div>
                 ))}
             </div>
