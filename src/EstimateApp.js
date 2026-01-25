@@ -42,7 +42,7 @@ const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' };
 const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; 
 const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
 const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; 
-// Legacy mapping to prevent crashes
+// Restored successBtn for legacy code compatibility
 const successBtn = { ...greenBtn, border: '2px solid #14532d' };
 
 const EstimateApp = ({ userId }) => {
@@ -80,7 +80,7 @@ const EstimateApp = ({ userId }) => {
     const [makeModel, setMakeModel] = useState('');
     const [vin, setVin] = useState(''); 
     const [paintCode, setPaintCode] = useState('');
-    const [vehicleInfo, setVehicleInfo] = useState(null); 
+    const [vehicleInfo, setVehicleInfo] = useState(null); // STORES FULL API DATA
     const [bookingDate, setBookingDate] = useState(''); 
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
@@ -227,7 +227,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- UPGRADED: SMART PAINT FINDER ---
+    // --- SMART PAINT FINDER ---
     const decodeVin = () => { 
         if (!vin && !makeModel) return alert("Enter VIN or Find Vehicle First");
         
@@ -243,7 +243,6 @@ const EstimateApp = ({ userId }) => {
         }
 
         // 2. Fallback: Search Dedicated UK Paint Code Database
-        // This is much better than Google Images "Location" search
         const searchTeam = makeModel ? makeModel.split(' ')[0] : 'Car';
         window.open(`https://www.paintcode.co.uk/search/${searchTeam}`, '_blank'); 
     };
