@@ -101,14 +101,22 @@ const EstimateApp = ({ userId }) => {
             setFin({lh:j.laborHours||'', lr:j.laborRate||cfg.laborRate, vat:j.vatRate||'0', ex:j.excess||'', paint:j.paintAllocated||''}); 
             setMode('DEAL_FILE'); window.scrollTo(0,0); 
         },
-        save: async (type) => { 
-            if(!cust.n || !veh.r) return alert("Name/Reg required"); setSys(p=>({...p, save:'SAVING'}));
+                save: async (type) => {
+            // 1. Validation
+            if(!cust.n || !veh.r) return alert("Name/Reg required"); 
+            setSys(p=>({...p, save:'SAVING...'}));
+
             try {
+                // 2. Logic Setup (Added safety check for empty notes)
                 let n = sys.invNum, t = type;
-                let currentNotes = [...sys.notes];
-                if(type.includes('INVOICE') && !n) { n = `INV-${1000+sys.jobs.length+1}`; setSys(p=>({...p, invNum:n})); }
+                let currentNotes = [...(sys.notes || [])]; 
+
+                if(type.includes('INVOICE') && !n) { 
+                    n = `INV-${Date.now()}`; 
+                    setSys(p=>({...p, invNum:n})); 
+                }
                 
-                if(type === 'INVOICE_MAIN') { setMode('INVOICE'); t='INVOICE'; } 
+                if(type === 'INVOICE_MAIN') { setMode('INVOICE_MAIN'); } 
                 else if (type === 'INVOICE_EXCESS') { 
                     setMode('INVOICE'); t='INVOICE (EXCESS)'; 
                     currentNotes.push({text: `Excess Invoice ${n} Generated`, date: new Date().toLocaleDateString(), resolved: true});
@@ -116,7 +124,41 @@ const EstimateApp = ({ userId }) => {
                 } 
                 else setMode(type);
                 
-                            const data = {
+                // 3. The Data Packet (With Safety Nets for empty emails/insurance)
+                const data = {
+                    type: t,
+                    status: 'UNPAID',
+                    invoiceNumber: n || '',
+                    date: new Date().toISOString(),
+                    ...cust,
+                    ...veh,
+                    ...fin,
+                    items: item.list || [],
+                    notes: currentNotes,
+                    insEmail: cust.ie || '',
+                    ins: cust.ins || '',
+                    claim: cust.c || '',
+                    excess: cust.ex || '0'
+                };
+
+                // 4. Send to Database
+                if(sys.id) {
+                    await updateDoc(doc(db, 'estimates', sys.id), data);
+                } else {
+                    const r = await addDoc(collection(db, 'estimates'), data);
+                    setSys(p=>({...p, id: r.id})); 
+                }
+
+                // 5. Success
+                setSys(p=>({...p, save:'SAVED!'}));
+                setTimeout(()=>setSys(p=>({...p, save:'IDLE'})), 3000);
+
+            } catch(e) {
+                alert("Save Error: " + e.message);
+                setSys(p=>({...p, save:'IDLE'}));
+            }
+        },
+
                 type: t,
                 status: 'UNPAID',
                 invoiceNumber: n,
