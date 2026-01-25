@@ -242,7 +242,20 @@ const EstimateApp = ({ userId }) => {
             }
         },
 
-        uploadPhoto: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `photos/${Date.now()}_${f.name}`); setSys(p=>({...p, save:'SAVING'})); await uploadBytes(r, f); const u = await getDownloadURL(r); setSys(p=>({...p, save:'IDLE', photos:[...p.photos,u]})); } },
+                uploadPhoto: async (e) => { 
+            const files = Array.from(e.target.files); 
+            if(files.length === 0) return;
+            setSys(p=>({...p, save:'UPLOADING...'}));
+            try {
+                const newUrls = await Promise.all(files.map(async (file) => {
+                    const r = ref(storage, `photos/${Date.now()}_${Math.random()}_${file.name}`);
+                    await uploadBytes(r, file);
+                    return getDownloadURL(r);
+                }));
+                setSys(p=>({...p, save:'IDLE', photos:[...p.photos, ...newUrls]}));
+            } catch(e) { alert("Upload error"); setSys(p=>({...p, save:'IDLE'})); }
+        },
+
         uploadLogo: async (e) => { const f=e.target.files[0]; if(f) { const r = ref(storage, `settings/logo_${Date.now()}`); await uploadBytes(r, f); const u = await getDownloadURL(r); setCfg(p=>({...p, logo:u})); await setDoc(doc(db,'settings','global'), {...cfg, logo:u}); } },
         
         delJob: async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db,'estimates',id)); },
@@ -513,7 +526,7 @@ const EstimateApp = ({ userId }) => {
                     <div style={{marginTop:15, padding:15, background:'#f8fafc', borderRadius:10, border:'2px dashed #cbd5e1', textAlign:'center'}}>
                         <div style={{marginBottom:10, fontSize:'12px', color:'#64748b'}}>{sys.photos.length} photos attached</div>
                         <div style={{position:'relative', overflow:'hidden', display:'inline-block'}}>
-                            <input type="file" onChange={actions.uploadPhoto} style={{position:'absolute', opacity:0, top:0, left:0, width:'100%', height:'100%', cursor:'pointer'}}/>
+                            <input type="file" multiple onChange={actions.uploadPhoto} style={{position:'absolute', opacity:0, top:0, left:0, width:'100%', height:'100%', cursor:'pointer'}}/>
                             <button style={{...s.btn, ...s.secondaryBtn}}>📸 Upload Photos</button>
                         </div>
                     </div>
