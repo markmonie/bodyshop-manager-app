@@ -34,12 +34,13 @@ const axios = {
 };
 
 // --- PREMIUM RACING THEME ---
-const theme = { bg: '#0f172a', card: '#1e293b', accent: '#f97316', text: '#f8fafc', textDim: '#94a3b8', success: '#22c55e', danger: '#ef4444', border: '#334155' };
+const theme = { bg: '#0f172a', card: '#1e293b', accent: '#f97316', text: '#f8fafc', textDim: '#94a3b8', success: '#16a34a', danger: '#ef4444', border: '#334155' };
 const s = {
     card: { background: theme.card, borderRadius: '16px', padding: '20px', marginBottom: '20px', border: `1px solid ${theme.border}` },
     input: { width: '100%', background: '#0f172a', border: `1px solid ${theme.border}`, color: theme.text, padding: '12px', borderRadius: '8px', marginBottom: '10px', outline: 'none' },
     label: { color: theme.accent, fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px', display: 'block' },
-    btn: { background: theme.accent, color: 'white', border: 'none', padding: '14px 20px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+    btnGreen: { background: theme.success, color: 'white', border: 'none', padding: '14px 20px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+    btnOrange: { background: theme.accent, color: 'white', border: 'none', padding: '14px 20px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' },
     secondaryBtn: { background: '#334155', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }
 };
 
@@ -51,25 +52,19 @@ const EstimateApp = ({ userId }) => {
 
     // --- GLOBAL SETTINGS ---
     const [settings, setSettings] = useState({
-        coName: 'Triple MMM Body Repairs',
-        address: '20A New Street, Stonehouse, ML9 3LT',
-        phone: '07501 728319',
-        email: 'markmonie72@gmail.com',
-        dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc',
-        vatRate: '0',
-        markup: '20',
-        labourRate: '50',
-        terms: 'Payment due on vehicle collection. Vehicle remains property of Triple MMM until paid in full.'
+        coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319',
+        email: 'markmonie72@gmail.com', dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc',
+        vatRate: '0', markup: '20', labourRate: '50', terms: 'Payment due on vehicle collection.'
     });
 
     const [customer, setCustomer] = useState({ name: '', phone: '', email: '', address: '' });
-    const [vehicle, setVehicle] = useState({ reg: '', makeModel: '', vin: '', paint: '' });
+    const [vehicle, setVehicle] = useState({ reg: '', makeModel: '', vin: '', paint: '', year: '', fuel: '', mot: '' });
     const [insurance, setInsurance] = useState({ co: '', claim: '', network: '' });
     const [repair, setRepair] = useState({ items: [], labourHours: '', paintMaterials: '', excess: '', photos: [] });
     const [savedJobs, setSavedJobs] = useState([]);
 
     useEffect(() => {
-        getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(snap.data()));
+        getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
         return onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), (snap) => setSavedJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     }, []);
 
@@ -79,9 +74,10 @@ const EstimateApp = ({ userId }) => {
         const proxy = `https://corsproxy.io/?${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
             const res = await axios.post(proxy, { registrationNumber: vehicle.reg }, { headers: { 'x-api-key': settings.dvlaKey } });
-            setVehicle(v => ({ ...v, makeModel: `${res.data.make} ${res.data.colour}` }));
+            const d = res.data;
+            setVehicle(v => ({ ...v, makeModel: `${d.make} ${d.colour}`, year: d.yearOfManufacture, fuel: d.fuelType, mot: d.motStatus }));
             alert("✅ Vehicle Found!");
-        } catch (e) { alert("⚠️ Connection Blocked. Manual Entry Enabled."); }
+        } catch (e) { alert("⚠️ Connection Error. Manual Entry Enabled."); }
         setLoading(false);
     };
 
@@ -93,7 +89,11 @@ const EstimateApp = ({ userId }) => {
         const subtotal = partsPrice + labourPrice + paintPrice;
         const vat = subtotal * (parseFloat(settings.vatRate) / 100);
         const total = subtotal + vat;
-        return { partsPrice, labourPrice, paintPrice, subtotal, vat, total, due: total - (parseFloat(repair.excess) || 0) };
+        return { 
+            partsPrice, labourPrice, paintPrice, subtotal, vat, total, 
+            due: total - (parseFloat(repair.excess) || 0),
+            netProfit: total - (partsCost + paintPrice) // Actual Profit
+        };
     }, [repair, settings]);
 
     const saveJob = async () => {
@@ -111,103 +111,92 @@ const EstimateApp = ({ userId }) => {
         setInsurance(j.insurance || {});
         setRepair(j.repair || { items: [], photos: [] });
         setMode('ESTIMATE');
+        window.scrollTo(0, 0);
     };
-
-    if (mode === 'SETTINGS') return (
-        <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px' }}>
-            <button onClick={() => setMode('ESTIMATE')} style={s.secondaryBtn}>← BACK</button>
-            <h2 style={{ color: theme.accent }}>SHOP SETTINGS</h2>
-            <div style={s.card}>
-                <span style={s.label}>Company Details</span>
-                <input style={s.input} placeholder="Company Name" value={settings.coName} onChange={e => setSettings({...settings, coName: e.target.value})} />
-                <textarea style={{...s.input, height: '60px'}} placeholder="Address / Letterhead" value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <input style={s.input} placeholder="VAT Rate %" value={settings.vatRate} onChange={e => setSettings({...settings, vatRate: e.target.value})} />
-                    <input style={s.input} placeholder="Parts Markup %" value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} />
-                </div>
-                <input style={s.input} placeholder="Labour Rate £/hr" value={settings.labourRate} onChange={e => setSettings({...settings, labourRate: e.target.value})} />
-                <span style={s.label}>DVLA API Key</span>
-                <input style={s.input} value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} />
-                <span style={s.label}>Terms & Conditions</span>
-                <textarea style={{...s.input, height: '100px'}} value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} />
-                <button onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Settings Saved"); }} style={s.btn}>SAVE GLOBAL SETTINGS</button>
-            </div>
-        </div>
-    );
 
     return (
         <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', paddingBottom: '120px' }}>
+            {/* HEADER */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h1 style={{ color: theme.accent, letterSpacing: '-1px' }}>TRIPLE <span style={{ color: 'white' }}>MMM</span></h1>
                 <div style={{ textAlign: 'right', fontSize: '10px', color: theme.textDim }}>{settings.coName}<br/>{settings.phone}</div>
             </div>
 
+            {/* VEHICLE INTAKE */}
             <div style={s.card}>
-                <span style={s.label}>Vehicle Intake</span>
+                <span style={s.label}>Vehicle Search</span>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                     <input style={{ ...s.input, fontSize: '24px', fontWeight: '900', color: theme.accent, textAlign: 'center', marginBottom: 0 }} value={vehicle.reg} onChange={e => setVehicle({ ...vehicle, reg: e.target.value.toUpperCase() })} />
-                    <button onClick={lookupReg} style={s.btn}>{loading ? '...' : '🔎'}</button>
+                    <button onClick={lookupReg} style={{...s.btnGreen, width: '80px'}}>{loading ? '...' : 'SEARCH'}</button>
                 </div>
                 <input style={s.input} placeholder="Make & Model" value={vehicle.makeModel} onChange={e => setVehicle({...vehicle, makeModel: e.target.value})} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <input style={s.input} placeholder="VIN" value={vehicle.vin} onChange={e => setVehicle({...vehicle, vin: e.target.value})} />
+                    <div style={{background: '#0f172a', padding: '10px', borderRadius: '8px'}}><span style={s.label}>Year</span>{vehicle.year}</div>
+                    <div style={{background: '#0f172a', padding: '10px', borderRadius: '8px'}}><span style={s.label}>Fuel</span>{vehicle.fuel}</div>
+                </div>
+                <div style={{marginTop: '10px'}}><span style={s.label}>Paint Code / VIN</span>
                     <input style={s.input} placeholder="Paint Code" value={vehicle.paint} onChange={e => setVehicle({...vehicle, paint: e.target.value})} />
+                    <input style={s.input} placeholder="Chassis / VIN" value={vehicle.vin} onChange={e => setVehicle({...vehicle, vin: e.target.value})} />
                 </div>
             </div>
 
-            <div style={s.card}>
-                <span style={s.label}>Client & Insurance</span>
-                <input style={s.input} placeholder="Customer Name" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <input style={s.input} placeholder="Insurer" value={insurance.co} onChange={e => setInsurance({...insurance, co: e.target.value})} />
-                    <input style={s.input} placeholder="Claim #" value={insurance.claim} onChange={e => setInsurance({...insurance, claim: e.target.value})} />
+            {/* FINANCIAL PAGE / DASHBOARD */}
+            <div style={{ ...s.card, background: theme.accent }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '10px' }}>
+                    <div><span style={{ fontSize: '11px', opacity: 0.8 }}>ESTIMATED NET PROFIT</span><div style={{ fontSize: '32px', fontWeight: '900' }}>£{totals.netProfit.toFixed(2)}</div></div>
+                    <div style={{ textAlign: 'right' }}><span style={{ fontSize: '11px', opacity: 0.8 }}>TOTAL DUE</span><div style={{ fontSize: '32px', fontWeight: '900' }}>£{totals.due.toFixed(2)}</div></div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div><span style={s.label}>Labour Hours</span><input type="number" style={{...s.input, background: 'rgba(0,0,0,0.2)', border: 'none'}} value={repair.labourHours} onChange={e => setRepair({...repair, labourHours: e.target.value})} /></div>
+                    <div><span style={s.label}>Paint & Mats £</span><input type="number" style={{...s.input, background: 'rgba(0,0,0,0.2)', border: 'none'}} value={repair.paintMaterials} onChange={e => setRepair({...repair, paintMaterials: e.target.value})} /></div>
                 </div>
             </div>
 
+            {/* REPAIR ESTIMATOR */}
             <div style={s.card}>
-                <span style={s.label}>Estimating Breakdowns</span>
+                <span style={s.label}>Repair Items</span>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                    <input id="desc" placeholder="Repair Item" style={{ ...s.input, flex: 2, marginBottom: 0 }} />
+                    <input id="desc" placeholder="Panel / Part" style={{ ...s.input, flex: 2, marginBottom: 0 }} />
                     <input id="cost" type="number" placeholder="Cost £" style={{ ...s.input, flex: 1, marginBottom: 0 }} />
                     <button onClick={() => { 
                         const d = document.getElementById('desc'), c = document.getElementById('cost'); 
+                        if(!d.value) return;
                         setRepair({...repair, items: [...repair.items, { desc: d.value, cost: c.value }]}); 
                         d.value = ''; c.value = ''; 
-                    }} style={s.btn}>+</button>
+                    }} style={{...s.btnGreen, padding: '0 20px'}}>+</button>
                 </div>
                 {repair.items.map((it, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155' }}>
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #334155' }}>
                         <span>{it.desc}</span>
-                        <span>£{(it.cost * (1 + (settings.markup/100))).toFixed(2)}</span>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <strong>£{(it.cost * (1 + (settings.markup/100))).toFixed(2)}</strong>
+                            <button onClick={()=>setRepair({...repair, items: repair.items.filter((_,idx)=>idx!==i)})} style={{color:theme.danger, background:'none', border:'none'}}>✕</button>
+                        </div>
                     </div>
                 ))}
             </div>
 
-            <div style={{ ...s.card, background: theme.accent }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    <div><span style={s.label}>Labour Hours</span><input type="number" style={{...s.input, background: 'rgba(0,0,0,0.2)'}} value={repair.labourHours} onChange={e => setRepair({...repair, labourHours: e.target.value})} /></div>
-                    <div><span style={s.label}>Paint & Materials</span><input type="number" style={{...s.input, background: 'rgba(0,0,0,0.2)'}} value={repair.paintMaterials} onChange={e => setRepair({...repair, paintMaterials: e.target.value})} /></div>
-                </div>
-                <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '10px' }}>
-                    <div><span style={{ fontSize: '10px' }}>DUE TOTAL</span><div style={{ fontSize: '24px', fontWeight: 'bold' }}>£{totals.due.toFixed(2)}</div></div>
-                    <div style={{ textAlign: 'right' }}><span style={{ fontSize: '10px' }}>EXCESS</span><input type="number" style={{ width: '80px', background: 'none', border: 'none', color: 'white', borderBottom: '1px solid white' }} value={repair.excess} onChange={e => setRepair({...repair, excess: e.target.value})} /></div>
-                </div>
+            <div style={s.card}>
+                <span style={s.label}>Customer & Insurance</span>
+                <input style={s.input} placeholder="Customer Name" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} />
+                <input style={s.input} placeholder="Insurance Company" value={insurance.co} onChange={e => setInsurance({...insurance, co: e.target.value})} />
             </div>
 
-            <h3 style={s.label}>Recent Jobs</h3>
+            {/* RECENT JOBS */}
+            <h3 style={s.label}>Workshop History</h3>
             {savedJobs.map(j => (
-                <div key={j.id} onClick={() => loadJob(j)} style={{ ...s.card, padding: '12px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }}>
-                    <span>{j.vehicle?.reg} - {j.customer?.name}</span>
-                    <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'estimates', j.id)); }} style={{ background: theme.danger, border: 'none', color: 'white', borderRadius: '4px' }}>X</button>
+                <div key={j.id} onClick={() => loadJob(j)} style={{ ...s.card, padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                    <div><strong style={{color:theme.accent}}>{j.vehicle?.reg}</strong><br/><small>{j.customer?.name}</small></div>
+                    <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Delete?")) deleteDoc(doc(db, 'estimates', j.id)); }} style={{ background: theme.danger, border: 'none', color: 'white', borderRadius: '50%', width: '30px', height:'30px' }}>✕</button>
                 </div>
             ))}
 
+            {/* ACTION BAR */}
             <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: theme.card, padding: '20px', display: 'flex', gap: '10px', borderTop: `1px solid ${theme.border}`, zIndex: 1000 }}>
-                <button onClick={saveJob} style={{ ...s.btn, flex: 2 }}>{saveStatus === 'IDLE' ? 'SAVE ESTIMATE' : 'SAVED ✓'}</button>
+                <button onClick={saveJob} style={{ ...s.btnGreen, flex: 2 }}>{saveStatus === 'IDLE' ? 'SAVE & SYNC' : 'SAVED ✓'}</button>
                 <button onClick={() => setMode('SETTINGS')} style={s.secondaryBtn}>⚙️</button>
-                <button onClick={() => window.print()} style={s.secondaryBtn}>🖨️</button>
+                <button onClick={() => window.location.reload()} style={{...s.secondaryBtn, background: theme.danger}}>NEW</button>
             </div>
-            <style>{`@media print { .no-print, button, input[type="number"] { display: none !important; } body { background: white; color: black; } }`}</style>
         </div>
     );
 };
