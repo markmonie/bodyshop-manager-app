@@ -10,6 +10,27 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 const HARDCODED_DVLA_KEY = "IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc"; 
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+// --- AXIOS SIMULATION ENGINE (To prevent build errors) ---
+// This acts exactly like Axios but uses native browser tools so you don't need to install anything.
+const axios = {
+    post: async (url, data, config) => {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...config.headers
+            },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const error = new Error("Network response was not ok");
+            error.response = await response.json().catch(() => ({}));
+            throw error;
+        }
+        return { data: await response.json() };
+    }
+};
+
 // --- CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
@@ -122,7 +143,6 @@ const EstimateApp = ({ userId }) => {
 
     const activeJob = useMemo(() => savedEstimates.find(j => j.id === currentJobId), [savedEstimates, currentJobId]);
 
-    // Check if Deal File is ready
     const isDealFileReady = useMemo(() => {
         if (!activeJob?.dealFile) return false;
         return activeJob.dealFile.auth && activeJob.dealFile.terms && activeJob.dealFile.satisfaction;
@@ -133,7 +153,6 @@ const EstimateApp = ({ userId }) => {
         getDoc(doc(db, 'settings', 'global')).then(snap => {
             if(snap.exists()) {
                 const s = snap.data();
-                // Ensure hardcoded key overrides if present
                 const finalKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : (s.dvlaKey || '');
                 setSettings(prev => ({...prev, ...s, dvlaKey: finalKey}));
                 setLaborRate(s.laborRate || '50');
@@ -222,50 +241,34 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
-    // --- DVLA LOOKUP WITH PROXY BYPASS (FIXED) ---
+    // --- AXIOS-STYLE DVLA LOOKUP (With Proxy) ---
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
         
         const apiKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : settings.dvlaKey;
         if (!apiKey) return alert("⚠️ DVLA Key Missing!");
 
-        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        // We use corsproxy.io because GitHub Pages (Browser) cannot talk to Gov API (Server) directly.
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles');
         
-        // Function to attempt fetch
-        const attemptFetch = async (url) => {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-                body: JSON.stringify({ registrationNumber: reg })
-            });
-            if (!response.ok) throw new Error("Fetch Failed");
-            return await response.json();
-        };
-
         try {
-            // 1. Try Direct
-            try {
-                const data = await attemptFetch(targetUrl);
-                handleDvlaSuccess(data);
-            } catch (directError) {
-                // 2. Direct Failed (CORS), Try Proxy
-                console.log("Direct connection failed (CORS likely). Switching to Proxy...");
-                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
-                const data = await attemptFetch(proxyUrl);
-                handleDvlaSuccess(data);
-            }
-        } catch (finalError) {
-            console.error(finalError);
-            alert("❌ DVLA Lookup Failed.\n\nThe Government API refused the connection (even via proxy). Please enter vehicle details manually.");
+            // Using our 'axios' wrapper to send the request
+            const response = await axios.post(proxyUrl, { registrationNumber: reg }, {
+                headers: { 'x-api-key': apiKey }
+            });
+
+            const data = response.data;
+            setMakeModel(`${data.make} ${data.colour}`);
+            setVehicleInfo(data); 
+            // Note: DVLA free API does not return VIN.
+            if(data.vin) setVin(data.vin); 
+            alert("✅ Vehicle Found!");
+
+        } catch (e) { 
+            console.error(e);
+            alert("❌ DVLA Lookup Failed.\n\nThe connection was blocked. Please manually enter the vehicle details.");
             setMakeModel("Manual Entry Required");
         }
-    };
-
-    const handleDvlaSuccess = (data) => {
-        setMakeModel(`${data.make} ${data.colour}`);
-        setVehicleInfo(data); 
-        if(data.vin) setVin(data.vin);
-        alert("✅ Vehicle Found!");
     };
 
     const decodeVin = () => { 
