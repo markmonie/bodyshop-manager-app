@@ -20,7 +20,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- STABLE DVLA LOGIC (2:22PM Engine) ---
+// --- STABLE DVLA LOGIC ---
 const axios = {
     post: async (url, data, config) => {
         const response = await fetch(url, {
@@ -48,6 +48,7 @@ const EstimateApp = ({ userId }) => {
     const [loading, setLoading] = useState(false);
     const [currentJobId, setCurrentJobId] = useState(null);
 
+    // --- GLOBAL SETTINGS ---
     const [settings, setSettings] = useState({
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319',
         bank: '80-22-60 | 06163462', dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc',
@@ -61,15 +62,16 @@ const EstimateApp = ({ userId }) => {
     const [expenses, setExpenses] = useState([]);
 
     useEffect(() => {
-        const draft = localStorage.getItem('triple_mmm_draft');
-        if (draft) {
-            try {
+        try {
+            const draft = localStorage.getItem('triple_mmm_draft');
+            if (draft) {
                 const d = JSON.parse(draft);
-                setCustomer(d.customer || customer);
-                setVehicle(d.vehicle || vehicle);
-                setRepair(d.repair || repair);
-            } catch (e) { console.error("Draft fail"); }
-        }
+                setCustomer(d.customer || { name: '', phone: '', email: '', address: '' });
+                setVehicle(d.vehicle || { reg: '', makeModel: '', vin: '', paint: '', year: '', fuel: '' });
+                setRepair(d.repair || { items: [], labourHours: '', paintMaterials: '', excess: '', photos: [] });
+            }
+        } catch (e) { console.error("Draft fail"); }
+
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
         const unsubJobs = onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), (snap) => setSavedJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         const unsubExp = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -82,14 +84,23 @@ const EstimateApp = ({ userId }) => {
 
     const totals = useMemo(() => {
         const pCost = (repair.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
-        const pPrice = pCost * (1 + (parseFloat(settings.markup) / 100));
-        const labour = (parseFloat(repair.labourHours) || 0) * (parseFloat(settings.labourRate) || 0);
+        const pPrice = pCost * (1 + (parseFloat(settings.markup || 20) / 100));
+        const labour = (parseFloat(repair.labourHours) || 0) * (parseFloat(settings.labourRate || 50) || 0);
         const paint = parseFloat(repair.paintMaterials) || 0;
         const sub = pPrice + labour + paint;
-        const vat = sub * (parseFloat(settings.vatRate) / 100);
+        const vat = sub * (parseFloat(settings.vatRate || 0) / 100);
         const total = sub + vat;
         return { sub, vat, total, due: total - (parseFloat(repair.excess) || 0), netProfit: total - (pCost + paint), labourPrice: labour, paintPrice: paint };
     }, [repair, settings]);
+
+    const loadJob = (j) => {
+        setCurrentJobId(j.id);
+        setCustomer(j.customer || { name: '', phone: '', email: '', address: '' });
+        setVehicle(j.vehicle || { reg: '', makeModel: '', vin: '', paint: '', year: '', fuel: '' });
+        setRepair(j.repair || { items: [], labourHours: '', paintMaterials: '', excess: '', photos: [] });
+        setMode('ESTIMATE');
+        window.scrollTo(0, 0);
+    };
 
     const lookupReg = async () => {
         if (!vehicle.reg) return;
@@ -102,16 +113,12 @@ const EstimateApp = ({ userId }) => {
         setLoading(false);
     };
 
-    const exportCSV = (type) => {
-        let csv = type === 'SALES' ? "Date,Reg,Customer,Amount\n" : "Date,Desc,Amount\n";
-        const list = type === 'SALES' ? savedJobs : expenses;
-        list.forEach(i => {
-            const d = new Date(i.date?.seconds * 1000 || Date.now()).toLocaleDateString();
-            csv += type === 'SALES' ? `${d},${i.vehicle?.reg || ''},${i.customer?.name || ''},${i.totals?.due || 0}\n` : `${d},${i.desc || ''},${i.amount || 0}\n`;
-        });
-        const link = document.createElement("a");
-        link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
-        link.download = `TripleMMM_${type}.csv`; link.click();
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const r = ref(storage, `workshop/${Date.now()}_${file.name}`);
+        await uploadBytes(r, file);
+        const url = await getDownloadURL(r);
+        setRepair(prev => ({ ...prev, photos: [...(prev.photos || []), url] }));
     };
 
     if (mode === 'FINANCE') return (
@@ -123,7 +130,7 @@ const EstimateApp = ({ userId }) => {
                 <div style={s.card}><span style={s.label}>Net Profit</span><div style={{ fontSize: '24px', fontWeight: 'bold', color: theme.success }}>£{savedJobs.reduce((a, b) => a + (b.totals?.netProfit || 0), 0).toFixed(2)}</div></div>
             </div>
             <div style={s.card}>
-                <span style={s.label}>Log Expenditure</span>
+                <span style={s.label}>New Expenditure</span>
                 <input id="exD" placeholder="Desc" style={s.input} />
                 <input id="exA" placeholder="Amount £" style={s.input} />
                 <button onClick={async () => {
@@ -132,15 +139,13 @@ const EstimateApp = ({ userId }) => {
                     d.value = ''; a.value = '';
                 }} style={s.btnGreen}>Log Cost</button>
             </div>
-            <button onClick={() => exportCSV('SALES')} style={{ ...s.secondaryBtn, width: '100%', marginBottom: '10px' }}>Income CSV</button>
-            <button onClick={() => exportCSV('EXPENSES')} style={{ ...s.secondaryBtn, width: '100%' }}>Expenditure CSV</button>
         </div>
     );
 
     return (
         <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', paddingBottom: '120px' }}>
             <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ color: theme.accent }}>TRIPLE MMM</h1>
+                <h1 style={{ color: theme.accent, letterSpacing: '-1px' }}>TRIPLE MMM</h1>
                 <div style={{ textAlign: 'right', fontSize: '10px' }}>{settings.coName}<br/>{settings.phone}</div>
             </div>
 
@@ -160,10 +165,18 @@ const EstimateApp = ({ userId }) => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '10px' }}>
                     <div><span style={s.label}>ESTIMATE TOTAL</span><div style={{ fontSize: '28px', fontWeight: 'bold' }}>£{totals.due.toFixed(2)}</div></div>
+                    <div style={{ textAlign: 'right' }}><span style={s.label}>Net Profit</span><div style={{ color: theme.success, fontWeight: 'bold' }}>£{totals.netProfit.toFixed(2)}</div></div>
                 </div>
             </div>
 
-            {/* RECENT JOBS */}
+            <div className="no-print" style={s.card}>
+                <span style={s.label}>Vault</span>
+                <input type="file" onChange={handleFileUpload} />
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '10px' }}>
+                    {(repair.photos || []).map((url, i) => <img key={i} src={url} style={{ width: '60px', height: '60px', borderRadius: '8px', border: '1px solid #334155' }} />)}
+                </div>
+            </div>
+
             <h3 className="no-print" style={s.label}>History</h3>
             <div className="no-print">
             {savedJobs.slice(0, 5).map(j => (
@@ -182,7 +195,7 @@ const EstimateApp = ({ userId }) => {
             </div>
 
             <div className="print-only" style={{ display: 'none', color: 'black' }}>
-                <h2>{settings.coName}</h2>
+                <h1>{settings.coName}</h1>
                 <p>{settings.address} | {settings.phone}</p>
                 <hr/>
                 <h3>Estimate: {vehicle.reg}</h3>
