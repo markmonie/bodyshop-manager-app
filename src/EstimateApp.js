@@ -4,6 +4,12 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+// ==========================================
+// 🔑 ENTER YOUR DVLA API KEY HERE
+// ==========================================
+const HARDCODED_DVLA_KEY = "lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc"; 
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 // --- CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
@@ -60,7 +66,7 @@ const EstimateApp = ({ userId }) => {
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
         email: 'markmonie72@gmail.com',
-        dvlaKey: '',
+        dvlaKey: HARDCODED_DVLA_KEY, // USES KEY FROM TOP OF FILE
         terms: 'Payment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
     });
 
@@ -116,6 +122,7 @@ const EstimateApp = ({ userId }) => {
 
     const activeJob = useMemo(() => savedEstimates.find(j => j.id === currentJobId), [savedEstimates, currentJobId]);
 
+    // Check if Deal File is ready
     const isDealFileReady = useMemo(() => {
         if (!activeJob?.dealFile) return false;
         return activeJob.dealFile.auth && activeJob.dealFile.terms && activeJob.dealFile.satisfaction;
@@ -126,7 +133,9 @@ const EstimateApp = ({ userId }) => {
         getDoc(doc(db, 'settings', 'global')).then(snap => {
             if(snap.exists()) {
                 const s = snap.data();
-                setSettings(prev => ({...prev, ...s}));
+                // Ensure hardcoded key overrides if present, otherwise use saved, otherwise empty
+                const finalKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : (s.dvlaKey || '');
+                setSettings(prev => ({...prev, ...s, dvlaKey: finalKey}));
                 setLaborRate(s.laborRate || '50');
                 setVatRate(s.vatRate || '0');
             }
@@ -213,35 +222,48 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
+    // --- DVLA LOOKUP (Smart Logic) ---
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
-        if (!settings.dvlaKey) return alert("⚠️ DVLA Key Missing in Settings!");
+        
+        // Use hardcoded key if available, otherwise settings key
+        const apiKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : settings.dvlaKey;
+        
+        if (!apiKey) return alert("⚠️ DVLA Key Missing! Edit the code or Settings.");
 
         try {
             const response = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': settings.dvlaKey
+                    'x-api-key': apiKey
                 },
                 body: JSON.stringify({ registrationNumber: reg })
             });
 
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.message || "Vehicle Not Found");
+                // If 403, key is bad. If 0/Failed to fetch, it's CORS.
+                if(response.status === 403) throw new Error("API Key Invalid/Forbidden");
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || "Failed to fetch data");
             }
 
             const data = await response.json();
             
+            // Set Data
             setMakeModel(`${data.make} ${data.colour}`);
-            setVehicleInfo(data); 
+            setVehicleInfo(data); // Stores the full object for the box
             if(data.vin) setVin(data.vin);
+            
             alert("✅ Vehicle Found!");
 
         } catch (e) { 
-            console.error(e); 
-            alert("DVLA Error: " + e.message); 
+            console.error(e);
+            if (e.message.includes("Failed to fetch")) {
+                alert("⚠️ Network Error (CORS): The Government API blocked the connection. This often happens on free hosting. Try running this locally or check your API key permissions.");
+            } else {
+                alert("DVLA Error: " + e.message); 
+            }
         }
     };
 
@@ -392,9 +414,10 @@ const EstimateApp = ({ userId }) => {
                 <label>Labor Rate (£/hr): <input value={settings.laborRate} onChange={e => setSettings({...settings, laborRate: e.target.value})} style={inputStyle} /></label>
                 <label>Parts Markup (%): <input value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} style={inputStyle} /></label>
                 
-                <div style={{background: settings.dvlaKey ? '#f0fdf4' : '#fef2f2', padding:'10px', borderRadius:'6px', border: `1px solid ${settings.dvlaKey ? 'green' : 'red'}`}}>
-                    <label style={{color: settings.dvlaKey ? 'green' : 'red', fontWeight:'bold'}}>DVLA API Key ({settings.dvlaKey ? 'ACTIVE' : 'MISSING'})</label>
-                    <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={{...inputStyle, borderColor: settings.dvlaKey ? 'green' : 'red'}} placeholder="Paste DVLA Key Here" />
+                {/* KEY VISUALIZER */}
+                <div style={{background: (settings.dvlaKey || HARDCODED_DVLA_KEY) ? '#f0fdf4' : '#fef2f2', padding:'10px', borderRadius:'6px', border: `1px solid ${(settings.dvlaKey || HARDCODED_DVLA_KEY) ? 'green' : 'red'}`}}>
+                    <label style={{color: (settings.dvlaKey || HARDCODED_DVLA_KEY) ? 'green' : 'red', fontWeight:'bold'}}>DVLA API Key ({(settings.dvlaKey || HARDCODED_DVLA_KEY).length > 5 ? 'ACTIVE' : 'MISSING'})</label>
+                    <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={{...inputStyle, borderColor: (settings.dvlaKey || HARDCODED_DVLA_KEY) ? 'green' : 'red'}} placeholder="Paste DVLA Key Here" />
                 </div>
 
                 <label>Address: <textarea value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} style={{...inputStyle, height:'60px'}} /></label>
@@ -605,46 +628,6 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     )}
                 </>
-            )}
-
-            {/* DEAL FILE */}
-            {mode === 'DEAL_FILE' && (
-                <div style={{ marginTop: '20px', padding: '20px', border: `1px solid ${theme.border}`, borderRadius: '12px', background: theme.light }}>
-                    <h2 style={{borderBottom:`2px solid ${theme.primary}`, paddingBottom:'10px', color: theme.dark}}>📂 Digital Deal File</h2>
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
-                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>1. Checklist</h4>
-                            {['terms', 'auth', 'satisfaction', 'methods'].map(type => (
-                                <div key={type} style={{marginBottom:'10px', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>
-                                    <div style={{display:'flex', justifyContent:'space-between'}}><strong>{type.toUpperCase()}</strong><span>{activeJob?.dealFile?.[type] ? '✅' : '❌'}</span></div>
-                                    <input type="file" onChange={(e) => uploadDoc(type, e.target.files[0])} style={{fontSize:'0.8em'}} />
-                                    {activeJob?.dealFile?.[type] && <a href={activeJob.dealFile[type].url} target="_blank" rel="noreferrer" style={{color: theme.primary, fontSize:'0.8em'}}>View</a>}
-                                </div>
-                            ))}
-                        </div>
-                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>2. Actions</h4>
-                            <div>📸 Photos: {photos.length}</div>
-                            <div>💰 Invoice: {invoiceNum || 'Pending'}</div>
-                            
-                            <div style={{marginTop:'20px', paddingTop:'10px', borderTop:'1px dashed #ccc'}}>
-                                <div style={{fontSize:'0.8em', color:'#666', marginBottom:'5px'}}>SEND TO: <strong>{insuranceEmail || 'No Email Set'}</strong></div>
-                                <button 
-                                    onClick={() => window.location.href = emailLink} 
-                                    disabled={!isDealFileReady}
-                                    style={{
-                                        ...primaryBtn, 
-                                        width:'100%', 
-                                        background: isDealFileReady ? theme.green : theme.disabled,
-                                        cursor: isDealFileReady ? 'pointer' : 'not-allowed'
-                                    }}
-                                >
-                                    {isDealFileReady ? '📧 SEND EMAIL PACK' : '⚠️ COMPLETE CHECKLIST FIRST'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             )}
 
             {/* SLIDING BOTTOM BAR */}
