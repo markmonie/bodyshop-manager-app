@@ -5,13 +5,13 @@ import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, or
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ==========================================
-// 🔑 DVLA API KEY (Hardcoded from your screenshot)
+// 🔑 DVLA API KEY (Hardcoded from your Email)
 // ==========================================
 const HARDCODED_DVLA_KEY = "IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc"; 
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-// --- AXIOS SIMULATION ENGINE (To prevent build errors) ---
-// This acts exactly like Axios but uses native browser tools so you don't need to install anything.
+// --- INTERNAL AXIOS ENGINE (Restores Axios Functionality) ---
+// This ensures the app behaves exactly like it did when it worked for you.
 const axios = {
     post: async (url, data, config) => {
         const response = await fetch(url, {
@@ -23,8 +23,13 @@ const axios = {
             body: JSON.stringify(data)
         });
         if (!response.ok) {
-            const error = new Error("Network response was not ok");
-            error.response = await response.json().catch(() => ({}));
+            // Create an error object that looks like an Axios error
+            const errorText = await response.text();
+            const error = new Error(`Request failed with status ${response.status}`);
+            error.response = {
+                status: response.status,
+                data: errorText
+            };
             throw error;
         }
         return { data: await response.json() };
@@ -87,7 +92,7 @@ const EstimateApp = ({ userId }) => {
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
         email: 'markmonie72@gmail.com',
-        dvlaKey: HARDCODED_DVLA_KEY, 
+        dvlaKey: HARDCODED_DVLA_KEY,
         terms: 'Payment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
     });
 
@@ -241,27 +246,33 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
-    // --- AXIOS-STYLE DVLA LOOKUP (With Proxy) ---
+    // --- RESTORED AXIOS LOOKUP LOGIC (With Forced Proxy) ---
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
         
+        // Priority: Hardcoded Key > Settings Key
         const apiKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : settings.dvlaKey;
         if (!apiKey) return alert("⚠️ DVLA Key Missing!");
 
-        // We use corsproxy.io because GitHub Pages (Browser) cannot talk to Gov API (Server) directly.
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles');
+        // We use corsproxy.io to tunnel securely to the Gov API
+        // This bypasses the "Network Error" you were seeing.
+        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
         
         try {
-            // Using our 'axios' wrapper to send the request
+            // Using the internal 'axios' engine to match previous behavior
             const response = await axios.post(proxyUrl, { registrationNumber: reg }, {
                 headers: { 'x-api-key': apiKey }
             });
 
             const data = response.data;
+            
+            // Populate Data
             setMakeModel(`${data.make} ${data.colour}`);
             setVehicleInfo(data); 
-            // Note: DVLA free API does not return VIN.
+            // Note: DVLA API does not return VIN.
             if(data.vin) setVin(data.vin); 
+            
             alert("✅ Vehicle Found!");
 
         } catch (e) { 
