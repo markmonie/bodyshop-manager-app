@@ -116,7 +116,6 @@ const EstimateApp = ({ userId }) => {
 
     const activeJob = useMemo(() => savedEstimates.find(j => j.id === currentJobId), [savedEstimates, currentJobId]);
 
-    // Check if Deal File is ready
     const isDealFileReady = useMemo(() => {
         if (!activeJob?.dealFile) return false;
         return activeJob.dealFile.auth && activeJob.dealFile.terms && activeJob.dealFile.satisfaction;
@@ -149,13 +148,7 @@ const EstimateApp = ({ userId }) => {
         setCurrentJobId(est.id); 
         setName(est.customer); setAddress(est.address || ''); setPhone(est.phone || ''); setEmail(est.email || ''); 
         setReg(est.reg); setMileage(est.mileage || ''); setMakeModel(est.makeModel || ''); setVin(est.vin || ''); setPaintCode(est.paintCode || ''); 
-        
-        setClaimNum(est.claimNum || ''); 
-        setNetworkCode(est.networkCode || ''); 
-        setInsuranceCo(est.insuranceCo || ''); 
-        setInsuranceAddr(est.insuranceAddr || ''); 
-        setInsuranceEmail(est.insuranceEmail || '');
-
+        setClaimNum(est.claimNum || ''); setNetworkCode(est.networkCode || ''); setInsuranceCo(est.insuranceCo || ''); setInsuranceAddr(est.insuranceAddr || ''); setInsuranceEmail(est.insuranceEmail || '');
         setItems(est.items || []); setLaborHours(est.laborHours || ''); setLaborRate(est.laborRate || settings.laborRate); setVatRate(est.vatRate || settings.vatRate);
         setExcess(est.excess || ''); setPhotos(est.photos || []); setBookingDate(est.bookingDate || ''); setBookingTime(est.bookingTime || '09:00'); 
         setPaintAllocated(est.paintAllocated || ''); setInvoiceNum(est.invoiceNumber || '');
@@ -220,13 +213,11 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
-    // FIXED: DVLA LOOKUP (Real Connection)
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
-        if (!settings.dvlaKey) return alert("⚠️ DVLA Key Missing! Go to Settings and paste your key.");
+        if (!settings.dvlaKey) return alert("⚠️ DVLA Key Missing in Settings!");
 
         try {
-            // Using FETCH to avoid build errors
             const response = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
                 method: 'POST',
                 headers: {
@@ -243,15 +234,14 @@ const EstimateApp = ({ userId }) => {
 
             const data = await response.json();
             
-            // Success: Populate Data
             setMakeModel(`${data.make} ${data.colour}`);
             setVehicleInfo(data); 
-            setVin(data.vin || ''); // Some DVLA responses include VIN, some don't
+            if(data.vin) setVin(data.vin);
             alert("✅ Vehicle Found!");
 
         } catch (e) { 
             console.error(e); 
-            alert("DVLA Error: " + e.message + "\n\n(Check your API Key in Settings)"); 
+            alert("DVLA Error: " + e.message); 
         }
     };
 
@@ -402,7 +392,6 @@ const EstimateApp = ({ userId }) => {
                 <label>Labor Rate (£/hr): <input value={settings.laborRate} onChange={e => setSettings({...settings, laborRate: e.target.value})} style={inputStyle} /></label>
                 <label>Parts Markup (%): <input value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} style={inputStyle} /></label>
                 
-                {/* KEY VISUALIZER */}
                 <div style={{background: settings.dvlaKey ? '#f0fdf4' : '#fef2f2', padding:'10px', borderRadius:'6px', border: `1px solid ${settings.dvlaKey ? 'green' : 'red'}`}}>
                     <label style={{color: settings.dvlaKey ? 'green' : 'red', fontWeight:'bold'}}>DVLA API Key ({settings.dvlaKey ? 'ACTIVE' : 'MISSING'})</label>
                     <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={{...inputStyle, borderColor: settings.dvlaKey ? 'green' : 'red'}} placeholder="Paste DVLA Key Here" />
