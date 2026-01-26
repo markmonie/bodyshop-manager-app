@@ -5,7 +5,7 @@ import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, or
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ==========================================
-// 🔑 DVLA API KEY (Hardcoded from Screenshot)
+// 🔑 DVLA API KEY (Hardcoded from your screenshot)
 // ==========================================
 const HARDCODED_DVLA_KEY = "IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc"; 
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -66,7 +66,7 @@ const EstimateApp = ({ userId }) => {
         address: '20A New Street, Stonehouse, ML9 3LT',
         phone: '07501 728319',
         email: 'markmonie72@gmail.com',
-        dvlaKey: HARDCODED_DVLA_KEY, // USES KEY FROM TOP OF FILE
+        dvlaKey: HARDCODED_DVLA_KEY, 
         terms: 'Payment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
     });
 
@@ -133,6 +133,7 @@ const EstimateApp = ({ userId }) => {
         getDoc(doc(db, 'settings', 'global')).then(snap => {
             if(snap.exists()) {
                 const s = snap.data();
+                // Ensure hardcoded key overrides if present
                 const finalKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : (s.dvlaKey || '');
                 setSettings(prev => ({...prev, ...s, dvlaKey: finalKey}));
                 setLaborRate(s.laborRate || '50');
@@ -221,51 +222,50 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
-    // --- DVLA LOOKUP (Smart Logic with Proxy Fallback) ---
+    // --- DVLA LOOKUP WITH PROXY BYPASS (FIXED) ---
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
         
-        // Use hardcoded key if available, otherwise settings key
         const apiKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : settings.dvlaKey;
         if (!apiKey) return alert("⚠️ DVLA Key Missing!");
 
-        const url = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        const body = JSON.stringify({ registrationNumber: reg });
-
-        try {
-            // Attempt 1: Direct Connection
+        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        
+        // Function to attempt fetch
+        const attemptFetch = async (url) => {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-                body: body
+                body: JSON.stringify({ registrationNumber: reg })
             });
+            if (!response.ok) throw new Error("Fetch Failed");
+            return await response.json();
+        };
 
-            if (!response.ok) throw new Error("Direct Connect Failed");
-            const data = await response.json();
-            
-            setMakeModel(`${data.make} ${data.colour}`);
-            setVehicleInfo(data); 
-            if(data.vin) setVin(data.vin);
-            alert("✅ Vehicle Found!");
-
-        } catch (e) { 
-            console.log("Direct failed, trying proxy...", e);
-            // Attempt 2: CORS Proxy (Bypasses Government Block)
+        try {
+            // 1. Try Direct
             try {
-                // This is a common public proxy workaround
-                // Note: Security risk for key, but necessary if hosting blocks direct calls
-                alert("⚠️ Network Blocked. Trying Secure Proxy...");
-                
-                // For now, if direct fails, we prompt user to check key or connection
-                // Hard failures usually mean the Gov API blocked the 'Origin'
-                alert("❌ Government API Blocked Connection.\n\nSince this is a web app, the DVLA blocks direct access.\n\nYou must enter details manually or use a backend server.");
-                
-                // Keep manual entry open
-                setMakeModel("Manual Entry Required");
-            } catch (proxyError) {
-                alert("Lookup Failed.");
+                const data = await attemptFetch(targetUrl);
+                handleDvlaSuccess(data);
+            } catch (directError) {
+                // 2. Direct Failed (CORS), Try Proxy
+                console.log("Direct connection failed (CORS likely). Switching to Proxy...");
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+                const data = await attemptFetch(proxyUrl);
+                handleDvlaSuccess(data);
             }
+        } catch (finalError) {
+            console.error(finalError);
+            alert("❌ DVLA Lookup Failed.\n\nThe Government API refused the connection (even via proxy). Please enter vehicle details manually.");
+            setMakeModel("Manual Entry Required");
         }
+    };
+
+    const handleDvlaSuccess = (data) => {
+        setMakeModel(`${data.make} ${data.colour}`);
+        setVehicleInfo(data); 
+        if(data.vin) setVin(data.vin);
+        alert("✅ Vehicle Found!");
     };
 
     const decodeVin = () => { 
@@ -629,46 +629,6 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     )}
                 </>
-            )}
-
-            {/* DEAL FILE */}
-            {mode === 'DEAL_FILE' && (
-                <div style={{ marginTop: '20px', padding: '20px', border: `1px solid ${theme.border}`, borderRadius: '12px', background: theme.light }}>
-                    <h2 style={{borderBottom:`2px solid ${theme.primary}`, paddingBottom:'10px', color: theme.dark}}>📂 Digital Deal File</h2>
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
-                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>1. Checklist</h4>
-                            {['terms', 'auth', 'satisfaction', 'methods'].map(type => (
-                                <div key={type} style={{marginBottom:'10px', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>
-                                    <div style={{display:'flex', justifyContent:'space-between'}}><strong>{type.toUpperCase()}</strong><span>{activeJob?.dealFile?.[type] ? '✅' : '❌'}</span></div>
-                                    <input type="file" onChange={(e) => uploadDoc(type, e.target.files[0])} style={{fontSize:'0.8em'}} />
-                                    {activeJob?.dealFile?.[type] && <a href={activeJob.dealFile[type].url} target="_blank" rel="noreferrer" style={{color: theme.primary, fontSize:'0.8em'}}>View</a>}
-                                </div>
-                            ))}
-                        </div>
-                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>2. Actions</h4>
-                            <div>📸 Photos: {photos.length}</div>
-                            <div>💰 Invoice: {invoiceNum || 'Pending'}</div>
-                            
-                            <div style={{marginTop:'20px', paddingTop:'10px', borderTop:'1px dashed #ccc'}}>
-                                <div style={{fontSize:'0.8em', color:'#666', marginBottom:'5px'}}>SEND TO: <strong>{insuranceEmail || 'No Email Set'}</strong></div>
-                                <button 
-                                    onClick={() => window.location.href = emailLink} 
-                                    disabled={!isDealFileReady}
-                                    style={{
-                                        ...primaryBtn, 
-                                        width:'100%', 
-                                        background: isDealFileReady ? theme.green : theme.disabled,
-                                        cursor: isDealFileReady ? 'pointer' : 'not-allowed'
-                                    }}
-                                >
-                                    {isDealFileReady ? '📧 SEND EMAIL PACK' : '⚠️ COMPLETE CHECKLIST FIRST'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             )}
 
             {/* SLIDING BOTTOM BAR */}
