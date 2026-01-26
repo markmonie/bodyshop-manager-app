@@ -5,13 +5,12 @@ import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, or
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ==========================================
-// 🔑 DVLA API KEY (Hardcoded from your Email)
+// 🔑 DVLA API KEY (Hardcoded from your Screenshot)
 // ==========================================
 const HARDCODED_DVLA_KEY = "IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc"; 
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-// --- INTERNAL AXIOS ENGINE (Restores Axios Functionality) ---
-// This ensures the app behaves exactly like it did when it worked for you.
+// --- INTERNAL AXIOS ENGINE (Restores Functionality) ---
 const axios = {
     post: async (url, data, config) => {
         const response = await fetch(url, {
@@ -23,14 +22,7 @@ const axios = {
             body: JSON.stringify(data)
         });
         if (!response.ok) {
-            // Create an error object that looks like an Axios error
-            const errorText = await response.text();
-            const error = new Error(`Request failed with status ${response.status}`);
-            error.response = {
-                status: response.status,
-                data: errorText
-            };
-            throw error;
+            throw new Error(`Status: ${response.status}`);
         }
         return { data: await response.json() };
     }
@@ -119,6 +111,7 @@ const EstimateApp = ({ userId }) => {
     const [bookingDate, setBookingDate] = useState(''); 
     const [bookingTime, setBookingTime] = useState('09:00'); 
     const [foundHistory, setFoundHistory] = useState(false);
+    const [isLookingUp, setIsLookingUp] = useState(false); // New Loading State
     
     // Items & Costs
     const [itemDesc, setItemDesc] = useState('');
@@ -246,39 +239,42 @@ const EstimateApp = ({ userId }) => {
         setFoundHistory(false);
     };
 
-    // --- RESTORED AXIOS LOOKUP LOGIC (With Forced Proxy) ---
+    // --- SMART DVLA LOOKUP (Silent Fail / No Popup) ---
     const lookupReg = async () => {
         if (!reg || reg.length < 3) return alert("Enter Reg");
+        setIsLookingUp(true);
         
-        // Priority: Hardcoded Key > Settings Key
         const apiKey = HARDCODED_DVLA_KEY.length > 5 ? HARDCODED_DVLA_KEY : settings.dvlaKey;
-        if (!apiKey) return alert("⚠️ DVLA Key Missing!");
-
-        // We use corsproxy.io to tunnel securely to the Gov API
-        // This bypasses the "Network Error" you were seeing.
+        
+        // Use 'thingproxy' instead of 'corsproxy' (More permissive)
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+        const proxyUrl = 'https://thingproxy.freeboard.io/fetch/' + targetUrl;
         
         try {
-            // Using the internal 'axios' engine to match previous behavior
             const response = await axios.post(proxyUrl, { registrationNumber: reg }, {
                 headers: { 'x-api-key': apiKey }
             });
 
             const data = response.data;
-            
-            // Populate Data
             setMakeModel(`${data.make} ${data.colour}`);
             setVehicleInfo(data); 
-            // Note: DVLA API does not return VIN.
             if(data.vin) setVin(data.vin); 
-            
             alert("✅ Vehicle Found!");
 
         } catch (e) { 
-            console.error(e);
-            alert("❌ DVLA Lookup Failed.\n\nThe connection was blocked. Please manually enter the vehicle details.");
+            console.error("Lookup failed silently:", e);
+            // FAIL SAFE: Do NOT show error popup. Just unlock manual entry.
             setMakeModel("Manual Entry Required");
+            setVehicleInfo({
+                make: "Connection Blocked",
+                colour: "",
+                yearOfManufacture: "N/A",
+                fuelType: "Manual Entry Needed",
+                taxStatus: "Unknown",
+                motStatus: "Unknown"
+            });
+        } finally {
+            setIsLookingUp(false);
         }
     };
 
@@ -547,7 +543,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
                 <div>
                     <h4 style={headerStyle}>VEHICLE</h4>
-                    <div style={{display:'flex', gap:'10px'}}><input placeholder="REG" value={reg} onChange={handleRegChange} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background: theme.light}} /><button onClick={lookupReg} className="no-print" style={secondaryBtn}>🔎</button></div>
+                    <div style={{display:'flex', gap:'10px'}}><input placeholder="REG" value={reg} onChange={handleRegChange} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background: theme.light}} /><button onClick={lookupReg} className="no-print" style={secondaryBtn}>{isLookingUp ? '...' : '🔎'}</button></div>
                     {foundHistory && <div style={{color:'green', fontSize:'0.8em'}}>✓ Customer Found</div>}
                     
                     {/* DEDICATED VEHICLE INFO BOX */}
