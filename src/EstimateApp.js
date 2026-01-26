@@ -20,7 +20,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- STABLE DVLA LOGIC ---
 const axios = {
     post: async (url, data, config) => {
         const response = await fetch(url, {
@@ -33,7 +32,6 @@ const axios = {
     }
 };
 
-// --- PREMIUM RACING THEME ---
 const theme = { bg: '#0f172a', card: '#1e293b', accent: '#f97316', text: '#f8fafc', textDim: '#94a3b8', success: '#16a34a', danger: '#ef4444', border: '#334155' };
 const s = {
     card: { background: theme.card, borderRadius: '16px', padding: '20px', marginBottom: '20px', border: `1px solid ${theme.border}`, boxShadow: '0 4px 20px rgba(0,0,0,0.5)' },
@@ -47,8 +45,8 @@ const EstimateApp = ({ userId }) => {
     const [mode, setMode] = useState('ESTIMATE');
     const [loading, setLoading] = useState(false);
     const [currentJobId, setCurrentJobId] = useState(null);
+    const [expPhoto, setExpPhoto] = useState(null);
 
-    // --- GLOBAL SETTINGS ---
     const [settings, setSettings] = useState({
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319',
         bank: '80-22-60 | 06163462', dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc',
@@ -62,25 +60,20 @@ const EstimateApp = ({ userId }) => {
     const [expenses, setExpenses] = useState([]);
 
     useEffect(() => {
-        try {
-            const draft = localStorage.getItem('triple_mmm_draft');
-            if (draft) {
+        const draft = localStorage.getItem('triple_mmm_draft');
+        if (draft) {
+            try {
                 const d = JSON.parse(draft);
-                setCustomer(d.customer || { name: '', phone: '', email: '', address: '' });
-                setVehicle(d.vehicle || { reg: '', makeModel: '', vin: '', paint: '', year: '', fuel: '' });
-                setRepair(d.repair || { items: [], labourHours: '', paintMaterials: '', excess: '', photos: [] });
-            }
-        } catch (e) { console.error("Draft fail"); }
-
+                setCustomer(d.customer || {}); setVehicle(d.vehicle || {}); setRepair(d.repair || { items: [], photos: [] });
+            } catch (e) {}
+        }
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
         const unsubJobs = onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), (snap) => setSavedJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         const unsubExp = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         return () => { unsubJobs(); unsubExp(); };
     }, []);
 
-    useEffect(() => {
-        localStorage.setItem('triple_mmm_draft', JSON.stringify({ customer, vehicle, repair }));
-    }, [customer, vehicle, repair]);
+    useEffect(() => { localStorage.setItem('triple_mmm_draft', JSON.stringify({ customer, vehicle, repair })); }, [customer, vehicle, repair]);
 
     const totals = useMemo(() => {
         const pCost = (repair.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
@@ -93,15 +86,6 @@ const EstimateApp = ({ userId }) => {
         return { sub, vat, total, due: total - (parseFloat(repair.excess) || 0), netProfit: total - (pCost + paint), labourPrice: labour, paintPrice: paint };
     }, [repair, settings]);
 
-    const loadJob = (j) => {
-        setCurrentJobId(j.id);
-        setCustomer(j.customer || { name: '', phone: '', email: '', address: '' });
-        setVehicle(j.vehicle || { reg: '', makeModel: '', vin: '', paint: '', year: '', fuel: '' });
-        setRepair(j.repair || { items: [], labourHours: '', paintMaterials: '', excess: '', photos: [] });
-        setMode('ESTIMATE');
-        window.scrollTo(0, 0);
-    };
-
     const lookupReg = async () => {
         if (!vehicle.reg) return;
         setLoading(true);
@@ -113,49 +97,75 @@ const EstimateApp = ({ userId }) => {
         setLoading(false);
     };
 
-    const handleFileUpload = async (e) => {
+    const handleFileUpload = async (e, path) => {
         const file = e.target.files[0]; if (!file) return;
-        const r = ref(storage, `workshop/${Date.now()}_${file.name}`);
+        const r = ref(storage, `${path}/${Date.now()}_${file.name}`);
         await uploadBytes(r, file);
         const url = await getDownloadURL(r);
-        setRepair(prev => ({ ...prev, photos: [...(prev.photos || []), url] }));
+        if (path === 'expenses') setExpPhoto(url);
+        else setRepair(prev => ({ ...prev, photos: [...(prev.photos || []), url] }));
+    };
+
+    const exportCSV = (type) => {
+        let csv = type === 'SALES' ? "Date,Reg,Customer,Amount\n" : "Date,Description,Amount,ReceiptURL\n";
+        const list = type === 'SALES' ? savedJobs : expenses;
+        list.forEach(i => {
+            const d = new Date(i.date?.seconds * 1000 || Date.now()).toLocaleDateString();
+            csv += type === 'SALES' ? `${d},${i.vehicle?.reg},${i.customer?.name},${i.totals?.due}\n` : `${d},${i.desc},${i.amount},${i.receiptUrl || ''}\n`;
+        });
+        const link = document.createElement("a");
+        link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
+        link.download = `TripleMMM_${type}.csv`; link.click();
     };
 
     if (mode === 'FINANCE') return (
         <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px' }}>
-            <button onClick={() => setMode('ESTIMATE')} style={s.secondaryBtn}>← WORKSHOP</button>
+            <button onClick={() => setMode('ESTIMATE')} style={s.secondaryBtn}>← BACK</button>
             <h2 style={{ color: theme.accent, marginTop: '20px' }}>FINANCIAL DEPARTMENT</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div style={s.card}><span style={s.label}>Total Income</span><div style={{ fontSize: '24px', fontWeight: 'bold' }}>£{savedJobs.reduce((a, b) => a + (b.totals?.due || 0), 0).toFixed(2)}</div></div>
                 <div style={s.card}><span style={s.label}>Net Profit</span><div style={{ fontSize: '24px', fontWeight: 'bold', color: theme.success }}>£{savedJobs.reduce((a, b) => a + (b.totals?.netProfit || 0), 0).toFixed(2)}</div></div>
             </div>
             <div style={s.card}>
-                <span style={s.label}>New Expenditure</span>
-                <input id="exD" placeholder="Desc" style={s.input} />
+                <span style={s.label}>Log Expenditure (Costs)</span>
+                <input id="exD" placeholder="Stock/Materials/Rent" style={s.input} />
                 <input id="exA" placeholder="Amount £" style={s.input} />
+                <span style={s.label}>Upload Receipt Photo</span>
+                <input type="file" onChange={(e) => handleFileUpload(e, 'expenses')} style={{marginBottom:'10px'}} />
+                {expPhoto && <p style={{color:theme.success, fontSize:'10px'}}>Receipt Linked ✓</p>}
                 <button onClick={async () => {
                     const d = document.getElementById('exD'), a = document.getElementById('exA');
-                    await addDoc(collection(db, 'expenses'), { desc: d.value, amount: a.value, date: serverTimestamp() });
-                    d.value = ''; a.value = '';
-                }} style={s.btnGreen}>Log Cost</button>
+                    await addDoc(collection(db, 'expenses'), { desc: d.value, amount: a.value, receiptUrl: expPhoto, date: serverTimestamp() });
+                    d.value = ''; a.value = ''; setExpPhoto(null);
+                }} style={{...s.btnGreen, width:'100%'}}>Save Expenditure</button>
             </div>
+            <button onClick={() => exportCSV('SALES')} style={{ ...s.secondaryBtn, width: '100%', marginBottom: '10px' }}>Download Income CSV (Accountant)</button>
+            <button onClick={() => exportCSV('EXPENSES')} style={{ ...s.secondaryBtn, width: '100%' }}>Download Expenditure CSV (Accountant)</button>
         </div>
     );
 
     return (
         <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', paddingBottom: '120px' }}>
             <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ color: theme.accent, letterSpacing: '-1px' }}>TRIPLE MMM</h1>
+                <h1 style={{ color: theme.accent, letterSpacing: '-1px' }}>TRIPLE <span style={{color:'white'}}>MMM</span></h1>
                 <div style={{ textAlign: 'right', fontSize: '10px' }}>{settings.coName}<br/>{settings.phone}</div>
             </div>
 
             <div className="no-print" style={s.card}>
-                <span style={s.label}>Registration</span>
+                <span style={s.label}>Vehicle Intake (DVLA)</span>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                     <input style={{ ...s.input, fontSize: '24px', fontWeight: '900', color: theme.accent, textAlign: 'center', marginBottom: 0 }} value={vehicle.reg} onChange={e => setVehicle({ ...vehicle, reg: e.target.value.toUpperCase() })} />
                     <button onClick={lookupReg} style={{...s.btnGreen, width: '80px'}}>{loading ? '...' : '🔎'}</button>
                 </div>
                 <input style={s.input} placeholder="Make & Model" value={vehicle.makeModel} onChange={e => setVehicle({...vehicle, makeModel: e.target.value})} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={{background: '#0f172a', padding: '10px', borderRadius: '8px'}}><span style={s.label}>Year</span>{vehicle.year}</div>
+                    <div style={{background: '#0f172a', padding: '10px', borderRadius: '8px'}}><span style={s.label}>Fuel</span>{vehicle.fuel}</div>
+                </div>
+                <div style={{marginTop:'10px'}}>
+                    <span style={s.label}>Chassis / VIN (Manual Entry)</span>
+                    <input style={s.input} placeholder="Enter Chassis Number" value={vehicle.vin} onChange={e => setVehicle({...vehicle, vin: e.target.value})} />
+                </div>
             </div>
 
             <div className="no-print" style={{ ...s.card, background: theme.accent }}>
@@ -165,22 +175,14 @@ const EstimateApp = ({ userId }) => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '10px' }}>
                     <div><span style={s.label}>ESTIMATE TOTAL</span><div style={{ fontSize: '28px', fontWeight: 'bold' }}>£{totals.due.toFixed(2)}</div></div>
-                    <div style={{ textAlign: 'right' }}><span style={s.label}>Net Profit</span><div style={{ color: theme.success, fontWeight: 'bold' }}>£{totals.netProfit.toFixed(2)}</div></div>
+                    <div style={{ textAlign: 'right' }}><span style={s.label}>Profit Check</span><div style={{ color: theme.success, fontWeight: 'bold' }}>£{totals.netProfit.toFixed(2)}</div></div>
                 </div>
             </div>
 
-            <div className="no-print" style={s.card}>
-                <span style={s.label}>Vault</span>
-                <input type="file" onChange={handleFileUpload} />
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '10px' }}>
-                    {(repair.photos || []).map((url, i) => <img key={i} src={url} style={{ width: '60px', height: '60px', borderRadius: '8px', border: '1px solid #334155' }} />)}
-                </div>
-            </div>
-
-            <h3 className="no-print" style={s.label}>History</h3>
+            <h3 className="no-print" style={s.label}>Workshop History</h3>
             <div className="no-print">
             {savedJobs.slice(0, 5).map(j => (
-                <div key={j.id} onClick={() => loadJob(j)} style={{ ...s.card, padding: '15px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }}>
+                <div key={j.id} onClick={() => { setCustomer(j.customer); setVehicle(j.vehicle); setRepair(j.repair); setCurrentJobId(j.id); }} style={{ ...s.card, padding: '15px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }}>
                     <span>{j.vehicle?.reg} - {j.customer?.name}</span>
                     <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'estimates', j.id)); }} style={{ background: theme.danger, border: 'none', color: 'white', borderRadius: '50%', width: '30px', height: '30px' }}>✕</button>
                 </div>
@@ -188,38 +190,39 @@ const EstimateApp = ({ userId }) => {
             </div>
 
             <div className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: theme.card, padding: '20px', display: 'flex', gap: '10px', borderTop: `1px solid ${theme.border}`, zIndex: 1000 }}>
-                <button onClick={async () => { await setDoc(doc(db, 'estimates', currentJobId || Date.now().toString()), { customer, vehicle, repair, totals, createdAt: serverTimestamp() }); alert("Saved"); }} style={{ ...s.btnGreen, flex: 2 }}>SAVE JOB</button>
+                <button onClick={async () => { await setDoc(doc(db, 'estimates', currentJobId || Date.now().toString()), { customer, vehicle, repair, totals, createdAt: serverTimestamp() }); alert("Sync Successful"); }} style={{ ...s.btnGreen, flex: 2 }}>SYNC JOB</button>
                 <button onClick={() => setMode('FINANCE')} style={s.secondaryBtn}>📊</button>
                 <button onClick={() => window.print()} style={s.secondaryBtn}>🖨️</button>
                 <button onClick={() => { localStorage.removeItem('triple_mmm_draft'); window.location.reload(); }} style={{ ...s.secondaryBtn, background: theme.danger }}>NEW</button>
             </div>
-
+            
             <div className="print-only" style={{ display: 'none', color: 'black' }}>
-                <h1>{settings.coName}</h1>
-                <p>{settings.address} | {settings.phone}</p>
-                <hr/>
-                <h3>Estimate: {vehicle.reg}</h3>
-                <p>Labour: £{totals.labourPrice.toFixed(2)}</p>
-                <p>Paint & Materials: £{totals.paintPrice.toFixed(2)}</p>
-                <h2>Total Due: £{totals.due.toFixed(2)}</h2>
-                <p style={{fontSize: '10px', marginTop: '50px'}}>{settings.terms} | Bank: {settings.bank}</p>
+                <div style={{ borderBottom: '3px solid #f97316', paddingBottom: '10px', marginBottom: '20px' }}>
+                    <h1>{settings.coName}</h1>
+                    <p>{settings.address} | {settings.phone}</p>
+                </div>
+                <h3>Estimate: {vehicle.reg} - {vehicle.makeModel}</h3>
+                <p>Chassis: {vehicle.vin}</p>
+                <div style={{ margin: '20px 0', border: '1px solid #ccc', padding: '15px' }}>
+                    <p>Labour: £{totals.labourPrice.toFixed(2)}</p>
+                    <p>Paint & Materials: £{totals.paintPrice.toFixed(2)}</p>
+                    <hr/>
+                    <h2 style={{ textAlign: 'right' }}>Total Due: £{totals.due.toFixed(2)}</h2>
+                </div>
+                <div style={{ fontSize: '12px' }}>
+                    <strong>Bank:</strong> {settings.bank}<br/>
+                    <strong>Terms:</strong> {settings.terms}
+                </div>
             </div>
-            <style>{`
-                @media print { 
-                    .no-print { display: none !important; } 
-                    .print-only { display: block !important; }
-                    body { background: white !important; }
-                }
-            `}</style>
+
+            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; } }`}</style>
         </div>
     );
 };
 
 const App = () => {
     const [u, sU] = useState(null);
-    useEffect(() => {
-        onAuthStateChanged(auth, u => u ? sU(u.uid) : signInAnonymously(auth).catch(e => console.error(e)));
-    }, []);
-    return u ? <EstimateApp userId={u} /> : <div style={{background: '#0f172a', color: '#f97316', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>STARTING WORKSHOP ENGINE...</div>;
+    useEffect(() => { onAuthStateChanged(auth, u => u ? sU(u.uid) : signInAnonymously(auth).catch(e => console.error(e))); }, []);
+    return u ? <EstimateApp userId={u} /> : null;
 };
 export default App;
