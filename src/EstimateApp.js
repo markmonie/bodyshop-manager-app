@@ -5,9 +5,9 @@ import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, or
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ==========================================
-// 🔑 CONFIG & DVLA KEY
+// 🔑 DVLA API KEY & CONFIG
 // ==========================================
-const DVLA_KEY = "IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc"; 
+const HARDCODED_DVLA_KEY = "IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc"; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
@@ -24,14 +24,27 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- STYLING ---
+// --- PREMIUM DESIGN SYSTEM ---
 const theme = { bg: '#0f172a', card: '#1e293b', accent: '#f97316', text: '#f8fafc', textDim: '#94a3b8', success: '#22c55e', danger: '#ef4444', border: '#334155' };
 const s = {
-    card: { background: theme.card, borderRadius: '16px', padding: '20px', marginBottom: '20px', border: `1px solid ${theme.border}` },
-    input: { width: '100%', background: '#0f172a', border: `1px solid ${theme.border}`, color: theme.text, padding: '12px', borderRadius: '8px', marginBottom: '10px', outline: 'none' },
+    card: { background: theme.card, borderRadius: '16px', padding: '20px', marginBottom: '20px', border: `1px solid ${theme.border}`, boxShadow: '0 4px 10px rgba(0,0,0,0.3)' },
+    input: { width: '100%', background: '#0f172a', border: `1px solid ${theme.border}`, color: theme.text, padding: '12px', borderRadius: '8px', marginBottom: '10px', outline: 'none', fontSize: '16px' },
     label: { color: theme.accent, fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px', display: 'block' },
-    btn: { background: theme.accent, color: 'white', border: 'none', padding: '14px 20px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' },
-    badge: { padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold' }
+    btn: { background: theme.accent, color: 'white', border: 'none', padding: '14px 20px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+    secondaryBtn: { background: '#334155', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }
+};
+
+// --- INTERNAL AXIOS ENGINE ---
+const axios = {
+    post: async (url, data, config) => {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...config.headers },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) { throw new Error(`DVLA Error: ${response.status}`); }
+        return { data: await response.json() };
+    }
 };
 
 const EstimateApp = ({ userId }) => {
@@ -40,7 +53,8 @@ const EstimateApp = ({ userId }) => {
     const [saveStatus, setSaveStatus] = useState('IDLE');
     const [currentJobId, setCurrentJobId] = useState(null);
 
-    const [customer, setCustomer] = useState({ name: '', phone: '', address: '' });
+    const [customer, setCustomer] = useState({ name: '', phone: '', address: '', email: '' });
+    const [insurance, setInsurance] = useState({ co: '', claim: '', network: '', email: '' });
     const [vehicle, setVehicle] = useState({ reg: '', makeModel: '', vin: '', paint: '' });
     const [job, setJob] = useState({ items: [], laborHours: '', laborRate: '50', markup: '20', paintCost: '', excess: '', photos: [] });
     const [expenses, setExpenses] = useState([]);
@@ -48,30 +62,23 @@ const EstimateApp = ({ userId }) => {
     const [expInput, setExpInput] = useState({ desc: '', amount: '', category: 'Stock' });
 
     useEffect(() => {
-        onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), (snap) => setSavedJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubJobs = onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), (snap) => setSavedJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubExp = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => { unsubJobs(); unsubExp(); };
     }, []);
 
-    // --- DVLA CONNECTION ---
     const lookupReg = async () => {
-        if (!vehicle.reg) return;
+        if (!vehicle.reg || vehicle.reg.length < 3) return alert("Enter Reg");
         setLoading(true);
         const proxy = `https://corsproxy.io/?${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
-            const res = await fetch(proxy, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'x-api-key': DVLA_KEY },
-                body: JSON.stringify({ registrationNumber: vehicle.reg })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setVehicle(v => ({ ...v, makeModel: `${data.make} ${data.colour}` }));
-            }
-        } catch (e) { console.error("Lookup failed"); }
+            const res = await axios.post(proxy, { registrationNumber: vehicle.reg }, { headers: { 'x-api-key': HARDCODED_DVLA_KEY } });
+            setVehicle(v => ({ ...v, makeModel: `${res.data.make} ${res.data.colour}` }));
+            alert("✅ Vehicle Found!");
+        } catch (e) { alert("⚠️ Connection Blocked. Manual Entry Enabled."); }
         setLoading(false);
     };
 
-    // --- LOGIC ---
     const totals = useMemo(() => {
         const pCost = job.items.reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
         const pPrice = pCost * (1 + (parseFloat(job.markup) / 100));
@@ -82,14 +89,25 @@ const EstimateApp = ({ userId }) => {
 
     const saveJob = async () => {
         setSaveStatus('SAVING');
-        const data = { customer, vehicle, job, totals, createdAt: serverTimestamp() };
-        if (currentJobId) await updateDoc(doc(db, 'estimates', currentJobId), data);
-        else await addDoc(collection(db, 'estimates'), data);
-        setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 2000);
+        const data = { customer, insurance, vehicle, job, totals, createdAt: serverTimestamp() };
+        try {
+            if (currentJobId) await updateDoc(doc(db, 'estimates', currentJobId), data);
+            else { const docRef = await addDoc(collection(db, 'estimates'), data); setCurrentJobId(docRef.id); }
+            setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 2000);
+        } catch (e) { setSaveStatus('IDLE'); }
     };
 
-    const deleteJob = async (id, e) => { e.stopPropagation(); if (window.confirm("Delete job permanently?")) await deleteDoc(doc(db, 'estimates', id)); };
-    
+    const loadJob = (j) => {
+        setCurrentJobId(j.id);
+        setCustomer(j.customer || { name: '', phone: '', address: '', email: '' });
+        setInsurance(j.insurance || { co: '', claim: '', network: '', email: '' });
+        setVehicle(j.vehicle || { reg: '', makeModel: '', vin: '', paint: '' });
+        setJob(j.job || { items: [], laborHours: '', laborRate: '50', markup: '20', paintCost: '', excess: '', photos: [] });
+        setMode('ESTIMATE'); window.scrollTo(0,0);
+    };
+
+    const deleteJob = async (id, e) => { e.stopPropagation(); if (window.confirm("Permanently delete this job?")) await deleteDoc(doc(db, 'estimates', id)); };
+
     const handlePhoto = async (e) => {
         const file = e.target.files[0]; if (!file) return;
         const r = ref(storage, `workshop/${Date.now()}_${file.name}`);
@@ -98,18 +116,12 @@ const EstimateApp = ({ userId }) => {
         setJob(prev => ({ ...prev, photos: [...prev.photos, url] }));
     };
 
-    const logExpense = async () => {
-        if (!expInput.desc || !expInput.amount) return;
-        await addDoc(collection(db, 'expenses'), { ...expInput, date: serverTimestamp() });
-        setExpInput({ desc: '', amount: '', category: 'Stock' });
-    };
-
     const exportCSV = (type) => {
-        let csv = type === 'SALES' ? "Date,Reg,Customer,Total\n" : "Date,Category,Desc,Amount\n";
+        let csv = type === 'SALES' ? "Date,Reg,Customer,InvoiceTotal\n" : "Date,Desc,Amount\n";
         const list = type === 'SALES' ? savedJobs : expenses;
         list.forEach(i => {
             const d = new Date(i.date?.seconds * 1000 || Date.now()).toLocaleDateString();
-            csv += type === 'SALES' ? `${d},${i.vehicle?.reg},${i.customer?.name},${i.totals?.due}\n` : `${d},${i.category},${i.desc},${i.amount}\n`;
+            csv += type === 'SALES' ? `${d},${i.vehicle?.reg},${i.customer?.name},${i.totals?.due}\n` : `${d},${i.desc},${i.amount}\n`;
         });
         const link = document.createElement("a");
         link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
@@ -117,63 +129,63 @@ const EstimateApp = ({ userId }) => {
     };
 
     return (
-        <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', fontFamily: 'sans-serif', paddingBottom: '100px' }}>
-            <h2 style={{ color: theme.accent }}>TRIPLE MMM <span style={{ color: 'white', fontSize: '0.6em' }}>WORKSHOP</span></h2>
+        <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', fontFamily: 'sans-serif', paddingBottom: '120px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h1 style={{ margin: 0, letterSpacing: '-1px' }}>TRIPLE <span style={{ color: theme.accent }}>MMM</span></h1>
+                <div style={{ textAlign: 'right', fontSize: '11px', color: theme.textDim }}>20A New Street, Stonehouse<br/>07501 728319</div>
+            </div>
 
             {mode === 'ESTIMATE' ? (
                 <>
                     <div style={s.card}>
                         <span style={s.label}>Registration</span>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input style={{ ...s.input, fontSize: '20px', fontWeight: 'bold', flex: 1 }} value={vehicle.reg} onChange={e => setVehicle({ ...vehicle, reg: e.target.value.toUpperCase() })} />
-                            <button onClick={lookupReg} style={s.btn}>{loading ? '...' : '🔎'}</button>
+                        <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                            <input style={{ ...s.input, fontSize: '24px', fontWeight: '900', color: theme.accent, textAlign: 'center', marginBottom: 0 }} value={vehicle.reg} onChange={e => setVehicle({ ...vehicle, reg: e.target.value.toUpperCase() })} />
+                            <button onClick={lookupReg} style={{ ...s.btn, width: '80px' }}>{loading ? '...' : '🔎'}</button>
                         </div>
                         <span style={s.label}>Make & Model</span>
                         <input style={s.input} value={vehicle.makeModel} onChange={e => setVehicle({ ...vehicle, makeModel: e.target.value })} />
                     </div>
 
                     <div style={s.card}>
-                        <span style={s.label}>Customer Name</span>
-                        <input style={s.input} value={customer.name} onChange={e => setCustomer({ ...customer, name: e.target.value })} />
-                        <span style={s.label}>Photos & Receipts</span>
-                        <input type="file" onChange={handlePhoto} style={{ marginBottom: '10px' }} />
-                        <div style={{ display: 'flex', gap: '5px', overflowX: 'auto' }}>
-                            {job.photos.map((p, i) => <img key={i} src={p} style={{ width: '60px', height: '60px', borderRadius: '8px' }} />)}
+                        <span style={s.label}>Customer & Photos</span>
+                        <input style={s.input} placeholder="Name" value={customer.name} onChange={e => setCustomer({ ...customer, name: e.target.value })} />
+                        <input type="file" onChange={handlePhoto} style={{ marginBottom: '10px', color: theme.textDim }} />
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+                            {job.photos.map((p, i) => <img key={i} src={p} style={{ width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover' }} />)}
                         </div>
                     </div>
 
                     <div style={{ ...s.card, background: theme.accent }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <div><span style={{ fontSize: '10px' }}>PROFIT</span><div style={{ fontSize: '20px', fontWeight: 'bold' }}>£{totals.profit.toFixed(2)}</div></div>
-                            <div style={{ textAlign: 'right' }}><span style={{ fontSize: '10px' }}>TOTAL DUE</span><div style={{ fontSize: '20px', fontWeight: 'bold' }}>£{totals.due.toFixed(2)}</div></div>
+                            <div><span style={{ fontSize: '10px', opacity: 0.8 }}>PROFIT</span><div style={{ fontSize: '28px', fontWeight: '900' }}>£{totals.profit.toFixed(2)}</div></div>
+                            <div style={{ textAlign: 'right' }}><span style={{ fontSize: '10px', opacity: 0.8 }}>TOTAL DUE</span><div style={{ fontSize: '28px', fontWeight: '900' }}>£{totals.due.toFixed(2)}</div></div>
                         </div>
-                        <input type="number" placeholder="Internal Paint Cost" style={{ ...s.input, background: 'rgba(0,0,0,0.2)', marginTop: '10px', border: 'none' }} value={job.paintCost} onChange={e => setJob({ ...job, paintCost: e.target.value })} />
+                        <input type="number" placeholder="Internal Paint Cost" style={{ ...s.input, background: 'rgba(0,0,0,0.2)', border: 'none', marginTop: '10px' }} value={job.paintCost} onChange={e => setJob({ ...job, paintCost: e.target.value })} />
                     </div>
 
-                    <h3 style={s.label}>Workshop History</h3>
+                    <h3 style={s.label}>Recent Workshop Jobs</h3>
                     {savedJobs.map(j => (
-                        <div key={j.id} onClick={() => { setCustomer(j.customer); setVehicle(j.vehicle); setJob(j.job); setCurrentJobId(j.id); }} style={{ ...s.card, display: 'flex', justifyContent: 'space-between', padding: '12px', cursor: 'pointer' }}>
-                            <span><strong>{j.vehicle?.reg}</strong> - {j.customer?.name}</span>
-                            <button onClick={(e) => deleteJob(j.id, e)} style={{ background: theme.danger, border: 'none', color: 'white', borderRadius: '4px', padding: '2px 8px' }}>X</button>
+                        <div key={j.id} onClick={() => loadJob(j)} style={{ ...s.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', cursor: 'pointer', marginBottom: '10px' }}>
+                            <div><strong style={{ color: theme.accent }}>{j.vehicle?.reg}</strong><br/><small style={{ color: theme.textDim }}>{j.customer?.name}</small></div>
+                            <button onClick={(e) => deleteJob(j.id, e)} style={{ background: theme.danger, border: 'none', color: 'white', borderRadius: '50%', width: '30px', height: '30px', fontWeight: 'bold' }}>✕</button>
                         </div>
                     ))}
                 </>
             ) : (
                 <div style={s.card}>
-                    <h3 style={s.label}>Expense Logger</h3>
-                    <input style={s.input} placeholder="Description" value={expInput.desc} onChange={e => setExpInput({ ...expInput, desc: e.target.value })} />
+                    <h2 style={{ color: theme.accent }}>Shop Finances</h2>
+                    <input style={s.input} placeholder="Expense Description" value={expInput.desc} onChange={e => setExpInput({ ...expInput, desc: e.target.value })} />
                     <input style={s.input} type="number" placeholder="Amount £" value={expInput.amount} onChange={e => setExpInput({ ...expInput, amount: e.target.value })} />
-                    <button onClick={logExpense} style={{ ...s.btn, width: '100%' }}>Log Expense</button>
-                    <div style={{ marginTop: '20px' }}>
-                        <button onClick={() => exportCSV('SALES')} style={s.btn}>Export Income</button>
-                        <button onClick={() => exportCSV('EXPENSES')} style={{ ...s.btn, marginLeft: '10px', background: '#334155' }}>Export Expenses</button>
-                    </div>
+                    <button onClick={async () => { await addDoc(collection(db, 'expenses'), { ...expInput, date: serverTimestamp() }); setExpInput({ desc: '', amount: '' }); }} style={{ ...s.btn, width: '100%', marginBottom: '20px' }}>LOG EXPENSE</button>
+                    <button onClick={() => exportCSV('SALES')} style={{ ...s.secondaryBtn, width: '100%', marginBottom: '10px' }}>📥 INCOME CSV</button>
+                    <button onClick={() => exportCSV('EXPENSES')} style={{ ...s.secondaryBtn, width: '100%' }}>📥 EXPENSE CSV</button>
                 </div>
             )}
 
-            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: theme.card, padding: '15px', display: 'flex', gap: '10px', borderTop: `1px solid ${theme.border}` }}>
-                <button onClick={saveJob} style={{ ...s.btn, flex: 1 }}>{saveStatus === 'IDLE' ? 'SAVE JOB' : 'SAVED ✓'}</button>
-                <button onClick={() => setMode(mode === 'ESTIMATE' ? 'FINANCE' : 'ESTIMATE')} style={{ ...s.btn, background: '#334155' }}>{mode === 'ESTIMATE' ? '📊' : '🔧'}</button>
+            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: theme.card, padding: '20px', display: 'flex', gap: '15px', borderTop: `1px solid ${theme.border}`, zIndex: 1000 }}>
+                <button onClick={saveJob} style={{ ...s.btn, flex: 2 }}>{saveStatus === 'IDLE' ? 'SAVE JOB' : 'SAVED ✓'}</button>
+                <button onClick={() => setMode(mode === 'ESTIMATE' ? 'FINANCE' : 'ESTIMATE')} style={{ ...s.secondaryBtn, flex: 1 }}>{mode === 'ESTIMATE' ? '📊' : '🔧'}</button>
             </div>
         </div>
     );
@@ -182,6 +194,6 @@ const EstimateApp = ({ userId }) => {
 const App = () => {
     const [u, sU] = useState(null);
     useEffect(() => onAuthStateChanged(auth, u => u ? sU(u.uid) : signInAnonymously(auth)), []);
-    return u ? <EstimateApp userId={u} /> : null;
+    return u ? <EstimateApp userId={u} /> : <div style={{ background: theme.bg, color: theme.accent, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>STARTING ENGINE...</div>;
 };
 export default App;
