@@ -30,39 +30,42 @@ const axios = {
     }
 };
 
-const theme = { bg: '#000000', card: '#111111', est: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', text: '#f8fafc', border: '#333' };
+const theme = { bg: '#000', card: '#111', est: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', text: '#f8fafc', border: '#333' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '12px', padding: '20px', marginBottom: '15px', border: `1px solid ${theme.border}`, borderTop: `4px solid ${color || theme.est}` }),
-    input: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '12px', borderRadius: '8px', marginBottom: '10px' },
-    btnG: { background: theme.deal, color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-    btnR: { background: '#ef4444', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '15px', display: 'flex', gap: '10px', overflowX: 'auto', borderTop: '2px solid #333', zIndex: 1000 }
+    input: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '12px', borderRadius: '8px', marginBottom: '10px', outline: 'none' },
+    label: { color: '#94a3b8', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px', display: 'block' },
+    btnG: { background: theme.deal, color: 'white', border: 'none', padding: '15px 25px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
+    btnR: { background: '#ef4444', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
+    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '15px', display: 'flex', gap: '10px', overflowX: 'auto', borderTop: '2px solid #333', zIndex: 1000, justifyContent: 'center' }
 };
 
 const EstimateApp = ({ userId }) => {
-    const [page, setPage] = useState('HOME'); // HOME, WORKSHOP, INSURANCE, FINANCE, SETTINGS
+    const [page, setPage] = useState('HOME'); 
     const [loading, setLoading] = useState(false);
-    const [settings, setSettings] = useState({ coName: 'Triple MMM', address: '', phone: '', bank: '', markup: '20', labourRate: '50', dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc', password: '1234' });
+    const [calc, setCalc] = useState(false);
+    
+    const [settings, setSettings] = useState({ coName: 'Triple MMM Body Repairs', address: '20A New Street, ML9 3LT', phone: '07501 728319', bank: '80-22-60 | 06163462', markup: '20', labourRate: '50', vatRate: '20', dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc', logoUrl: '', password: '1234' });
     const [job, setJob] = useState({
         client: { name: '', phone: '', email: '', address: '' },
         insurance: { co: '', claim: '', network: '', email: '', address: '' },
-        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', paintCode: '' },
+        vehicle: { reg: '', make: '', vin: '', year: '', fuel: '', engine: '', mot: '', tax: '', colour: '' },
         repair: { items: [], panelHrs: 0, paintHrs: 0, metHrs: 0, paintMats: 0, excess: 0 },
         vault: { auth: '', sat: '', tc: '', photos: [] }
     });
-    const [allJobs, setAllJobs] = useState([]);
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        return onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), (snap) => setAllJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     }, []);
 
     const totals = useMemo(() => {
         const partsCost = job.repair.items.reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
         const partsPrice = partsCost * (1 + (parseFloat(settings.markup) / 100));
-        const labPrice = (parseFloat(job.repair.panelHrs) + parseFloat(job.repair.paintHrs) + parseFloat(job.repair.metHrs)) * settings.labourRate;
-        const total = partsPrice + labPrice + parseFloat(job.repair.paintMats || 0);
-        return { total, customer: parseFloat(job.repair.excess || 0), insurer: total - parseFloat(job.repair.excess || 0) };
+        const labPrice = (parseFloat(job.repair.panelHrs || 0) + parseFloat(job.repair.paintHrs || 0) + parseFloat(job.repair.metHrs || 0)) * settings.labourRate;
+        const sub = partsPrice + labPrice + parseFloat(job.repair.paintMats || 0);
+        const vat = sub * (parseFloat(settings.vatRate) / 100);
+        const total = sub + vat;
+        return { sub, vat, total, customer: parseFloat(job.repair.excess || 0), insurer: total - parseFloat(job.repair.excess || 0), profit: total - (partsCost + parseFloat(job.repair.paintMats || 0)) };
     }, [job.repair, settings]);
 
     const runDVLA = async () => {
@@ -70,58 +73,87 @@ const EstimateApp = ({ userId }) => {
         const proxy = `https://corsproxy.io/?${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
             const res = await axios.post(proxy, { registrationNumber: job.vehicle.reg }, { headers: { 'x-api-key': settings.dvlaKey } });
-            setJob({...job, vehicle: {...job.vehicle, make: res.data.make, year: res.data.yearOfManufacture, colour: res.data.colour}});
-        } catch (e) { alert("Manual Entry Required"); }
+            const d = res.data;
+            setJob({...job, vehicle: {...job.vehicle, make: d.make, year: d.yearOfManufacture, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, tax: d.taxStatus, colour: d.colour}});
+        } catch (e) { alert("DVLA Link Down - Manual Entry Required"); }
         setLoading(false);
     };
 
     return (
-        <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', paddingBottom: '120px' }}>
-            {/* HUB / HOME PAGE */}
+        <div style={{ background: theme.bg, minHeight: '100vh', color: theme.text, padding: '20px', paddingBottom: '140px' }}>
+            {calc && <div style={{position:'fixed', top:'20%', right:'10%', background:'#111', padding:'20px', border:'2px solid orange', zIndex:2000, borderRadius:'10px'}}>
+                <input id="v1" style={s.input} placeholder="Val 1" /> <input id="v2" style={s.input} placeholder="Val 2" />
+                <button style={s.btnG} onClick={()=>alert(parseFloat(document.getElementById('v1').value) + parseFloat(document.getElementById('v2').value))}>+</button>
+                <button onClick={()=>setCalc(false)} style={{...s.btnR, marginLeft:'10px'}}>X</button>
+            </div>}
+
+            {/* PAGE: HOME HUB */}
             {page === 'HOME' && (
                 <div>
                     <h1 style={{color:theme.est}}>MANAGEMENT HUB</h1>
                     <div style={s.card(theme.est)}>
-                        <span style={{color:theme.est, fontWeight:'bold'}}>1. DATA ACQUISITION (DVLA)</span>
-                        <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
-                            <input style={s.input} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="VEHICLE REG" />
-                            <button style={s.btnG} onClick={runDVLA}>{loading ? '...' : 'PULL DATA'}</button>
+                        <span style={s.label}>Vehicle Specs (DVLA)</span>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <input style={{...s.input, fontSize:'20px', fontWeight:'bold'}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
+                            <button style={s.btnG} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
                         </div>
-                        <input style={s.input} placeholder="CHASSIS / VIN (MANUAL)" value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
+                        <input style={s.input} placeholder="Manual VIN / Chassis" value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
                     </div>
                     <div style={s.card(theme.est)}>
-                        <span style={{color:theme.est, fontWeight:'bold'}}>2. CLIENT & INSURANCE DATA</span>
-                        <input style={s.input} placeholder="Client Name" value={job.client.name} onChange={e=>setJob({...job, client:{...job.client, name:e.target.value}})} />
-                        <input style={s.input} placeholder="Insurance Co" value={job.insurance.co} onChange={e=>setJob({...job, insurance:{...job.insurance, co:e.target.value}})} />
-                        <input style={s.input} placeholder="Claim Number" value={job.insurance.claim} onChange={e=>setJob({...job, insurance:{...job.insurance, claim:e.target.value}})} />
+                        <span style={s.label}>Client & Insurance Details</span>
+                        <input style={s.input} placeholder="Insurance Company" value={job.insurance.co} />
+                        <input style={s.input} placeholder="Claim Number" value={job.insurance.claim} />
+                        <input style={s.input} placeholder="Network ID" value={job.insurance.network} />
+                        <button style={{...s.btnG, width:'100%', marginTop:'10px'}} onClick={()=>setPage('ESTIMATE')}>IMPORT TO ESTIMATE (GREEN)</button>
                     </div>
                 </div>
             )}
 
-            {/* WORKSHOP PAGE */}
-            {page === 'WORKSHOP' && (
+            {/* PAGE: ESTIMATE */}
+            {page === 'ESTIMATE' && (
                 <div>
-                    <h1 style={{color:theme.work}}>WORKSHOP JOBSHEET</h1>
-                    <div style={s.card(theme.work)}>
-                        <h3>{job.vehicle.reg} | {job.vehicle.make}</h3>
-                        <p>VIN: {job.vehicle.vin}</p>
-                        <hr style={{borderColor:'#333'}}/>
-                        <a href="https://www.partslink24.com" target="_blank" style={{color:theme.work, fontSize:'12px'}}>Link to Manufacturer Parts Database →</a>
+                    <button onClick={()=>setPage('HOME')} style={{background:'none', color:theme.est, border:'none', cursor:'pointer', marginBottom:'10px'}}>← BACK TO HUB</button>
+                    <h1 style={{color:theme.est}}>ESTIMATING ENGINE</h1>
+                    <div style={s.card(theme.est)}>
+                        <span style={s.label}>Add Repair Items</span>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <input id="pDes" style={{...s.input, flex:2}} placeholder="Part Name" />
+                            <input id="pPri" style={{...s.input, flex:1}} placeholder="Price £" />
+                            <button style={s.btnG} onClick={()=>{
+                                const d=document.getElementById('pDes'), p=document.getElementById('pPri');
+                                if(d.value && p.value) setJob({...job, repair:{...job.repair, items:[...job.repair.items, {desc:d.value, cost:p.value}]}});
+                                d.value=''; p.value='';
+                            }}>+</button>
+                        </div>
+                    </div>
+                    <div style={s.card(theme.est)}>
+                        <span style={s.label}>Paint & VAT Settings</span>
+                        <input style={s.input} placeholder="Paint & Materials Cost £" value={job.repair.paintMats} onChange={e=>setJob({...job, repair:{...job.repair, paintMats:e.target.value}})} />
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <input style={{...s.input, flex:1}} placeholder="VAT %" value={settings.vatRate} onChange={e=>setSettings({...settings, vatRate:e.target.value})} />
+                            <input style={{...s.input, flex:1, color:theme.danger}} placeholder="Excess -£" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
+                        </div>
+                    </div>
+                    <div style={{...s.card(theme.deal), background:theme.deal, borderTop:'none'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                            <div><span style={{color:'white', fontSize:'10px'}}>GRAND TOTAL</span><h1 style={{margin:0}}>£{totals.total.toFixed(2)}</h1></div>
+                            <button style={{background:'white', color:theme.deal, border:'none', padding:'10px 20px', borderRadius:'8px', fontWeight:'bold'}} onClick={()=>setPage('INVOICE')}>SAVE & VIEW INVOICE</button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* DOCK NAVIGATION */}
+            {/* DOCK NAVIGATION BAR */}
             <div className="no-print" style={s.dock}>
                 <button style={{...s.btnG, background:theme.est}} onClick={()=>setPage('HOME')}>HUB</button>
                 <button style={{...s.btnG, background:theme.work}} onClick={()=>setPage('WORKSHOP')}>WORKSHOP</button>
-                <button style={{...s.btnG, background:theme.deal}} onClick={()=>setPage('INSURANCE')}>INSURANCE</button>
-                <button style={{...s.btnG, background:theme.set}} onClick={()=>setPage('FINANCE')}>FINANCE</button>
-                <button style={{...s.btnG, background:'#444'}} onClick={()=>setPage('SETTINGS')}>SETTINGS</button>
+                <button style={{...s.btnG, background:theme.deal}} onClick={()=>setPage('VAULT')}>VAULT</button>
+                <button style={{...s.btnG, background:theme.set}} onClick={()=>setPage('SETTINGS')}>SET</button>
+                <button style={s.btnG} onClick={()=>setCalc(true)}>🧮</button>
                 <button style={{...s.btnG, background:theme.deal}} onClick={async () => {
                     await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
-                    alert("Triple MMM Cloud Synchronized");
-                }}>SYNC ALL</button>
+                    alert("Triple MMM Deal Folder Synced");
+                }}>SAVE (GREEN)</button>
             </div>
 
             <style>{`
