@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- DVLA API HANDSHAKE ---
+// --- DVLA API ENGINE ---
 const axios = {
     post: async (url, data, config) => {
         const response = await fetch(url, {
@@ -32,25 +32,25 @@ const axios = {
     }
 };
 
-// --- ENTERPRISE DESIGN SYSTEM ---
+// --- ENTERPRISE DESIGN SYSTEM (ORANGE, GREEN, BLACK) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
-    card: (color) => ({ background: theme.card, borderRadius: '24px', padding: '35px', marginBottom: '25px', border: `1px solid ${theme.border}`, borderTop: `12px solid ${color || theme.hub}`, boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }),
-    input: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '18px', borderRadius: '15px', marginBottom: '16px', outline: 'none', fontSize: '16px' },
-    label: { color: '#94a3b8', fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '1.5px' },
-    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '18px 32px', borderRadius: '18px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', transition: '0.2s' }),
-    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '25px', display: 'flex', gap: '15px', overflowX: 'auto', borderTop: '3px solid #333', zIndex: 1000, justifyContent: 'center' }
+    card: (color) => ({ background: theme.card, borderRadius: '24px', padding: '30px', marginBottom: '25px', border: `1px solid ${theme.border}`, borderTop: `12px solid ${color || theme.hub}`, boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }),
+    input: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '16px', borderRadius: '14px', marginBottom: '14px', outline: 'none', fontSize: '16px' },
+    label: { color: '#94a3b8', fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '8px', display: 'block', letterSpacing: '1.5px' },
+    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '18px 32px', borderRadius: '16px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', transition: '0.2s' }),
+    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', borderTop: '3px solid #333', zIndex: 1000, justifyContent: 'center' }
 };
 
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
+    const [docType, setDocType] = useState('ESTIMATE'); // ESTIMATE or INVOICE
     
-    // --- PERSISTENT DATA CORE ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc', logoUrl: '', paypalQr: '', terms: 'Standard 12-Month Warranty. Payment due on collection.' 
+        dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc', logoUrl: '', paypalQr: '', password: '1234', terms: 'Standard 12-Month Bodywork Warranty. Payment due strictly on collection.' 
     });
 
     const [job, setJob] = useState({
@@ -65,12 +65,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_master_v29');
+        const saved = localStorage.getItem('mmm_enterprise_v31_LOCKED');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_master_v29', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_enterprise_v31_LOCKED', JSON.stringify(job)); }, [job]);
 
     const totals = useMemo(() => {
         const partsCost = (job.repair.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
@@ -84,7 +84,6 @@ const EstimateApp = ({ userId }) => {
         return { total, sub, vat, customer, insurer: total - customer, profit: total - (partsCost + parseFloat(job.repair.paintMats || 0)), labHrs, labPrice };
     }, [job.repair, settings]);
 
-    // --- CORE HANDLERS ---
     const runDVLA = async () => {
         if (!job.vehicle.reg) return;
         setLoading(true);
@@ -93,7 +92,7 @@ const EstimateApp = ({ userId }) => {
             const res = await axios.post(proxy, { registrationNumber: job.vehicle.reg }, { headers: { 'x-api-key': settings.dvlaKey } });
             const d = res.data;
             setJob(prev => ({...prev, vehicle: {...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus}}));
-        } catch (e) { alert("DVLA Handshake Failed."); }
+        } catch (e) { alert("DVLA Handshake Error. Manual Entry Mode."); }
         setLoading(false);
     };
 
@@ -109,33 +108,33 @@ const EstimateApp = ({ userId }) => {
     };
 
     const saveMaster = async () => {
-        const invoiceSnapshot = { date: new Date().toLocaleDateString(), total: totals.total, insurer: totals.insurer, customer: totals.customer };
-        const updatedJob = { ...job, totals, vault: { ...job.vault, invoices: [...(job.vault.invoices || []), invoiceSnapshot] }, createdAt: serverTimestamp() };
+        const snap = { date: new Date().toLocaleDateString(), total: totals.total, type: docType };
+        const updatedJob = { ...job, totals, vault: { ...job.vault, invoices: [...(job.vault.invoices || []), snap] }, createdAt: serverTimestamp() };
         await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), updatedJob);
         alert("Triple MMM Cloud Synced & Invoice Archived");
     };
 
     return (
-        <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '140px' }}>
+        <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '160px' }}>
             
-            {/* VIEW 1: HUB */}
+            {/* HUB */}
             {view === 'HUB' && (
                 <div>
-                    <h1 style={{color:theme.hub, fontSize:'32px'}}>MANAGEMENT HUB</h1>
+                    <h1 style={{color:theme.hub, letterSpacing:'-2px'}}>MANAGEMENT HUB</h1>
                     <div style={s.card(theme.hub)}>
-                        <span style={s.label}>1. Technical Vehicle Identification (DVLA)</span>
+                        <span style={s.label}>1. Technical Identification (DVLA)</span>
                         <div style={{display:'flex', gap:'12px', marginBottom:'15px'}}>
                             <input style={{...s.input, flex:2, fontSize:'24px', fontWeight:'900', textAlign:'center', border:`2px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
                             <button style={{...s.btnG(theme.hub), width:'120px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
                         </div>
-                        <input style={s.input} placeholder="Manual VIN / Chassis" value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
-                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', fontSize:'13px', opacity:0.8}}>
+                        <input style={s.input} placeholder="Manual VIN" value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
+                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', fontSize:'13px'}}>
                             <div style={{background:'#222', padding:'12px', borderRadius:'10px'}}>Make: {job.vehicle.make}</div>
                             <div style={{background:'#222', padding:'12px', borderRadius:'10px'}}>MOT: {job.vehicle.mot}</div>
                         </div>
                     </div>
                     <div style={s.card(theme.hub)}>
-                        <span style={s.label}>2. Stakeholder Profiles</span>
+                        <span style={s.label}>2. Stakeholders</span>
                         <input style={s.input} placeholder="Client Name" value={job.client.name} onChange={e=>setJob({...job, client:{...job.client, name:e.target.value}})} />
                         <input style={s.input} placeholder="Insurance Company" value={job.insurance.co} onChange={e=>setJob({...job, insurance:{...job.insurance, co:e.target.value}})} />
                         <button style={{...s.btnG(theme.deal), width:'100%', marginTop:'10px'}} onClick={()=>setView('EST')}>IMPORT TO ESTIMATOR (GREEN)</button>
@@ -143,24 +142,38 @@ const EstimateApp = ({ userId }) => {
                 </div>
             )}
 
-            {/* VIEW 2: ESTIMATOR */}
+            {/* ESTIMATOR */}
             {view === 'EST' && (
                 <div>
                     <h2 style={{color:theme.hub}}>ESTIMATOR: {job.vehicle.reg}</h2>
                     <div style={s.card(theme.hub)}>
-                        <span style={s.label}>Labour Hours Allocation</span>
+                        <span style={s.label}>Labour Breakdown (MET/Panel/Paint)</span>
                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'15px'}}>
                             <div><span style={s.label}>MET</span><input style={s.input} value={job.repair.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} /></div>
                             <div><span style={s.label}>Panel</span><input style={s.input} value={job.repair.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} /></div>
                             <div><span style={s.label}>Paint</span><input style={s.input} value={job.repair.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
                         </div>
+                        <span style={s.label}>Parts Management</span>
+                        <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                            <input id="pD" style={{...s.input, flex:3}} placeholder="Part Name" />
+                            <input id="pC" style={{...s.input, flex:1}} type="number" placeholder="Cost £" />
+                            <button style={s.btnG(theme.deal)} onClick={()=>{
+                                const d=document.getElementById('pD'), c=document.getElementById('pC');
+                                if(d.value && c.value) setJob({...job, repair:{...job.repair, items:[...job.repair.items, {desc:d.value, cost:c.value}]}});
+                                d.value=''; c.value='';
+                            }}>+</button>
+                        </div>
                         <input style={{...s.input, color:theme.danger, fontWeight:'bold'}} placeholder="DEDUCT EXCESS -£" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
-                        <button style={{...s.btnG(theme.deal), width: '100%', marginTop:'10px'}} onClick={() => window.print()}>PRINT OFFICIAL INVOICE</button>
+                        
+                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginTop:'20px'}}>
+                            <button style={s.btnG('#333')} onClick={() => { setDocType('ESTIMATE'); setTimeout(() => window.print(), 100); }}>PRINT ESTIMATE</button>
+                            <button style={s.btnG(theme.deal)} onClick={() => { setDocType('INVOICE'); setTimeout(() => window.print(), 100); }}>CONVERT TO INVOICE</button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* VIEW 3: WORKSHOP CARD */}
+            {/* WORKSHOP */}
             {view === 'WORK' && (
                 <div>
                     <h1 style={{color:theme.work}}>WORKSHOP JOBSHEET</h1>
@@ -177,27 +190,26 @@ const EstimateApp = ({ userId }) => {
                 </div>
             )}
 
-            {/* VIEW 4: DEAL FOLDER */}
+            {/* DEAL FOLDER */}
             {view === 'DEAL' && (
                 <div>
                     <h1 style={{color:theme.deal}}>DEAL FOLDER</h1>
                     <div style={s.card(theme.deal)}>
-                        <span style={s.label}>Archived Invoices (Auto-Imported)</span>
+                        <span style={s.label}>Snapshot History</span>
                         <div style={{background:'#000', padding:'15px', borderRadius:'12px', marginBottom:'20px', fontSize:'13px'}}>
-                            {(job.vault.invoices || []).length > 0 ? job.vault.invoices.map((inv, idx) => (
+                            {(job.vault.invoices || []).map((inv, idx) => (
                                 <div key={idx} style={{borderBottom:'1px solid #333', padding:'10px 0', display:'flex', justifyContent:'space-between'}}>
-                                    <span>{inv.date}</span><span>£{inv.total?.toFixed(2)}</span>
+                                    <span>{inv.type}: {inv.date}</span><span>£{inv.total?.toFixed(2)}</span>
                                 </div>
-                            )) : <p>No invoices saved to this folder yet.</p>}
+                            ))}
                         </div>
-                        <span style={s.label}>Submission Assets</span>
-                        <input type="file" multiple onChange={(e) => handleFileUpload(e, 'claims', 'photos')} style={{marginBottom:'20px'}} />
+                        <input type="file" multiple onChange={(e) => handleFileUpload(e, 'claims', 'photos')} style={{marginBottom:'15px'}} />
                         <input type="file" onChange={(e) => handleFileUpload(e, 'claims', 'satNote')} />
                     </div>
                 </div>
             )}
 
-            {/* VIEW 5: RECENT JOBS */}
+            {/* RECENT JOBS */}
             {view === 'RECENT' && (
                 <div>
                     <h1 style={{color:theme.hub}}>RECENT JOBS</h1>
@@ -207,7 +219,7 @@ const EstimateApp = ({ userId }) => {
                                 <div><h3 style={{margin:0}}>{h.vehicle?.reg}</h3><p style={{margin:0, fontSize:'12px'}}>{h.client?.name}</p></div>
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <button style={s.btnG(theme.deal)} onClick={()=>{setJob(h); setView('HUB');}}>LOAD</button>
-                                    <button style={{...s.btnG(theme.danger), padding:'12px 20px'}} onClick={async () => { if(window.confirm("Wipe?")) await deleteDoc(doc(db, 'estimates', h.id)); }}>X</button>
+                                    <button style={{...s.btnG(theme.danger), padding:'12px 20px'}} onClick={async () => { if(window.confirm("Master delete?")) await deleteDoc(doc(db, 'estimates', h.id)); }}>X</button>
                                 </div>
                             </div>
                         </div>
@@ -215,43 +227,34 @@ const EstimateApp = ({ userId }) => {
                 </div>
             )}
 
-            {/* VIEW 6: FINANCE */}
+            {/* FINANCE */}
             {view === 'FIN' && (
                 <div>
                     <h1 style={{color:theme.fin}}>FINANCE VAULT</h1>
                     <div style={s.card(theme.fin)}>
                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginBottom:'25px'}}>
                             <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Gross Income</span><h2 style={{margin:0}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toFixed(2)}</h2></div>
-                            <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Receipts</span><h2 style={{margin:0, color:theme.danger}}>{job.vault.expenses.length}</h2></div>
+                            <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Expenses</span><h2 style={{margin:0, color:theme.danger}}>{job.vault.expenses.length}</h2></div>
                         </div>
                         <input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} />
                     </div>
                 </div>
             )}
 
-            {/* VIEW 7: SETTINGS (EXECUTIVE ASSET GRID) */}
+            {/* SETTINGS */}
             {view === 'SET' && (
                 <div>
                     <h1 style={{color:theme.set}}>MASTER SETTINGS</h1>
                     <div style={s.card(theme.set)}>
-                        <span style={s.label}>Executive Branding Grid</span>
-                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', background:'#000', padding:'25px', borderRadius:'15px', border:'1px solid #333', marginBottom:'25px'}}>
-                            <div>
-                                <span style={s.label}>Business Logo</span>
-                                {settings.logoUrl && <img src={settings.logoUrl} style={{height:'45px', marginBottom:'10px', display:'block'}} />}
-                                <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'logoUrl')} style={{fontSize:'11px'}} />
-                            </div>
-                            <div>
-                                <span style={s.label}>PayPal QR Code</span>
-                                {settings.paypalQr && <img src={settings.paypalQr} style={{height:'45px', marginBottom:'10px', display:'block'}} />}
-                                <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'paypalQr')} style={{fontSize:'11px'}} />
-                            </div>
+                        <span style={s.label}>1. Executive Branding Grid</span>
+                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', background:'#000', padding:'25px', borderRadius:'15px', border:'1px solid #333', marginBottom:'20px'}}>
+                            <div><span style={s.label}>Business Logo</span>{settings.logoUrl && <img src={settings.logoUrl} style={{height:'40px', marginBottom:'10px', display:'block'}} />}<input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'logoUrl')} style={{fontSize:'11px'}} /></div>
+                            <div><span style={s.label}>PayPal QR</span>{settings.paypalQr && <img src={settings.paypalQr} style={{height:'40px', marginBottom:'10px', display:'block'}} />}<input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'paypalQr')} style={{fontSize:'11px'}} /></div>
                         </div>
                         <input style={s.input} placeholder="Company Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
-                        <input style={s.input} placeholder="Address" value={settings.address} onChange={e=>setSettings({...settings, address:e.target.value})} />
-                        <input style={s.input} placeholder="Bank Details" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
-                        <textarea style={{...s.input, height:'100px'}} value={settings.terms} onChange={e=>setSettings({...settings, terms:e.target.value})} placeholder="Warranty" />
-                        <button style={{...s.btnG(theme.set), width:'100%'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Master Confirmed."); }}>SAVE ALL SETTINGS (GREEN)</button>
+                        <input style={s.input} placeholder="Sort/Acc" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
+                        <textarea style={{...s.input, height:'100px'}} value={settings.terms} onChange={e=>setSettings({...settings, terms:e.target.value})} />
+                        <button style={{...s.btnG(theme.set), width:'100%'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Master Confirmed."); }}>SAVE SETTINGS (GREEN)</button>
                     </div>
                 </div>
             )}
@@ -268,17 +271,17 @@ const EstimateApp = ({ userId }) => {
                 <button style={{...s.btnG(theme.deal), minWidth:'150px'}} onClick={saveMaster}>SAVE MASTER</button>
             </div>
 
-            {/* --- MASTER CLEAN PRINT VIEW (RE-ENGINEERED TECHNICAL BLOCK) --- */}
-            <div className="print-only" style={{display:'none', color:'black', padding:'70px', fontFamily:'Arial, sans-serif'}}>
+            {/* --- MASTER CLEAN PRINT VIEW --- */}
+            <div className="print-only" style={{display:'none', color:'black', padding:'60px', fontFamily:'Arial'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'6px solid #f97316', paddingBottom:'35px'}}>
                     <div>
-                        {settings.logoUrl && <img src={settings.logoUrl} style={{height:'120px', marginBottom:'15px'}} />}
-                        <h1 style={{margin:0, color:'#f97316', fontSize:'38px', fontWeight:'900'}}>{settings.coName}</h1>
-                        <p style={{fontSize:'15px', lineHeight:'1.6'}}>{settings.address}<br/>Tel: {settings.phone}</p>
+                        {settings.logoUrl && <img src={settings.logoUrl} style={{height:'110px', marginBottom:'15px'}} />}
+                        <h1 style={{margin:0, color:'#f97316', fontSize:'36px', fontWeight:'900'}}>{settings.coName}</h1>
+                        <p>{settings.address}<br/>Tel: {settings.phone}</p>
                     </div>
                     <div style={{textAlign:'right'}}>
-                        <h2 style={{color:'#f97316', fontSize:'48px', margin:0}}>INVOICE</h2>
-                        <p style={{marginTop:'15px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                        <h2 style={{color:'#f97316', fontSize:'48px', margin:0, fontWeight:'900'}}>{docType}</h2>
+                        <p style={{marginTop:'15px', fontSize:'18px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
                     </div>
                 </div>
 
@@ -288,9 +291,8 @@ const EstimateApp = ({ userId }) => {
                         <h3 style={{margin:'10px 0'}}>{job.client.name}</h3>
                         <p style={{margin:0, fontSize:'14px'}}>{job.client.address}</p>
                     </div>
-                    {/* ENHANCED TECHNICAL BLOCK */}
                     <div style={{background:'#f9f9f9', padding:'25px', borderRadius:'15px', border:'1px solid #ddd'}}>
-                        <span style={{fontSize:'10px', fontWeight:'900', color:'#888', textTransform:'uppercase'}}>Technical Vehicle Specification</span>
+                        <span style={{fontSize:'10px', fontWeight:'900', color:'#888', textTransform:'uppercase'}}>Technical Specification</span>
                         <h3 style={{margin:'10px 0', color:'#f97316'}}>{job.vehicle.reg}</h3>
                         <div style={{fontSize:'12px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', color:'#333'}}>
                             <span><strong>Make:</strong> {job.vehicle.make || '-'}</span>
@@ -304,8 +306,8 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 </div>
 
-                <div style={{marginTop:'30px', fontWeight:'bold', textTransform:'uppercase', fontSize:'11px', color:'#777'}}>Technician Supplement Findings:</div>
-                <div style={{minHeight:'60px', border:'1px solid #eee', padding:'15px', marginTop:'10px', borderRadius:'10px', fontSize:'14px', fontStyle:'italic'}}>{job.repair.techNotes || 'Standard repair procedure.'}</div>
+                <div style={{marginTop:'30px', fontWeight:'bold', textTransform:'uppercase', fontSize:'11px', color:'#777'}}>Technician Report:</div>
+                <div style={{minHeight:'60px', border:'1px solid #eee', padding:'15px', marginTop:'10px', borderRadius:'10px', fontSize:'14px', fontStyle:'italic'}}>{job.repair.techNotes || 'Repair carried out to professional standard.'}</div>
 
                 <table style={{width:'100%', marginTop:'30px', borderCollapse:'collapse'}}>
                     <thead><tr style={{background:'#f3f3f3', borderBottom:'4px solid #ddd'}}><th style={{padding:'18px', textAlign:'left'}}>Description of Services & Parts</th><th style={{padding:'18px', textAlign:'right'}}>Amount</th></tr></thead>
@@ -313,21 +315,21 @@ const EstimateApp = ({ userId }) => {
                         {job.repair.items.map((it, i) => (
                             <tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'18px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'18px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>
                         ))}
-                        <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'18px'}}>Qualified Bodywork Labour ({totals.labHrs} hrs)</td><td style={{textAlign:'right', padding:'18px', fontWeight:'bold'}}>£{totals.labPrice.toFixed(2)}</td></tr>
+                        <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'18px'}}>Bodywork Labour Preparation ({totals.labHrs} hrs)</td><td style={{textAlign:'right', padding:'18px', fontWeight:'bold'}}>£{totals.labPrice.toFixed(2)}</td></tr>
                     </tbody>
                 </table>
 
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:'40px'}}>
-                    <div>{settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} />}</div>
+                    <div>{docType === 'INVOICE' && settings.paypalQr && <img src={settings.paypalQr} style={{height:'140px'}} />}</div>
                     <div style={{width:'55%', textAlign:'right'}}>
                         <h1 style={{color:'#f97316', fontSize:'52px', margin:'0 0 20px 0'}}>£{totals.total.toFixed(2)}</h1>
-                        <div style={{background:'#fff3e0', padding:'30px', border:'3px solid #f97316', borderRadius:'25px', textAlign:'left'}}>
-                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'12px', fontSize:'15px'}}><span>CLIENT EXCESS:</span><strong style={{fontSize:'22px'}}>£{totals.customer.toFixed(2)}</strong></div>
-                            <div style={{display:'flex', justifyContent:'space-between', color:'#f97316', borderTop:'3px solid #f97316', paddingTop:'20px', fontSize:'15px'}}><span>INSURER BALANCE:</span><strong style={{fontSize:'34px'}}>£{totals.insurer.toFixed(2)}</strong></div>
+                        <div style={{background:'#fff3e0', padding:'30px', border:'2px solid #f97316', borderRadius:'25px', textAlign:'left'}}>
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'12px', fontSize:'15px'}}><span>CUSTOMER EXCESS:</span><strong style={{fontSize:'22px'}}>£{totals.customer.toFixed(2)}</strong></div>
+                            <div style={{display:'flex', justifyContent:'space-between', color:'#f97316', borderTop:'3px solid #f97316', paddingTop:'15px', fontSize:'15px'}}><span>INSURER BALANCE:</span><strong style={{fontSize:'34px'}}>£{totals.insurer.toFixed(2)}</strong></div>
                         </div>
                     </div>
                 </div>
-                <div style={{marginTop:'80px', borderTop:'1px solid #eee', paddingTop:'30px', fontSize:'13px'}}>Bank: {settings.bank} | Warranty: {settings.terms}</div>
+                {docType === 'INVOICE' && <div style={{marginTop:'80px', borderTop:'1px solid #eee', paddingTop:'30px', fontSize:'13px'}}>Bank: {settings.bank} | Warranty: {settings.terms}</div>}
             </div>
 
             <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; } }`}</style>
