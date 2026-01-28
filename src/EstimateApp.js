@@ -35,14 +35,14 @@ const axios = {
 // --- ENTERPRISE DESIGN SYSTEM (S25 ULTRA OPTIMIZED) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
-    card: (color) => ({ background: theme.card, borderRadius: '24px', padding: '35px', marginBottom: '25px', border: `1px solid ${theme.border}`, borderTop: `12px solid ${color || theme.hub}`, boxShadow: '0 25px 70px rgba(0,0,0,0.9)' }),
+    card: (color) => ({ background: theme.card, borderRadius: '24px', padding: '35px', marginBottom: '25px', border: `1px solid ${theme.border}`, borderTop: `12px solid ${color || theme.hub}`, boxShadow: '0 25px 80px rgba(0,0,0,0.9)' }),
     input: { width: '100%', background: '#000', border: '1px solid #555', color: '#fff', padding: '22px', borderRadius: '18px', marginBottom: '16px', outline: 'none', fontSize: '20px' },
-    label: { color: '#cbd5e1', fontSize: '15px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '12px', display: 'block', letterSpacing: '1.2px' },
-    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '22px 35px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', transition: '0.2s', fontSize: '16px' }),
+    label: { color: '#cbd5e1', fontSize: '15px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '12px', display: 'block', letterSpacing: '1.5px' },
+    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '22px 35px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', transition: '0.2s', fontSize: '18px' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '15px', display: 'flex', gap: '10px', overflowX: 'auto', borderTop: '3px solid #333', zIndex: 1000, justifyContent: 'center' },
     navBar: { display: 'flex', gap: '12px', marginBottom: '30px' },
     tag: (bg) => ({ padding: '6px 12px', borderRadius: '10px', fontSize: '11px', background: bg, color: '#fff', fontWeight: 'bold' }),
-    traffic: (active) => ({ width: '30px', height: '30px', borderRadius: '50%', opacity: active ? 1 : 0.15, border: '3px solid #fff' })
+    traffic: (active) => ({ width: '32px', height: '32px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '3px solid #fff' })
 };
 
 // --- NATIVE SIGNATURE PAD ---
@@ -76,8 +76,9 @@ const EstimateApp = ({ userId }) => {
     const [loading, setLoading] = useState(false);
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [addressBook, setAddressBook] = useState([]);
+    const [history, setHistory] = useState([]);
     
-    // --- SETTINGS CORE ---
+    // --- PERSISTENT SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Account: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -96,55 +97,55 @@ const EstimateApp = ({ userId }) => {
     };
 
     const [job, setJob] = useState(INITIAL_JOB);
-    const [history, setHistory] = useState([]);
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v61_MASTER_FINAL');
+        const saved = localStorage.getItem('mmm_v64_TITAN_BUILD');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
         onSnapshot(collection(db, 'addressBook'), snap => setAddressBook(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v61_MASTER_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v64_TITAN_BUILD', JSON.stringify(job)); }, [job]);
 
-    // --- MATH & AI ---
+    // --- AI INTEL & MATH ---
     const totals = useMemo(() => {
-        const pCost = (job.repair.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
+        const pCost = (job?.repair?.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
         const pPrice = pCost * (1 + (parseFloat(settings.markup) / 100));
-        const labHrs = (parseFloat(job.repair.panelHrs || 0) + parseFloat(job.repair.paintHrs || 0) + parseFloat(job.repair.metHrs || 0));
+        const labHrs = (parseFloat(job?.repair?.panelHrs || 0) + parseFloat(job?.repair?.paintHrs || 0) + parseFloat(job?.repair?.metHrs || 0));
         const labPrice = labHrs * parseFloat(settings.labourRate);
-        const total = (pPrice + labPrice + parseFloat(job.repair.paintMats || 0)) * (1 + (parseFloat(settings.vatRate) / 100));
-        const customer = parseFloat(job.repair.excess || 0);
-        return { total, insurer: total - customer, labHrs, labPrice };
-    }, [job.repair, settings]);
+        const total = (pPrice + labPrice + parseFloat(job?.repair?.paintMats || 0)) * (1 + (parseFloat(settings.vatRate) / 100));
+        const customer = parseFloat(job?.repair?.excess || 0);
+        return { total, insurer: total - customer, labHrs, labPrice, customer };
+    }, [job?.repair, settings]);
 
-    const aiIntel = useMemo(() => {
-        const matches = history.filter(h => h.vehicle?.make === job.vehicle.make);
+    const systemIntel = useMemo(() => {
+        if (!job?.vehicle?.make) return null;
+        const matches = history.filter(h => h?.vehicle?.make === job.vehicle.make);
         if (!matches.length) return null;
         return { 
             avgMet: matches.reduce((a,b)=>a+parseFloat(b.repair?.metHrs||0),0)/matches.length,
             avgPanel: matches.reduce((a,b)=>a+parseFloat(b.repair?.panelHrs||0),0)/matches.length,
-            count: matches.length
+            sample: matches.length
         };
-    }, [job.vehicle.make, history]);
+    }, [job?.vehicle?.make, history]);
 
-    // --- ACTIONS ---
+    // --- HANDLERS ---
     const runDVLA = async () => {
-        if (!job.vehicle.reg) return;
+        if (!job?.vehicle?.reg) return;
         setLoading(true);
         const proxy = `https://corsproxy.io/?${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
             const res = await axios.post(proxy, { registrationNumber: job.vehicle.reg }, { headers: { 'x-api-key': settings.dvlaKey } });
             const d = res.data;
             setJob(prev => ({...prev, vehicle: {...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus}}));
-        } catch (e) { alert("DVLA API Connection Error."); }
+        } catch (e) { alert("DVLA Handshake Interrupted."); }
         setLoading(false);
     };
 
     const saveMaster = async () => {
         const snap = { date: new Date().toLocaleDateString(), total: totals.total, type: docType, status: job.status };
-        await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, vault: { ...job.vault, invoices: [...(job.vault.invoices || []), snap] }, createdAt: serverTimestamp() });
+        await setDoc(doc(db, 'estimates', job?.vehicle?.reg || Date.now().toString()), { ...job, totals, vault: { ...job.vault, invoices: [...(job?.vault?.invoices || []), snap] }, createdAt: serverTimestamp() });
         alert("Triple MMM System Intel Updated.");
     };
 
@@ -155,10 +156,22 @@ const EstimateApp = ({ userId }) => {
         await uploadBytes(r, file);
         const url = await getDownloadURL(r);
         if (path === 'branding') setSettings(prev => ({...prev, [field]: url}));
-        else if (path === 'finances') setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}}));
-        else if (field === 'photos') setJob(prev => ({...prev, vault: {...prev.vault, photos: [...(prev.vault.photos || []), url]}}));
+        else if (path === 'finances') setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev?.vault?.expenses || []), url]}}));
+        else if (field === 'photos') setJob(prev => ({...prev, vault: {...prev.vault, photos: [...(prev?.vault?.photos || []), url]}}));
         else setJob(prev => ({...prev, vault: {...prev.vault, [field]: url}}));
         setLoading(false);
+    };
+
+    const handleCSVImport = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const rows = ev.target.result.split('\n').slice(1);
+            const batch = writeBatch(db);
+            rows.forEach(r => { const [n, em, ph] = r.split(','); if(n) batch.set(doc(collection(db, 'addressBook')), { name: n, email: em, phone: ph }); });
+            await batch.commit(); alert("S25 CRM Directory Imported.");
+        };
+        reader.readAsText(file);
     };
 
     const HeaderNav = ({ prev }) => (
@@ -178,15 +191,15 @@ const EstimateApp = ({ userId }) => {
                         <h1 style={{color:theme.hub, fontSize:'48px', letterSpacing:'-3px'}}>MANAGEMENT HUB</h1>
                         
                         <div style={s.card(theme.hub)}>
-                            <span style={s.label}>1. Technical Traffic Lights (Live Repairs)</span>
+                            <span style={s.label}>1. Technical Traffic Light Tracker (Live Repairs)</span>
                             <div style={{background:'#000', padding:'25px', borderRadius:'20px', border:'2px solid #333', height:'250px', overflowY:'auto'}}>
-                                {history.map((h, i) => (
+                                {(history || []).map((h, i) => (
                                     <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'18px 0', borderBottom:'1px solid #222'}}>
-                                        <div><div style={{fontWeight:'900', fontSize:'22px'}}>{h.vehicle?.reg}</div><div style={{fontSize:'13px', color:'#888'}}>{h.client?.name}</div></div>
+                                        <div><div style={{fontWeight:'900', fontSize:'22px'}}>{h?.vehicle?.reg}</div><div style={{fontSize:'13px', color:'#888'}}>{h?.client?.name}</div></div>
                                         <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
-                                            <div style={{...s.traffic(h.status==='STRIPPING'), background:theme.danger}} title="Stripping" />
-                                            <div style={{...s.traffic(h.status==='PAINT'), background:theme.work}} title="In Paint" />
-                                            <div style={{...s.traffic(h.status==='QC'), background:theme.deal}} title="Ready/QC" />
+                                            <div style={{...s.traffic(h?.status==='STRIPPING'), background:theme.danger}} title="Stripping" />
+                                            <div style={{...s.traffic(h?.status==='PAINT'), background:theme.work}} title="In Paint" />
+                                            <div style={{...s.traffic(h?.status==='QC'), background:theme.deal}} title="Ready/QC" />
                                             <button style={{...s.btnG(theme.deal), padding:'12px 20px', marginLeft:'10px'}} onClick={()=>setJob(h)}>LOAD</button>
                                         </div>
                                     </div>
@@ -197,26 +210,27 @@ const EstimateApp = ({ userId }) => {
                         <div style={s.card(theme.hub)}>
                             <span style={s.label}>2. Quick Vehicle Intake</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}>
-                                <input style={{...s.input, flex:2, fontSize:'38px', fontWeight:'900', textAlign:'center', border:`4px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
+                                <input style={{...s.input, flex:2, fontSize:'38px', fontWeight:'900', textAlign:'center', border:`4px solid ${theme.hub}`}} value={job?.vehicle?.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
                                 <button style={{...s.btnG(theme.hub), width:'160px', fontSize:'24px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
                             </div>
                             <div style={{display:'flex', gap:'12px'}}>
-                                <input style={{...s.input, flex:3}} placeholder="VIN / Chassis Command" value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
-                                <button style={{...s.btnG(theme.set), padding:'12px'}} onClick={() => window.open(`https://www.google.com/search?q=${job.vehicle.make}+workshop+manual+${job.vehicle.year}`, '_blank')}>MANUALS</button>
-                                <button style={{...s.btnG(theme.work), padding:'12px'}} onClick={() => window.open(`https://www.google.com/search?q=${job.vehicle.vin}+parts+lookup`, '_blank')}>PARTS</button>
+                                <input style={{...s.input, flex:3}} placeholder="VIN / Chassis Command" value={job?.vehicle?.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
+                                <button style={{...s.btnG(theme.set), padding:'12px'}} onClick={() => window.open(`https://www.google.com/search?q=${job?.vehicle?.make}+workshop+manual+${job?.vehicle?.year}`, '_blank')}>MANUALS</button>
+                                <button style={{...s.btnG(theme.work), padding:'12px'}} onClick={() => window.open(`https://www.google.com/search?q=${job?.vehicle?.vin}+parts+lookup`, '_blank')}>PARTS</button>
                             </div>
                         </div>
 
                         <div style={s.card(theme.hub)}>
-                            <span style={s.label}>3. Address CSR Pick & Import</span>
-                            <div style={{background:'#000', padding:'25px', borderRadius:'20px', border:'2px solid #333', height:'280px', overflowY:'auto'}}>
-                                {addressBook.map((c, i) => (
-                                    <div key={i} style={{borderBottom:'1px solid #222', padding:'18px 0', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                        <div><div style={{fontWeight:'900', fontSize:'22px'}}>{c.name}</div><div style={{fontSize:'12px', color:'#888'}}>{c.email || c.phone}</div></div>
-                                        <button style={{...s.btnG(theme.deal), padding:'15px 25px'}} onClick={() => {
-                                            setJob({...job, client: { name: c.name, phone: c.phone, email: c.email }});
-                                            alert(`${c.name} Imported.`);
-                                        }}>IMPORT</button>
+                            <span style={s.label}>3. Address CSR Folder (Samsung CRM Sync)</span>
+                            <input type="file" accept=".csv" onChange={handleCSVImport} style={{fontSize:'12px', width:'100%', marginBottom:'15px'}} />
+                            <div style={{background:'#000', padding:'25px', borderRadius:'20px', border:'2px solid #333', height:'350px', overflowY:'auto'}}>
+                                {(addressBook || []).map((c, i) => (
+                                    <div key={i} style={{borderBottom:'1px solid #222', padding:'20px 0', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                        <div><div style={{fontWeight:'900', fontSize:'22px'}}>{c?.name}</div><div style={{fontSize:'12px', color:'#888'}}>{c?.phone} | {c?.email}</div></div>
+                                        <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'8px'}}>
+                                            <button style={{...s.btnG(theme.deal), padding:'10px 20px', fontSize:'12px'}} onClick={() => { setJob({...job, client: { name: c.name, phone: c.phone, email: c.email }}); alert("Client Details Imported."); }}>+ CLIENT</button>
+                                            <button style={{...s.btnG(theme.set), padding:'10px 20px', fontSize:'12px'}} onClick={() => { setJob({...job, insurance: { co: c.name, phone: c.phone, email: c.email }}); alert("Insurer Details Imported."); }}>+ INSURER</button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -229,14 +243,14 @@ const EstimateApp = ({ userId }) => {
                 {view === 'EST' && (
                     <div>
                         <HeaderNav prev="HUB" />
-                        <h2 style={{color:theme.hub}}>ESTIMATING CENTRE: {job.vehicle.reg}</h2>
-                        {aiIntel && <div style={{background:'#fff3e0', color:'#000', padding:'20px', borderRadius:'15px', marginBottom:'20px', fontSize:'15px'}}>🧠 <strong>AI INTEL:</strong> For {job.vehicle.make}, you average {aiIntel.avgMet.toFixed(1)}h MET & {aiIntel.avgPanel.toFixed(1)}h Panel.</div>}
+                        <h2 style={{color:theme.hub}}>ESTIMATING CENTRE: {job?.vehicle?.reg}</h2>
+                        {systemIntel && <div style={{background:'#fff3e0', color:'#000', padding:'20px', borderRadius:'15px', marginBottom:'20px', fontSize:'15px'}}>🧠 <strong>SYSTEM INTEL:</strong> For {job?.vehicle?.make}, typical labour is {systemIntel.avgMet.toFixed(1)}h MET & {systemIntel.avgPanel.toFixed(1)}h Panel.</div>}
                         <div style={s.card(theme.hub)}>
-                            <span style={s.label}>1. Labour Allocation (Qualified Hours)</span>
+                            <span style={s.label}>1. Labour Allocation (MET/Panel/Paint)</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px', marginBottom:'20px'}}>
-                                <div><span style={{fontSize:'10px', color:'#888'}}>MET</span><input style={s.input} value={job.repair.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} /></div>
-                                <div><span style={{fontSize:'10px', color:'#888'}}>PANEL</span><input style={s.input} value={job.repair.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} /></div>
-                                <div><span style={{fontSize:'10px', color:'#888'}}>PAINT</span><input style={s.input} value={job.repair.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
+                                <div><span style={{fontSize:'10px', color:'#888'}}>MET</span><input style={s.input} value={job?.repair?.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} /></div>
+                                <div><span style={{fontSize:'10px', color:'#888'}}>PANEL</span><input style={s.input} value={job?.repair?.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} /></div>
+                                <div><span style={{fontSize:'10px', color:'#888'}}>PAINT</span><input style={s.input} value={job?.repair?.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
                             </div>
                             <span style={s.label}>2. Parts Matrix Grid</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'15px'}}>
@@ -244,15 +258,15 @@ const EstimateApp = ({ userId }) => {
                                 <input id="pC" style={{...s.input, flex:1}} type="number" placeholder="£" />
                                 <button style={s.btnG(theme.deal)} onClick={()=>{
                                     const d=document.getElementById('pD'), c=document.getElementById('pC');
-                                    if(d.value && c.value) setJob({...job, repair:{...job.repair, items:[...(job.repair.items||[]), {desc:d.value, cost:c.value}]}});
+                                    if(d.value && c.value) setJob({...job, repair:{...job.repair, items:[...(job?.repair?.items||[]), {desc:d.value, cost:c.value}]}});
                                     d.value=''; c.value='';
                                 }}>+</button>
                             </div>
                             <div style={{background:'#000', padding:'35px', borderRadius:'25px', border:'1px solid #333', marginBottom:'20px'}}>
-                                <div style={{display:'flex', justifyContent:'space-between', fontSize:'28px'}}><span>Grand Total:</span><strong>£{totals.total.toFixed(2)}</strong></div>
-                                <div style={{display:'flex', justifyContent:'space-between', color:theme.deal, marginTop:'15px', borderTop:'2px solid #222', paddingTop:'15px'}}><span>Insurer Pays:</span><strong>£{totals.insurer.toFixed(2)}</strong></div>
+                                <div style={{display:'flex', justifyContent:'space-between', fontSize:'28px'}}><span>Total authorised:</span><strong>£{totals.total.toFixed(2)}</strong></div>
+                                <div style={{display:'flex', justifyContent:'space-between', color:theme.deal, marginTop:'15px', borderTop:'2px solid #222', paddingTop:'15px'}}><span>Insurer Balance:</span><strong>£{totals.insurer.toFixed(2)}</strong></div>
                             </div>
-                            <input style={{...s.input, color:theme.danger, fontWeight:'bold', border:`3px solid ${theme.danger}`}} placeholder="CLIENT EXCESS DEDUCTION -£" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
+                            <input style={{...s.input, color:theme.danger, fontWeight:'bold', border:`2px solid ${theme.danger}`}} placeholder="DEDUCT EXCESS -£" value={job?.repair?.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginTop:'25px'}}>
                                 <button style={s.btnG('#333')} onClick={() => { setDocType('ESTIMATE'); setTimeout(() => window.print(), 100); }}>PRINT ESTIMATE</button>
                                 <button style={s.btnG(theme.deal)} onClick={() => { setDocType('INVOICE'); setTimeout(() => window.print(), 100); }}>CONVERT TO INVOICE</button>
@@ -261,48 +275,26 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* Workshop Job Card */}
+                {/* Advanced Workshop Job Card */}
                 {view === 'WORK' && (
                     <div>
                         <HeaderNav prev="EST" />
-                        <h1 style={{color:theme.work}}>ADVANCED JOB CARD</h1>
+                        <h1 style={{color:theme.work}}>ADVANCED WORKSHOP JOB CARD</h1>
                         <div style={{display:'flex', gap:'20px', marginBottom:'25px'}}>
-                            <button onClick={()=>setJob({...job, status:'STRIPPING'})} style={{...s.btnG(job.status==='STRIPPING'?theme.danger:'#222'), flex:1}}>🔴 STRIPPING</button>
-                            <button onClick={()=>setJob({...job, status:'PAINT'})} style={{...s.btnG(job.status==='PAINT'?theme.work:'#222'), flex:1}}>🟡 PAINTING</button>
-                            <button onClick={()=>setJob({...job, status:'QC'})} style={{...s.btnG(job.status==='QC'?theme.deal:'#222'), flex:1}}>🟢 QC / BUILT</button>
+                            <button onClick={()=>setJob({...job, status:'STRIPPING'})} style={{...s.btnG(job?.status==='STRIPPING'?theme.danger:'#222'), flex:1}}>🔴 STRIPPING</button>
+                            <button onClick={()=>setJob({...job, status:'PAINT'})} style={{...s.btnG(job?.status==='PAINT'?theme.work:'#222'), flex:1}}>🟡 PAINTING</button>
+                            <button onClick={()=>setJob({...job, status:'QC'})} style={{...s.btnG(job?.status==='QC'?theme.deal:'#222'), flex:1}}>🟢 QC / BUILT</button>
                         </div>
                         <div style={s.card(theme.work)}>
-                            <h2 style={{margin:'0 0 25px 0', fontSize:'32px'}}>{job.vehicle.reg} | {job.vehicle.make}</h2>
+                            <h2 style={{margin:'0 0 25px 0', fontSize:'32px'}}>{job?.vehicle?.reg} | {job?.vehicle?.make} ({job?.vehicle?.year})</h2>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'25px', background:'#000', padding:'30px', borderRadius:'25px', border:'1px solid #333'}}>
-                                <div><span style={s.label}>Client Name</span>{job.client.name || 'N/A'}</div>
-                                <div><span style={s.label}>Insurance/Fleet</span>{job.insurance.co || 'PRIVATE'}</div>
-                                <div><span style={s.label}>Allocated MET</span>{job.repair.metHrs}h</div>
-                                <div><span style={s.label}>Allocated Panel</span>{job.repair.panelHrs}h</div>
-                                <div><span style={s.label}>Paint Hours</span>{job.repair.paintHrs}h</div>
-                                <div><span style={s.label}>Chassis/VIN</span>{job.vehicle.vin || '-'}</div>
+                                <div><span style={s.label}>Customer Details</span><strong>{job?.client?.name || 'N/A'}</strong><br/>{job?.client?.phone}<br/>{job?.client?.email}</div>
+                                <div><span style={s.label}>Insurer / Fleet</span><strong>{job?.insurance?.co || 'PRIVATE'}</strong><br/>{job?.insurance?.phone}</div>
+                                <div><span style={s.label}>Technical Specs</span>Fuel: {job?.vehicle?.fuel}<br/>Engine: {job?.vehicle?.engine}<br/>MOT: {job?.vehicle?.mot}</div>
+                                <div><span style={s.label}>Authorised Hours</span>MET: {job?.repair?.metHrs}h<br/>Panel: {job?.repair?.panelHrs}h<br/>Paint: {job?.repair?.paintHrs}h</div>
+                                <div style={{gridColumn:'span 2'}}><span style={s.label}>Chassis / VIN Command</span>{job?.vehicle?.vin || 'NOT ENTERED'}</div>
                             </div>
-                            <textarea style={{...s.input, height:'250px', marginTop:'30px'}} value={job.repair.techNotes} onChange={e=>setJob({...job, repair:{...job.repair, techNotes:e.target.value}})} placeholder="Log damage report and supplemental findings for office..." />
-                        </div>
-                    </div>
-                )}
-
-                {/* Deal Folder Archive */}
-                {view === 'DEAL' && (
-                    <div>
-                        <HeaderNav prev="WORK" />
-                        <h1 style={{color:theme.deal}}>DEAL SUBMISSION VAULT</h1>
-                        <div style={s.card(theme.deal)}>
-                            <span style={s.label}>1. Client Authorisation Pad</span>
-                            <NativeSignature onSave={(data) => setJob({...job, vault: {...job.vault, signature: data}})} />
-                            <span style={s.label} style={{marginTop:'35px'}}>2. Claim Asset Snapshot History</span>
-                            <div style={{background:'#000', padding:'25px', borderRadius:'20px', border:'1px solid #333', marginBottom:'30px'}}>
-                                {(job.vault.invoices || []).map((inv, idx) => (
-                                    <div key={idx} style={{borderBottom:'1px solid #222', padding:'18px 0', display:'flex', justifyContent:'space-between', fontSize:'18px'}}>
-                                        <span>{inv.type} Archive: {inv.date}</span><span style={{fontWeight:'bold'}}>£{inv.total?.toFixed(2)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <input type="file" multiple onChange={(e) => handleFileUpload(e, 'claims', 'photos')} />
+                            <textarea style={{...s.input, height:'250px', marginTop:'30px'}} value={job?.repair?.techNotes} onChange={e=>setJob({...job, repair:{...job.repair, techNotes:e.target.value}})} placeholder="Log damage report and supplemental findings for office audit..." />
                         </div>
                     </div>
                 )}
@@ -314,12 +306,12 @@ const EstimateApp = ({ userId }) => {
                         <h1 style={{color:theme.fin}}>FINANCE AUDIT VAULT</h1>
                         <div style={s.card(theme.fin)}>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'45px'}}>
-                                <div style={{background:'#000', padding:'40px', borderRadius:'30px', border:'1px solid #333'}}><span style={s.label}>Gross Revenue</span><h2 style={{margin:0, fontSize:'42px'}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toFixed(2)}</h2></div>
-                                <div style={{background:'#000', padding:'40px', borderRadius:'30px', border:'1px solid #333'}}><span style={s.label}>Receipt Total</span><h2 style={{margin:0, color:theme.danger, fontSize:'42px'}}>{job.vault.expenses?.length || 0}</h2></div>
+                                <div style={{background:'#000', padding:'40px', borderRadius:'30px', border:'1px solid #333'}}><span style={s.label}>Gross Revenue</span><h2 style={{margin:0, fontSize:'42px'}}>£{history.reduce((a,b)=>a+(b?.totals?.total||0),0).toFixed(2)}</h2></div>
+                                <div style={{background:'#000', padding:'40px', borderRadius:'30px', border:'1px solid #333'}}><span style={s.label}>Receipt Count</span><h2 style={{margin:0, color:theme.danger, fontSize:'42px'}}>{job?.vault?.expenses?.length || 0} CSRs</h2></div>
                             </div>
                             <span style={s.label}>Expenditure CSR Audit Trail</span>
                             <div style={{background:'#000', padding:'25px', borderRadius:'20px', height:'350px', overflowY:'auto', border:'2px solid #333', marginBottom:'35px'}}>
-                                {(job.vault.expenses || []).map((exp, idx) => (
+                                {(job?.vault?.expenses || []).map((exp, idx) => (
                                     <div key={idx} style={{borderBottom:'1px solid #222', padding:'20px 0', fontSize:'16px', display:'flex', justifyContent:'space-between'}}>
                                         <span>Triple MMM Receipt #{idx+1}</span><a href={exp} target="_blank" rel="noreferrer" style={{color:theme.danger, fontWeight:'bold', textDecoration:'none'}}>VIEW CSR</a>
                                     </div>
@@ -343,58 +335,57 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* Print View */}
+            {/* Print View (Absolute Isolation) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'60px', fontFamily:'Arial'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'40px'}}>
                     <div>
-                        {settings.logoUrl && <img src={settings.logoUrl} style={{height:'130px', marginBottom:'20px'}} />}
-                        <h1 style={{margin:0, color:'#f97316', fontSize:'48px', fontWeight:'900'}}>{settings.coName}</h1>
-                        <p style={{fontSize:'18px'}}>{settings.address}<br/>Tel: {settings.phone}</p>
+                        {settings?.logoUrl && <img src={settings.logoUrl} style={{height:'130px', marginBottom:'20px'}} />}
+                        <h1 style={{margin:0, color:'#f97316', fontSize:'48px', fontWeight:'900'}}>{settings?.coName}</h1>
+                        <p style={{fontSize:'18px'}}>{settings?.address}<br/>Tel: {settings?.phone}</p>
                     </div>
                     <div style={{textAlign:'right'}}>
                         <h2 style={{color:'#f97316', fontSize:'65px', margin:0}}>{docType}</h2>
-                        <p style={{marginTop:'20px', fontSize:'22px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                        <p style={{marginTop:'20px', fontSize:'22px'}}><strong>Reg:</strong> {job?.vehicle?.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
                     </div>
                 </div>
                 <div style={{marginTop:'45px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'60px'}}>
                     <div style={{background:'#f9f9f9', padding:'35px', borderRadius:'25px', border:'1px solid #ddd'}}>
-                        <h3 style={{margin:'0 0 15px 0', fontSize:'28px'}}>{job.client.name}</h3>
-                        <p style={{margin:0, fontSize:'18px'}}>{job.client.address}<br/>{job.client.phone}</p>
+                        <h3 style={{margin:'0 0 15px 0', fontSize:'28px'}}>{job?.client?.name}</h3>
+                        <p style={{margin:0, fontSize:'18px'}}>{job?.client?.address}<br/>{job?.client?.phone}</p>
                     </div>
                     <div style={{background:'#f9f9f9', padding:'35px', borderRadius:'25px', border:'1px solid #ddd'}}>
-                        <h3 style={{margin:'0 0 15px 0', color:'#f97316', fontSize:'28px'}}>{job.vehicle.reg}</h3>
+                        <h3 style={{margin:'0 0 15px 0', color:'#f97316', fontSize:'28px'}}>{job?.vehicle?.reg}</h3>
                         <div style={{fontSize:'16px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
-                            <span><strong>Make:</strong> {job.vehicle.make || '-'}</span><span><strong>Year:</strong> {job.vehicle.year || '-'}</span>
-                            <span style={{gridColumn:'span 2'}}><strong>VIN:</strong> {job.vehicle.vin || '-'}</span>
+                            <span><strong>Make:</strong> {job?.vehicle?.make || '-'}</span><span><strong>Year:</strong> {job?.vehicle?.year || '-'}</span>
                         </div>
                     </div>
                 </div>
                 <table style={{width:'100%', marginTop:'50px', borderCollapse:'collapse'}}>
                     <thead><tr style={{background:'#f3f3f3', borderBottom:'5px solid #ddd'}}><th style={{padding:'25px', textAlign:'left', fontSize:'20px'}}>Qualified Technical Work</th><th style={{padding:'25px', textAlign:'right', fontSize:'20px'}}>Amount</th></tr></thead>
                     <tbody>
-                        {(job.repair.items || []).map((it, i) => (
-                            <tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'25px', fontSize:'18px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'25px', fontWeight:'bold', fontSize:'18px'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>
+                        {(job?.repair?.items || []).map((it, i) => (
+                            <tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'25px', fontSize:'18px'}}>{it?.desc}</td><td style={{textAlign:'right', padding:'25px', fontWeight:'bold', fontSize:'18px'}}>£{(parseFloat(it?.cost)*(1+(parseFloat(settings?.markup)/100))).toFixed(2)}</td></tr>
                         ))}
-                        <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'25px', fontSize:'18px'}}>Bodywork Labour ({totals.labHrs} hrs)</td><td style={{textAlign:'right', padding:'25px', fontWeight:'bold', fontSize:'18px'}}>£{totals.labPrice.toFixed(2)}</td></tr>
+                        <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'25px', fontSize:'18px'}}>Bodywork Labour ({totals?.labHrs} hrs)</td><td style={{textAlign:'right', padding:'25px', fontWeight:'bold', fontSize:'18px'}}>£{totals?.labPrice?.toFixed(2)}</td></tr>
                     </tbody>
                 </table>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:'60px'}}>
                     <div style={{textAlign:'center', width:'48%'}}>
-                        {docType === 'INVOICE' && settings.paypalQr && (
+                        {docType === 'INVOICE' && settings?.paypalQr && (
                             <div>
                                 <img src={settings.paypalQr} style={{height:'350px', width:'350px', objectFit:'contain', marginBottom:'20px'}} />
-                                <div style={{fontSize:'22px', fontWeight:'900', background:'#fff3e0', padding:'35px', borderRadius:'30px', border:'4px solid #f97316'}}>
-                                    PAYMENT TO: {settings.bank}
+                                <div style={{fontSize:'22px', fontWeight:'900', background:'#fff3e0', padding:'35px', borderRadius:'25px', border:'4px solid #f97316'}}>
+                                    PAYMENT TO: {settings?.bank}
                                 </div>
                             </div>
                         )}
-                        {job.vault.signature && <div style={{marginTop:'45px'}}><span style={{fontSize:'12px', textTransform:'uppercase', color:'#888'}}>Client Satisfaction Authorisation</span><br/><img src={job.vault.signature} style={{height:'130px'}} /></div>}
+                        {job?.vault?.signature && <div style={{marginTop:'45px'}}><span style={{fontSize:'12px', textTransform:'uppercase', color:'#888'}}>Authorisation Sign-off</span><br/><img src={job.vault.signature} style={{height:'130px'}} /></div>}
                     </div>
                     <div style={{width:'45%', textAlign:'right'}}>
-                        <h1 style={{color:'#f97316', fontSize:'80px', margin:'0 0 35px 0'}}>£{totals.total.toFixed(2)}</h1>
+                        <h1 style={{color:'#f97316', fontSize:'80px', margin:'0 0 35px 0'}}>£{totals?.total?.toFixed(2)}</h1>
                         <div style={{background:'#fff3e0', padding:'45px', border:'5px solid #f97316', borderRadius:'35px', textAlign:'left'}}>
-                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'15px', fontSize:'22px'}}><span>CLIENT EXCESS:</span><strong style={{fontSize:'32px'}}>£{totals.customer.toFixed(2)}</strong></div>
-                            <div style={{display:'flex', justifyContent:'space-between', color:'#f97316', borderTop:'5px solid #f97316', paddingTop:'25px', fontSize:'22px'}}><span>INSURER BALANCE:</span><strong style={{fontSize:'48px'}}>£{totals.insurer.toFixed(2)}</strong></div>
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'15px', fontSize:'22px'}}><span>CLIENT EXCESS:</span><strong style={{fontSize:'32px'}}>£{totals?.customer?.toFixed(2)}</strong></div>
+                            <div style={{display:'flex', justifyContent:'space-between', color:'#f97316', borderTop:'3px solid #f97316', paddingTop:'25px', fontSize:'22px'}}><span>INSURER BALANCE:</span><strong style={{fontSize:'48px'}}>£{totals?.insurer?.toFixed(2)}</strong></div>
                         </div>
                     </div>
                 </div>
