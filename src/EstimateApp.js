@@ -42,7 +42,7 @@ const s = {
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '10px', overflowX: 'auto', borderTop: '3px solid #333', zIndex: 1000, justifyContent: 'center' }
 };
 
-// --- NATIVE SIGNATURE ENGINE (PREVENTS BUILD FAILURES) ---
+// --- NATIVE SIGNATURE ENGINE (BUILD-SAFE) ---
 const NativeSignature = ({ onSave }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -76,7 +76,7 @@ const EstimateApp = ({ userId }) => {
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc', logoUrl: '', paypalQr: '', password: '1234', terms: '12-Month Bodywork Warranty.',
+        dvlaKey: 'IXqv1yDD1latEPHIntk2w8MEuz9X57IE9TP9sxGc', logoUrl: '', paypalQr: '', password: '1234', terms: 'Standard 12-Month Bodywork Warranty.',
         calId: 'markmonie72@gmail.com'
     });
 
@@ -93,12 +93,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v46_MASTER_LOCKED');
+        const saved = localStorage.getItem('mmm_v47_FINANCE_LOCKED');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v46_MASTER_LOCKED', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v47_FINANCE_LOCKED', JSON.stringify(job)); }, [job]);
 
     const totals = useMemo(() => {
         const partsCost = (job.repair.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
@@ -119,7 +119,7 @@ const EstimateApp = ({ userId }) => {
             const res = await axios.post(proxy, { registrationNumber: job.vehicle.reg }, { headers: { 'x-api-key': settings.dvlaKey } });
             const d = res.data;
             setJob(prev => ({...prev, vehicle: {...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus}}));
-        } catch (e) { alert("DVLA Handshake Failed."); }
+        } catch (e) { alert("DVLA Handshake Error."); }
         setLoading(false);
     };
 
@@ -139,7 +139,7 @@ const EstimateApp = ({ userId }) => {
     const saveMaster = async () => {
         const snap = { date: new Date().toLocaleDateString(), total: totals.total, insurer: totals.insurer, type: docType };
         const updatedJob = { ...job, totals, vault: { ...job.vault, invoices: [...(job.vault.invoices || []), snap] }, createdAt: serverTimestamp() };
-        await setDoc(doc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString())), updatedJob);
+        await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), updatedJob);
         alert("Synced & Snapshot Archived");
     };
 
@@ -152,7 +152,7 @@ const EstimateApp = ({ userId }) => {
                     <div>
                         <h1 style={{color:theme.hub, letterSpacing:'-2px'}}>MANAGEMENT HUB</h1>
                         <div style={s.card(theme.hub)}>
-                            <span style={s.label}>1. Technical Intake (DVLA)</span>
+                            <span style={s.label}>1. Technical Identification (DVLA)</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'15px'}}>
                                 <input style={{...s.input, flex:2, fontSize:'24px', fontWeight:'900', textAlign:'center', border:`2px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
                                 <button style={{...s.btnG(theme.hub), width:'120px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
@@ -168,7 +168,7 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* ESTIMATOR (LOCKED SPECS & PARTS MATRIX) */}
+                {/* ESTIMATOR */}
                 {view === 'EST' && (
                     <div>
                         <h2 style={{color:theme.hub}}>ESTIMATING: {job.vehicle.reg}</h2>
@@ -178,7 +178,7 @@ const EstimateApp = ({ userId }) => {
                             <span>MOT: {job.vehicle.mot || '-'}</span>
                         </div>
                         <div style={s.card(theme.hub)}>
-                            <span style={s.label}>1. Labour Breakdown (Hrs)</span>
+                            <span style={s.label}>1. Labour Hours (MET/Panel/Paint)</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'15px'}}>
                                 <div><span style={s.label}>MET</span><input style={s.input} value={job.repair.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} /></div>
                                 <div><span style={s.label}>Panel</span><input style={s.input} value={job.repair.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} /></div>
@@ -194,7 +194,7 @@ const EstimateApp = ({ userId }) => {
                                     d.value=''; c.value='';
                                 }}>+</button>
                             </div>
-                            <span style={s.label}>3. Financial Summary</span>
+                            <span style={s.label}>3. Financial Calculation Summary</span>
                             <div style={{background:'#000', padding:'20px', borderRadius:'15px', border:'1px solid #333', marginBottom:'15px'}}>
                                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}><span>Total bill:</span><strong>£{totals.total.toFixed(2)}</strong></div>
                                 <div style={{display:'flex', justifyContent:'space-between', color:theme.deal, borderTop:'1px solid #222', paddingTop:'8px'}}><span>Insurer Pays:</span><strong>£{totals.insurer.toFixed(2)}</strong></div>
@@ -224,14 +224,14 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* DEAL FOLDER (SIGNATURE & SNAPSHOTS) */}
+                {/* DEAL FOLDER */}
                 {view === 'DEAL' && (
                     <div>
                         <h1 style={{color:theme.deal}}>DEAL SUBMISSION FOLDER</h1>
                         <div style={s.card(theme.deal)}>
-                            <span style={s.label}>1. Digital Signature</span>
+                            <span style={s.label}>1. Digital Signature Sign-off</span>
                             <NativeSignature onSave={(data) => setJob({...job, vault: {...job.vault, signature: data}})} />
-                            <span style={s.label} style={{marginTop:'25px'}}>2. Archived Snapshots</span>
+                            <span style={s.label} style={{marginTop:'25px'}}>2. Snapshot Archive (CSR)</span>
                             <div style={{background:'#000', padding:'15px', borderRadius:'12px', marginBottom:'20px', fontSize:'13px'}}>
                                 {(job.vault.invoices || []).map((inv, idx) => (
                                     <div key={idx} style={{borderBottom:'1px solid #333', padding:'10px 0', display:'flex', justifyContent:'space-between'}}>
@@ -244,7 +244,7 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* HISTORY (JOBS GLIDE BUTTON) */}
+                {/* JOBS (HISTORY) */}
                 {view === 'RECENT' && (
                     <div>
                         <h1 style={{color:theme.hub}}>RECENT REPAIRS</h1>
@@ -262,15 +262,33 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* FINANCE */}
+                {/* FINANCE VAULT (CSR INTEGRATED) */}
                 {view === 'FIN' && (
                     <div>
                         <h1 style={{color:theme.fin}}>FINANCE VAULT</h1>
                         <div style={s.card(theme.fin)}>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginBottom:'25px'}}>
-                                <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Revenue</span><h2 style={{margin:0}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toFixed(2)}</h2></div>
-                                <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Receipts</span><h2 style={{margin:0, color:theme.danger}}>{job.vault.expenses?.length || 0}</h2></div>
+                                <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Income</span><h2 style={{margin:0}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toFixed(2)}</h2></div>
+                                <div style={{background:'#000', padding:'25px', borderRadius:'15px'}}><span style={s.label}>Expenditure</span><h2 style={{margin:0, color:theme.danger}}>{job.vault.expenses?.length || 0} Receipts</h2></div>
                             </div>
+                            
+                            <span style={s.label}>Income & Expenditure CSR Log</span>
+                            <div style={{background:'#000', padding:'15px', borderRadius:'12px', height:'200px', overflowY:'auto', border:'1px solid #333', marginBottom:'20px'}}>
+                                {history.map((h, idx) => (
+                                    <div key={`inc-${idx}`} style={{borderBottom:'1px solid #222', padding:'10px 0', fontSize:'13px', display:'flex', justifyContent:'space-between'}}>
+                                        <span>{h.vehicle?.reg} ({h.client?.name})</span>
+                                        <span style={{color:theme.deal}}>+£{h.totals?.total?.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                                {job.vault.expenses.map((exp, idx) => (
+                                    <div key={`exp-${idx}`} style={{borderBottom:'1px solid #222', padding:'10px 0', fontSize:'13px', display:'flex', justifyContent:'space-between'}}>
+                                        <span>Expense Receipt #{idx + 1}</span>
+                                        <a href={exp} target="_blank" rel="noreferrer" style={{color:theme.danger, textDecoration:'none', fontWeight:'bold'}}>VIEW CSR</a>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <span style={s.label}>Log Expenditure Photo</span>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} />
                         </div>
                     </div>
@@ -286,15 +304,15 @@ const EstimateApp = ({ userId }) => {
                                 <div><span style={s.label}>PayPal QR</span>{settings.paypalQr && <img src={settings.paypalQr} style={{height:'40px', marginBottom:'10px'}} />}<input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'paypalQr')} /></div>
                             </div>
                             <input style={s.input} placeholder="Calendar Email" value={settings.calId} onChange={e=>setSettings({...settings, calId:e.target.value})} />
-                            <input style={s.input} placeholder="Co Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
+                            <input style={s.input} placeholder="Company Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
                             <input style={s.input} placeholder="Bank Sort/Acc" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
                             <textarea style={{...s.input, height:'100px'}} value={settings.terms} onChange={e=>setSettings({...settings, terms:e.target.value})} />
-                            <button style={{...s.btnG(theme.set), width:'100%'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Locked."); }}>SAVE SETTINGS (GREEN)</button>
+                            <button style={{...s.btnG(theme.set), width:'100%'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Settings Saved."); }}>SAVE SETTINGS (GREEN)</button>
                         </div>
                     </div>
                 )}
 
-                {/* NAVIGATION DOCK (RESTORED JOBS GLIDE) */}
+                {/* NAVIGATION DOCK */}
                 <div className="no-print" style={s.dock}>
                     <button onClick={()=>setView('HUB')} style={{...s.btnG(view === 'HUB' ? theme.hub : '#222'), minWidth:'80px'}}>HUB</button>
                     <button onClick={()=>setView('EST')} style={{...s.btnG(view === 'EST' ? theme.hub : '#222'), minWidth:'80px'}}>EST</button>
@@ -306,7 +324,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* --- MASTER CLEAN PRINT VIEW (OFFICIAL DOCUMENT) --- */}
+            {/* --- MASTER CLEAN PRINT VIEW --- */}
             <div className="print-only" style={{display:'none', color:'black', padding:'60px', fontFamily:'Arial'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'6px solid #f97316', paddingBottom:'35px'}}>
                     <div>
@@ -321,12 +339,12 @@ const EstimateApp = ({ userId }) => {
                 </div>
                 <div style={{marginTop:'35px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'40px'}}>
                     <div style={{background:'#f9f9f9', padding:'25px', borderRadius:'15px', border:'1px solid #ddd'}}>
-                        <span style={{fontSize:'10px', fontWeight:'900', color:'#888', textTransform:'uppercase'}}>Client / Owner</span>
+                        <span style={{fontSize:'10px', fontWeight:'900', color:'#888', textTransform:'uppercase'}}>Client Details</span>
                         <h3 style={{margin:'10px 0'}}>{job.client.name}</h3>
                         <p style={{margin:0, fontSize:'14px'}}>{job.client.address}</p>
                     </div>
                     <div style={{background:'#f9f9f9', padding:'25px', borderRadius:'15px', border:'1px solid #ddd'}}>
-                        <span style={{fontSize:'10px', fontWeight:'900', color:'#888', textTransform:'uppercase'}}>Vehicle Specification</span>
+                        <span style={{fontSize:'10px', fontWeight:'900', color:'#888', textTransform:'uppercase'}}>Technical Specification</span>
                         <h3 style={{margin:'10px 0', color:'#f97316'}}>{job.vehicle.reg}</h3>
                         <div style={{fontSize:'12px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', color:'#333'}}>
                             <span><strong>Make:</strong> {job.vehicle.make || '-'}</span>
@@ -345,13 +363,13 @@ const EstimateApp = ({ userId }) => {
                         {job.repair.items.map((it, i) => (
                             <tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'18px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'18px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>
                         ))}
-                        <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'18px'}}>Professional Bodywork Labour ({totals.labHrs} hrs)</td><td style={{textAlign:'right', padding:'18px', fontWeight:'bold'}}>£{totals.labPrice.toFixed(2)}</td></tr>
+                        <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'18px'}}>Qualified Bodywork Labour ({totals.labHrs} hrs)</td><td style={{textAlign:'right', padding:'18px', fontWeight:'bold'}}>£{totals.labPrice.toFixed(2)}</td></tr>
                     </tbody>
                 </table>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:'40px'}}>
                     <div>
                         {docType === 'INVOICE' && settings.paypalQr && <img src={settings.paypalQr} style={{height:'140px'}} />}
-                        {job.vault.signature && <div style={{marginTop:'20px'}}><span style={{fontSize:'10px', textTransform:'uppercase', color:'#888'}}>Sign-off</span><br/><img src={job.vault.signature} style={{height:'80px'}} /></div>}
+                        {job.vault.signature && <div style={{marginTop:'20px'}}><span style={{fontSize:'10px', textTransform:'uppercase', color:'#888'}}>Satisfaction Sign-off</span><br/><img src={job.vault.signature} style={{height:'80px'}} /></div>}
                     </div>
                     <div style={{width:'50%', textAlign:'right'}}>
                         <h1 style={{color:'#f97316', fontSize:'52px', margin:'0 0 20px 0'}}>£{totals.total.toFixed(2)}</h1>
