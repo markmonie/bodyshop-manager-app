@@ -1,39 +1,3 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, doc, getDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
-  authDomain: "triple-mmm-body-repairs.firebaseapp.com",
-  projectId: "triple-mmm-body-repairs",
-  storageBucket: "triple-mmm-body-repairs.firebasestorage.app",
-  messagingSenderId: "110018101133",
-  appId: "1:110018101133:web:63b0996c7050c4967147c4",
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', bg: '#000', card: '#111', border: '#333', danger: '#ef4444' };
-const s = {
-    card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
-    input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '25px', borderRadius: '22px', marginBottom: '20px', outline: 'none', fontSize: '26px', fontWeight: 'bold', boxSizing: 'border-box' },
-    label: { color: '#94a3b8', fontSize: '16px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '15px', display: 'block', letterSpacing: '2.5px' },
-    displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
-    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '24px 35px', borderRadius: '22px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '18px', flexShrink: 0 }),
-    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '25px 20px', display: 'flex', gap: '15px', overflowX: 'auto', borderTop: '5px solid #222', zIndex: 1000 },
-    traffic: (active, color) => ({ width: '55px', height: '55px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' })
-};
-
-const EstimateApp = () => {
-    const [view, setView] = useState('HUB'); 
-    const [loading, setLoading] = useState(false);
-    const [history, setHistory] = useState([]);
-    const [settings, setSettings] = useState({ 
-        coName: 'Triple MMM Body Repairs', address: '20A New Street, ML9 3LT', phone: '07501 728319', 
-        bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
         dvlaKey: 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc'
     });
 
