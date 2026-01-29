@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- DESIGN SYSTEM: TUNGSTEN TITAN BASELINE ---
+// --- DESIGN SYSTEM: TUNGSTEN TITAN (V120 FINAL) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -30,31 +30,6 @@ const s = {
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '25px 20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, WebkitOverflowScrolling: 'touch', paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
     traffic: (active) => ({ width: '40px', height: '40px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '3px solid #fff' })
-};
-
-const NativeSignature = ({ onSave }) => {
-    const canvasRef = useRef(null);
-    const [isDrawing, setIsDrawing] = useState(false);
-    const getXY = (e) => {
-        const rect = canvasRef.current.getBoundingClientRect();
-        const cX = e.clientX || (e.touches && e.touches[0].clientX);
-        const cY = e.clientY || (e.touches && e.touches[0].clientY);
-        return { x: cX - rect.left, y: cY - rect.top };
-    };
-    const start = (e) => {
-        const { x, y } = getXY(e);
-        const ctx = canvasRef.current.getContext('2d');
-        ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(x, y);
-        setIsDrawing(true);
-    };
-    const move = (e) => { if (!isDrawing) return; const { x, y } = getXY(e); canvasRef.current.getContext('2d').lineTo(x, y); canvasRef.current.getContext('2d').stroke(); };
-    const end = () => { setIsDrawing(false); onSave(canvasRef.current.toDataURL()); };
-    return (
-        <div style={{ background: '#fff', borderRadius: '25px', padding: '20px' }}>
-            <canvas ref={canvasRef} width={400} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '260px', touchAction: 'none' }} />
-            <button style={{ ...s.btnG('#222'), width: '100%', marginTop: '15px', padding: '25px' }} onClick={() => { canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>RESET PAD</button>
-        </div>
-    );
 };
 
 const EstimateApp = ({ userId }) => {
@@ -85,13 +60,13 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v115_ABSOLUTE');
+        const saved = localStorage.getItem('mmm_v120_ABSOLUTE');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
         onSnapshot(collection(db, 'addressBook'), snap => setAddressBook(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v115_ABSOLUTE', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v120_ABSOLUTE', JSON.stringify(job)); }, [job]);
 
     // --- MATH & AI ---
     const totals = useMemo(() => {
@@ -112,24 +87,32 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job?.repair]);
 
-    // --- ABSOLUTE DVLA HANDSHAKE (FIXES ALL SECURITY BLOCKS) ---
+    // --- ABSOLUTE DVLA HANDSHAKE (LEGAL SPEC COMPLIANT) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
-        const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        const cleanReg = job.vehicle.reg.replace(/\s+/g, '').toUpperCase();
         const proxyUrl = `https://corsproxy.io/?${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
             const response = await fetch(proxyUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'x-api-key': settings.dvlaKey.trim() },
+                headers: { 
+                    'x-api-key': settings.dvlaKey.trim(),
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
-            if (!response.ok) throw new Error();
+            if (!response.ok) throw new Error(`${response.status}`);
             const d = await response.json();
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: {...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate}
+                vehicle: {
+                    ...prev.vehicle, 
+                    make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, 
+                    engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
+                }
             }));
         } catch (e) { alert("DVLA Handshake Refused: Verify API Key in Settings."); }
         setLoading(false);
@@ -198,7 +181,7 @@ const EstimateApp = ({ userId }) => {
                                     <div key={i} style={{borderBottom:'1px solid #222', padding:'25px 0', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                                         <div><div style={{fontWeight:'900', fontSize:'24px'}}>{c?.name}</div><div style={{fontSize:'14px', color:'#888'}}>{c?.phone}</div></div>
                                         <div style={{display:'flex', gap:'12px'}}>
-                                            <button style={{...s.btnG(theme.deal), padding:'15px 25px', fontSize:'14px'}} onClick={() => { setJob({...job, client: { name: c.name, phone: c.phone, email: c.email }}); alert("Client Assigned."); }}>+ CLIENT</button>
+                                            <button style={{...s.btnG(theme.deal), padding:'15px 25px', fontSize:'14px'}} onClick={() => { setJob({...job, client: { name: c.name, phone: c.phone, email: c.email, address: c.address }}); alert("Client Assigned."); }}>+ CLIENT</button>
                                             <button style={{...s.btnG(theme.set), padding:'15px 25px', fontSize:'14px'}} onClick={() => { setJob({...job, insurance: { co: c.name, phone: c.phone, email: c.email }}); alert("Insurer Assigned."); }}>+ INSURER</button>
                                         </div>
                                     </div>
@@ -222,6 +205,7 @@ const EstimateApp = ({ userId }) => {
                     <div>
                         <HeaderNav prev="HUB" /><h2 style={{color:theme.hub}}>ESTIMATING: {job?.vehicle?.reg}</h2>
                         <div style={s.card(theme.hub)}>
+                            <div style={{...s.displayBox, fontSize:'14px', marginBottom:'30px', color:theme.text}}><strong>{job.vehicle.make} | {job.vehicle.year} | {job.vehicle.colour}</strong></div>
                             <span style={s.label}>Labour Qualified Hours</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'15px', marginBottom:'30px'}}>
                                 <div><span style={s.label}>MET</span><input style={s.input} value={job?.repair?.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} /></div>
@@ -275,7 +259,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT VIEW (PRECISION FLEX-GRID LOCK) */}
+            {/* PRINT VIEW (FLEX GRID LOCK) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'60px', fontFamily:'Arial', width:'100%', boxSizing:'border-box'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'10px solid #f97316', paddingBottom:'45px', width:'100%'}}>
                     <div style={{flex:1}}>
@@ -289,7 +273,7 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 </div>
                 <table style={{width:'100%', marginTop:'60px', borderCollapse:'collapse'}}>
-                    <thead><tr style={{background:'#f3f3f3', borderBottom:'6px solid #ddd'}}><th style={{padding:'30px', textAlign:'left', fontSize:'24px'}}>Technical Breakdown</th><th style={{padding:'30px', textAlign:'right', fontSize:'24px'}}>Amount</th></tr></thead>
+                    <thead><tr style={{background:'#f3f3f3', borderBottom:'6px solid #ddd'}}><th style={{padding:'30px', textAlign:'left', fontSize:'24px'}}>Description</th><th style={{padding:'30px', textAlign:'right', fontSize:'24px'}}>Amount</th></tr></thead>
                     <tbody>
                         {(job?.repair?.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'2px solid #eee'}}><td style={{padding:'30px', fontSize:'20px'}}>{it?.desc}</td><td style={{textAlign:'right', padding:'30px', fontWeight:'bold', fontSize:'20px'}}>£{(parseFloat(it?.cost)*(1+(parseFloat(settings?.markup)/100))).toFixed(2)}</td></tr>))}
                         <tr style={{borderBottom:'2px solid #eee'}}><td style={{padding:'30px', fontSize:'20px'}}>Qualified Bodywork Labour ({totals?.lHrs} hrs)</td><td style={{textAlign:'right', padding:'30px', fontWeight:'bold', fontSize:'20px'}}>£{totals?.lPrice?.toFixed(2)}</td></tr>
@@ -303,7 +287,6 @@ const EstimateApp = ({ userId }) => {
                                 <div style={{fontSize:'22px', fontWeight:'900', background:'#fff3e0', padding:'35px', borderRadius:'30px', border:'4px solid #f97316'}}>PAYMENT TO: {settings?.bank}</div>
                             </div>
                         )}
-                        {job?.vault?.signature && <div style={{marginTop:'45px'}}><span style={{fontSize:'12px', textTransform:'uppercase', color:'#888'}}>Satisfaction Sign-off</span><br/><img src={job.vault.signature} style={{height:'130px'}} /></div>}
                     </div>
                     <div style={{textAlign:'right'}}>
                         <h1 style={{color:'#f97316', fontSize:'80px', margin:'0 0 35px 0'}}>£{totals?.total?.toFixed(2)}</h1>
