@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc, addDoc, writeBatch } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// --- CONFIGURATION ---
+// --- MASTER ENTERPRISE CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -12,7 +12,6 @@ const firebaseConfig = {
   storageBucket: "triple-mmm-body-repairs.firebasestorage.app",
   messagingSenderId: "110018101133",
   appId: "1:110018101133:web:63b0996c7050c4967147c4",
-  measurementId: "G-NRDPCR0SR2"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -20,674 +19,255 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- STYLES (ORANGE THEME) ---
-const theme = {
-    primary: '#ea580c', // Orange
-    green: '#16a34a',   // Green
-    red: '#dc2626',     // Red
-    light: '#fff7ed',
-    dark: '#9a3412',
-    border: '#fdba74',
-    grey: '#f8fafc',
-    text: '#334155',
-    disabled: '#9ca3af'
+// --- DESIGN SYSTEM: TITAN TUNGSTEN (V145 ABSOLUTE) ---
+const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
+const s = {
+    card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
+    input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '25px', borderRadius: '22px', marginBottom: '20px', outline: 'none', fontSize: '26px', fontWeight: 'bold', boxSizing: 'border-box' },
+    label: { color: '#94a3b8', fontSize: '16px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '15px', display: 'block', letterSpacing: '2.5px' },
+    displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
+    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '24px 35px', borderRadius: '22px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '18px', flexShrink: 0 }),
+    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '25px 20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, WebkitOverflowScrolling: 'touch', paddingRight: '150px' },
+    navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
+    traffic: (active) => ({ width: '40px', height: '40px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '3px solid #fff' })
 };
 
-const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1em', boxSizing: 'border-box' };
-const headerStyle = { borderBottom: `2px solid ${theme.primary}`, paddingBottom: '5px', marginBottom: '15px', color: theme.primary, fontSize: '0.9em', fontWeight: 'bold', letterSpacing: '1px' };
-const rowStyle = { display: 'flex', justifyContent: 'space-between', padding: '4px 0' };
-
-// Buttons
-const btnBase = { padding: '12px 20px', border: 'none', borderRadius: '50px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', fontSize: '0.9em' };
-const primaryBtn = { ...btnBase, background: theme.primary, color: 'white' }; 
-const greenBtn = { ...btnBase, background: theme.green, color: 'white' }; 
-const secondaryBtn = { ...btnBase, background: '#334155', color: 'white' };
-const dangerBtn = { ...btnBase, background: theme.red, color: 'white', padding: '8px 15px' }; 
-const successBtn = { ...greenBtn, border: '2px solid #14532d' };
-
 const EstimateApp = ({ userId }) => {
-    // --- STATE ---
-    const [mode, setMode] = useState('ESTIMATE');
-    const [invoiceNum, setInvoiceNum] = useState('');
-    const [invoiceDate, setInvoiceDate] = useState('');
-    const [invoiceType, setInvoiceType] = useState('MAIN');
-
-    // Settings
-    const [settings, setSettings] = useState({
-        laborRate: '50',
-        markup: '20',
-        companyName: 'TRIPLE MMM',
-        address: '20A New Street, Stonehouse, ML9 3LT',
-        phone: '07501 728319',
-        email: 'markmonie72@gmail.com',
-        dvlaKey: '',
-        terms: 'Payment Terms: 30 Days. Title of goods remains with Triple MMM until paid in full.'
+    const [view, setView] = useState('HUB'); 
+    const [loading, setLoading] = useState(false);
+    const [docType, setDocType] = useState('ESTIMATE'); 
+    const [addressBook, setAddressBook] = useState([]);
+    const [history, setHistory] = useState([]);
+    
+    const [settings, setSettings] = useState({ 
+        coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
+        bank: 'Sort Code: 80-22-60 | Account: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
+        dvlaKey: 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '', password: '1234', terms: 'Standard 12-Month Guarantee.',
+        calId: 'markmonie72@gmail.com'
     });
 
-    // Data
-    const [name, setName] = useState('');
-    const [address, setAddress] = useState('');
-    const [phone, setPhone] = useState('');
-    const [email, setEmail] = useState('');
-    
-    // Insurance Specifics (Moved to Insurance Box)
-    const [claimNum, setClaimNum] = useState('');
-    const [networkCode, setNetworkCode] = useState('');
-    const [insuranceCo, setInsuranceCo] = useState('');
-    const [insuranceAddr, setInsuranceAddr] = useState('');
-    const [insuranceEmail, setInsuranceEmail] = useState(''); // NEW
-    
-    // Vehicle & Stats
-    const [reg, setReg] = useState('');
-    const [mileage, setMileage] = useState('');
-    const [makeModel, setMakeModel] = useState('');
-    const [vin, setVin] = useState(''); 
-    const [paintCode, setPaintCode] = useState('');
-    const [vehicleInfo, setVehicleInfo] = useState(null); 
-    const [bookingDate, setBookingDate] = useState(''); 
-    const [bookingTime, setBookingTime] = useState('09:00'); 
-    const [foundHistory, setFoundHistory] = useState(false);
-    
-    // Items & Costs
-    const [itemDesc, setItemDesc] = useState('');
-    const [itemCostPrice, setItemCostPrice] = useState(''); 
-    const [items, setItems] = useState([]);
-    const [photos, setPhotos] = useState([]);
-    const [uploading, setUploading] = useState(false);
-    const [paintAllocated, setPaintAllocated] = useState(''); 
-    const [expDesc, setExpDesc] = useState('');
-    const [expAmount, setExpAmount] = useState('');
-    const [expCategory, setExpCategory] = useState('Stock');
-    const [laborHours, setLaborHours] = useState('');
-    const [laborRate, setLaborRate] = useState('50');
-    const [vatRate, setVatRate] = useState('0');
-    const [excess, setExcess] = useState('');
-    
-    // System
-    const [savedEstimates, setSavedEstimates] = useState([]);
-    const [generalExpenses, setGeneralExpenses] = useState([]);
-    const [saveStatus, setSaveStatus] = useState('IDLE');
-    const [logoError, setLogoError] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const canvasRef = useRef(null);
-    const [isDrawing, setIsDrawing] = useState(false);
-    const [currentJobId, setCurrentJobId] = useState(null); 
-    const [methodsRequired, setMethodsRequired] = useState(false);
+    const INITIAL_JOB = {
+        status: 'STRIPPING', lastSuccess: '',
+        client: { name: '', phone: '', email: '', address: '' },
+        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '' },
+        repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' },
+        vault: { signature: '', expenses: [] }
+    };
 
-    const activeJob = useMemo(() => savedEstimates.find(j => j.id === currentJobId), [savedEstimates, currentJobId]);
+    const [job, setJob] = useState(INITIAL_JOB);
 
-    // Check if Deal File is ready to send
-    const isDealFileReady = useMemo(() => {
-        if (!activeJob?.dealFile) return false;
-        return activeJob.dealFile.auth && activeJob.dealFile.terms && activeJob.dealFile.satisfaction;
-    }, [activeJob]);
-
-    // --- LOGIC ---
     useEffect(() => {
-        getDoc(doc(db, 'settings', 'global')).then(snap => {
-            if(snap.exists()) {
-                const s = snap.data();
-                setSettings(prev => ({...prev, ...s}));
-                setLaborRate(s.laborRate || '50');
-                setVatRate(s.vatRate || '0');
-            }
-        });
-        const qEst = query(collection(db, 'estimates'), orderBy('createdAt', 'desc'));
-        const unsubEst = onSnapshot(qEst, (snap) => setSavedEstimates(snap.docs.map(d => ({id: d.id, ...d.data()}))));
-        const qExp = query(collection(db, 'expenses'), orderBy('date', 'desc'));
-        const unsubExp = onSnapshot(qExp, (snap) => setGeneralExpenses(snap.docs.map(d => ({id: d.id, ...d.data()}))));
-        return () => { unsubEst(); unsubExp(); };
+        getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
+        const saved = localStorage.getItem('mmm_v145_FORENSIC');
+        if (saved) setJob(JSON.parse(saved));
+        onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
+        onSnapshot(collection(db, 'addressBook'), snap => setAddressBook(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => {
-        if(mode === 'SETTINGS' || mode === 'DASHBOARD' || mode === 'DEAL_FILE') return;
-        const draft = { name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, insuranceEmail, mode };
-        localStorage.setItem('triple_mmm_draft', JSON.stringify(draft));
-    }, [name, reg, items, laborRate, claimNum, networkCode, photos, paintAllocated, bookingDate, bookingTime, vin, paintCode, excess, insuranceCo, insuranceAddr, insuranceEmail, mode]);
+    useEffect(() => { localStorage.setItem('mmm_v145_FORENSIC', JSON.stringify(job)); }, [job]);
 
-    const loadJobIntoState = (est) => {
-        setCurrentJobId(est.id); 
-        setName(est.customer); setAddress(est.address || ''); setPhone(est.phone || ''); setEmail(est.email || ''); 
-        setReg(est.reg); setMileage(est.mileage || ''); setMakeModel(est.makeModel || ''); setVin(est.vin || ''); setPaintCode(est.paintCode || ''); 
-        
-        // Load Insurance Data
-        setClaimNum(est.claimNum || ''); 
-        setNetworkCode(est.networkCode || ''); 
-        setInsuranceCo(est.insuranceCo || ''); 
-        setInsuranceAddr(est.insuranceAddr || ''); 
-        setInsuranceEmail(est.insuranceEmail || '');
+    // --- INDUSTRIAL MATH ENGINE ---
+    const totals = useMemo(() => {
+        const pCost = (job?.repair?.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
+        const pPrice = pCost * (1 + (parseFloat(settings.markup) / 100));
+        const lHrs = (parseFloat(job?.repair?.panelHrs || 0) + parseFloat(job?.repair?.paintHrs || 0) + parseFloat(job?.repair?.metHrs || 0));
+        const lPrice = lHrs * parseFloat(settings.labourRate);
+        const total = (pPrice + lPrice + parseFloat(job?.repair?.paintMats || 0)) * (1 + (parseFloat(settings.vatRate) / 100));
+        return { total: total || 0, insurer: (total - parseFloat(job?.repair?.excess || 0)) || 0, lHrs, lPrice };
+    }, [job?.repair, settings]);
 
-        setItems(est.items || []); setLaborHours(est.laborHours || ''); setLaborRate(est.laborRate || settings.laborRate); setVatRate(est.vatRate || settings.vatRate);
-        setExcess(est.excess || ''); setPhotos(est.photos || []); setBookingDate(est.bookingDate || ''); setBookingTime(est.bookingTime || '09:00'); 
-        setPaintAllocated(est.paintAllocated || ''); setInvoiceNum(est.invoiceNumber || '');
-        setVehicleInfo(est.vehicleInfo || null);
-        setMethodsRequired(est.dealFile?.methodsRequired || false); 
-        setMode('DEAL_FILE'); window.scrollTo(0, 0);
-    };
+    const projectedDate = useMemo(() => {
+        const hrs = (parseFloat(job?.repair?.panelHrs || 0) + parseFloat(job?.repair?.paintHrs || 0) + parseFloat(job?.repair?.metHrs || 0));
+        if (hrs <= 0) return "N/A";
+        let daysNeeded = Math.ceil(hrs / 8); let date = new Date(); let count = 0;
+        while(count < daysNeeded) { date.setDate(date.getDate() + 1); if(date.getDay() !== 0 && date.getDay() !== 6) count++; }
+        return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }, [job?.repair]);
 
-    const uploadDoc = async (docType, file) => {
-        if (!currentJobId) return alert("Save job first.");
-        if (!file) return;
-        const storageRef = ref(storage, `deal_docs/${currentJobId}/${docType}_${file.name}`);
+    // --- ABSOLUTE DVLA HANDSHAKE: MIMICS PYTHON REQUESTS TO THE LETTER ---
+    const runDVLA = async () => {
+        if (!job?.vehicle?.reg || !settings.dvlaKey) return;
+        setLoading(true);
+        const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
-            setSaveStatus('SAVING');
-            const snap = await uploadBytes(storageRef, file);
-            const url = await getDownloadURL(snap.ref);
-            await updateDoc(doc(db, 'estimates', currentJobId), { [`dealFile.${docType}`]: { name: file.name, url: url, date: new Date().toLocaleDateString() } });
-            setSaveStatus('IDLE'); alert("Uploaded!");
-        } catch (e) { alert("Upload failed: " + e.message); setSaveStatus('IDLE'); }
-    };
-
-    const toggleMethods = async () => {
-        if (!currentJobId) return alert("Save job first.");
-        const newVal = !methodsRequired;
-        setMethodsRequired(newVal);
-        await updateDoc(doc(db, 'estimates', currentJobId), { 'dealFile.methodsRequired': newVal });
-    };
-
-    const addToGoogleCalendar = () => {
-        if(!bookingDate) return alert("Select Booking Date.");
-        const start = bookingDate.replace(/-/g, '') + 'T' + bookingTime.replace(/:/g, '') + '00';
-        const end = bookingDate.replace(/-/g, '') + 'T' + (parseInt(bookingTime.split(':')[0]) + 1).toString().padStart(2, '0') + bookingTime.split(':')[1] + '00';
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Repair: ${name} (${reg})`)}&dates=${start}/${end}&details=${encodeURIComponent(makeModel)}&location=${encodeURIComponent(settings.address)}`;
-        window.open(url, '_blank');
-    };
-
-    const handlePrint = () => {
-        if (mode === 'DEAL_FILE' || mode === 'DASHBOARD' || mode === 'SETTINGS') setMode('INVOICE');
-        setTimeout(() => window.print(), 1000);
-    };
-
-    const checkHistory = async (regInput) => {
-        if(regInput.length < 3) return;
-        const q = query(collection(db, 'estimates'), where("reg", "==", regInput), orderBy('createdAt', 'desc'));
-        try {
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const prev = querySnapshot.docs[0].data();
-                setMakeModel(prev.makeModel || ''); setName(prev.customer || ''); setPhone(prev.phone || ''); setEmail(prev.email || '');
-                setAddress(prev.address || ''); setVin(prev.vin || ''); setPaintCode(prev.paintCode || '');
-                setVehicleInfo(prev.vehicleInfo || null);
-                if(prev.insuranceCo) setInsuranceCo(prev.insuranceCo);
-                if(prev.insuranceEmail) setInsuranceEmail(prev.insuranceEmail);
-                setFoundHistory(true);
-            }
-        } catch(e) { }
-    };
-
-    const handleRegChange = (e) => {
-        const val = e.target.value.toUpperCase();
-        setReg(val);
-        setFoundHistory(false);
-    };
-
-    const lookupReg = async () => {
-        if (!reg || reg.length < 3) return alert("Enter Reg");
-        if (settings.dvlaKey) {
-            try {
-                const response = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': settings.dvlaKey },
-                    body: JSON.stringify({ registrationNumber: reg })
-                });
-                const data = await response.json();
-                if (data.errors) throw new Error("Not Found");
-                setMakeModel(`${data.make} ${data.colour}`);
-                setVehicleInfo(data); 
-                alert("Vehicle Found!");
-            } catch (e) { console.error(e); alert("DVLA Error: Check Key or Connection"); }
-        } else { 
-            alert("Simulated: Vehicle Found!"); 
-            setMakeModel("FORD TRANSIT (Simulated)");
-            setVehicleInfo({ yearOfManufacture: 2019, fuelType: 'DIESEL', make: 'FORD', colour: 'WHITE', engineCapacity: 1995 });
-        }
-    };
-
-    const decodeVin = () => { 
-        if (!vin && !makeModel) return alert("Enter VIN or Find Vehicle First");
-        if (vin && vin.length > 2) {
-            const wmi = vin.toUpperCase().substring(0, 3);
-            if (wmi.startsWith('WBA') || wmi.startsWith('WMW') || wmi.startsWith('WBS')) { window.open(`https://www.mdecoder.com/decode/${vin}`, '_blank'); return; }
-            if (wmi.startsWith('WDD') || wmi.startsWith('WDB')) { window.open(`https://www.lastvin.com/vin/${vin}`, '_blank'); return; }
-        }
-        const searchTeam = makeModel ? makeModel.split(' ')[0] : 'Car';
-        window.open(`https://www.paintcode.co.uk/search/${searchTeam}`, '_blank'); 
-    };
-
-    const decodeParts = () => { if (!vin || vin.length < 3) return alert("Enter VIN"); window.open(`https://partsouq.com/en/catalog/genuine/locate?c=${vin}`, '_blank'); };
-
-    const addItem = () => {
-        if (!itemDesc) return;
-        const cost = parseFloat(itemCostPrice) || 0;
-        const markupPercent = parseFloat(settings.markup) || 0;
-        const price = cost * (1 + (markupPercent / 100)); 
-        setItems([...items, { desc: itemDesc, costPrice: cost, price: price }]);
-        setItemDesc(''); setItemCostPrice('');
-    };
-
-    const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
-
-    const calculateJobFinancials = () => {
-        const partsPrice = items.reduce((acc, i) => acc + i.price, 0); 
-        const partsCost = items.reduce((acc, i) => acc + i.costPrice, 0); 
-        const labor = (parseFloat(laborHours) || 0) * (parseFloat(laborRate) || 0);
-        const paintCost = parseFloat(paintAllocated) || 0;
-        const invoiceTotal = partsPrice + labor;
-        const totalJobCost = partsCost + paintCost;
-        const jobProfit = invoiceTotal - totalJobCost;
-        const excessAmount = parseFloat(excess) || 0;
-        const finalDue = invoiceTotal - excessAmount;
-        return { partsPrice, partsCost, labor, paintCost, invoiceTotal, totalJobCost, jobProfit, excessAmount, finalDue };
-    };
-
-    const totals = calculateJobFinancials();
-
-    const saveSettings = async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Settings Saved!"); setMode('ESTIMATE'); };
-    const addGeneralExpense = async () => { if(!expDesc || !expAmount) return; await addDoc(collection(db, 'expenses'), { desc: expDesc, amount: parseFloat(expAmount), category: expCategory, date: serverTimestamp() }); setExpDesc(''); setExpAmount(''); };
-    const deleteJob = async (id) => { if(window.confirm("Delete permanently?")) try { await deleteDoc(doc(db, 'estimates', id)); } catch (e) { alert("Error: " + e.message); } };
-    const deleteExpense = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, 'expenses', id)); };
-
-    const updatePaintCost = async (id, newCost) => {
-        if(!id) return;
-        const cost = parseFloat(newCost) || 0;
-        await updateDoc(doc(db, 'estimates', id), { paintAllocated: cost });
-        const updated = savedEstimates.map(j => {
-            if(j.id === id) {
-                const newTotalCost = (j.totals?.partsCost || 0) + cost;
-                const newProfit = (j.totals?.invoiceTotal || 0) - newTotalCost;
-                return { ...j, paintAllocated: cost, totals: { ...j.totals, totalJobCost: newTotalCost, jobProfit: newProfit } };
-            }
-            return j;
-        });
-        setSavedEstimates(updated);
-    };
-
-    const saveToCloud = async (targetType) => {
-        if (!name || !reg) return alert("Enter Customer & Reg");
-        setSaveStatus('SAVING');
-        try {
-            let finalInvNum = invoiceNum;
-            let displayType = targetType;
-            if((targetType.includes('INVOICE')) && !finalInvNum) {
-                finalInvNum = `INV-${1000 + savedEstimates.length + 1}`;
-                setInvoiceNum(finalInvNum); setInvoiceDate(new Date().toLocaleDateString());
-            }
-            if(targetType === 'INVOICE_MAIN') { setMode('INVOICE'); setInvoiceType('MAIN'); displayType = 'INVOICE'; } 
-            else if (targetType === 'INVOICE_EXCESS') { setMode('INVOICE'); setInvoiceType('EXCESS'); displayType = 'INVOICE (EXCESS)'; } 
-            else { setMode(targetType); }
-
-            const docRef = await addDoc(collection(db, 'estimates'), {
-                type: displayType, status: 'UNPAID', invoiceNumber: finalInvNum || '',
-                customer: name, address, phone, email, 
-                claimNum, networkCode, insuranceCo, insuranceAddr, insuranceEmail, // SAVED
-                reg, mileage, makeModel, vin, paintCode, items, laborHours, laborRate, vatRate, excess, photos,
-                bookingDate, bookingTime, paintAllocated,
-                vehicleInfo: vehicleInfo || {}, 
-                totals: calculateJobFinancials(), createdAt: serverTimestamp(), createdBy: userId,
-                dealFile: { methodsRequired: false }
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: { 
+                    'x-api-key': settings.dvlaKey.trim(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ registrationNumber: cleanReg })
             });
-            setCurrentJobId(docRef.id);
-            setSaveStatus('SUCCESS'); setTimeout(() => setSaveStatus('IDLE'), 3000); 
-        } catch (error) { alert("Error: " + error.message); setSaveStatus('IDLE'); }
-    };
-
-    const clearForm = () => {
-        if(window.confirm("Start fresh?")) {
-            setMode('ESTIMATE'); setInvoiceNum(''); setName(''); setReg(''); setItems([]); setPhotos([]); setPaintAllocated(''); 
-            setClaimNum(''); setNetworkCode(''); setInsuranceCo(''); setInsuranceAddr(''); setInsuranceEmail('');
-            setSaveStatus('IDLE'); localStorage.removeItem('triple_mmm_draft'); setCurrentJobId(null); setVehicleInfo(null);
-        }
-    };
-
-    const handlePhotoUpload = async (e) => {
-        const files = Array.from(e.target.files); if (!files.length) return;
-        setUploading(true);
-        try {
-            const urls = await Promise.all(files.map(async (file) => {
-                const r = ref(storage, `damage_photos/${Date.now()}_${Math.random()}_${file.name}`);
-                await uploadBytes(r, file); return getDownloadURL(r);
+            if (!response.ok) throw new Error(`${response.status}`);
+            const d = await response.json();
+            setJob(prev => ({
+                ...prev, 
+                lastSuccess: new Date().toLocaleString('en-GB'),
+                vehicle: {
+                    ...prev.vehicle, 
+                    make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, 
+                    engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
+                }
             }));
-            setPhotos(prev => [...prev, ...urls]);
-        } catch (error) { alert("Upload failed"); }
-        setUploading(false);
+        } catch (e) { alert("DVLA Link Failed: Verify settings or registry."); }
+        setLoading(false);
     };
 
-    const removePhoto = (index) => setPhotos(photos.filter((_, i) => i !== index));
-    const startDrawing = ({nativeEvent}) => { const {offsetX, offsetY} = getCoordinates(nativeEvent); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth=3; ctx.lineCap='round'; ctx.strokeStyle='#000'; ctx.beginPath(); ctx.moveTo(offsetX, offsetY); setIsDrawing(true); };
-    const draw = ({nativeEvent}) => { if(!isDrawing) return; const {offsetX, offsetY} = getCoordinates(nativeEvent); canvasRef.current.getContext('2d').lineTo(offsetX, offsetY); canvasRef.current.getContext('2d').stroke(); };
-    const stopDrawing = () => { const ctx = canvasRef.current.getContext('2d'); ctx.closePath(); setIsDrawing(false); };
-    const getCoordinates = (event) => { if (event.touches && event.touches[0]) { const rect = canvasRef.current.getBoundingClientRect(); return { offsetX: event.touches[0].clientX - rect.left, offsetY: event.touches[0].clientY - rect.top }; } return { offsetX: event.offsetX, offsetY: event.offsetY }; };
-    const clearSignature = () => { if(canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); } };
-    useEffect(() => { clearSignature(); }, [mode]);
-
-    const downloadAccountingCSV = () => {
-        let csv = "Date,Type,Invoice,Customer,Reg,Total,Status\n";
-        savedEstimates.filter(est => est.type && est.type.includes('INVOICE')).forEach(inv => {
-            csv += `${new Date(inv.createdAt?.seconds * 1000).toLocaleDateString()},${inv.type},${inv.invoiceNumber},${inv.customer},${inv.reg},${inv.totals?.finalDue.toFixed(2)},${inv.status}\n`;
-        });
-        const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = "TripleMMM_Sales.csv"; link.click();
+    const saveMaster = async () => {
+        await setDoc(doc(db, 'estimates', job?.vehicle?.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
+        alert("Titan Master Synchronised.");
     };
 
-    const downloadExpensesCSV = () => {
-        let csv = "Date,Category,Description,Amount\n";
-        generalExpenses.forEach(ex => { csv += `${new Date(ex.date?.seconds * 1000).toLocaleDateString()},${ex.category},${ex.desc},${ex.amount.toFixed(2)}\n`; });
-        const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = "TripleMMM_Expenses.csv"; link.click();
-    };
-
-    const togglePaid = async (id, currentStatus) => { await updateDoc(doc(db, 'estimates', id), { status: currentStatus === 'PAID' ? 'UNPAID' : 'PAID' }); };
-    const filteredEstimates = savedEstimates.filter(est => (est.customer?.toLowerCase().includes(searchTerm.toLowerCase()) || est.reg?.toLowerCase().includes(searchTerm.toLowerCase()) || est.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())));
-
-    // SMART EMAIL LINK - Uses Insurance Email
-    const emailSubject = `Repair Docs: ${reg} (Claim: ${claimNum})`;
-    const emailBody = `Attached documents for vehicle ${reg}.%0D%0A%0D%0A1. Authority: Attached%0D%0A2. Invoice: ${invoiceNum}%0D%0A3. Signed T&Cs: ${activeJob?.dealFile?.terms ? 'Attached' : 'Pending'}%0D%0A4. Satisfaction Note: ${activeJob?.dealFile?.satisfaction ? 'Attached' : 'Pending'}`;
-    const emailTarget = insuranceEmail || email; // Prefer Insurance Email, fallback to client
-    const emailLink = `mailto:${emailTarget}?subject=${emailSubject}&body=${emailBody}`;
-
-    // --- VIEWS ---
-    if(mode === 'SETTINGS') return (
-        <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'Arial' }}>
-            <button onClick={() => setMode('ESTIMATE')} style={secondaryBtn}>← Back</button>
-            <h2 style={{color: theme.primary, borderBottom: `2px solid ${theme.primary}`}}>⚙️ Settings</h2>
-            <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
-                <label>Labor Rate (£/hr): <input value={settings.laborRate} onChange={e => setSettings({...settings, laborRate: e.target.value})} style={inputStyle} /></label>
-                <label>Parts Markup (%): <input value={settings.markup} onChange={e => setSettings({...settings, markup: e.target.value})} style={inputStyle} /></label>
-                <label>DVLA API Key: <input value={settings.dvlaKey} onChange={e => setSettings({...settings, dvlaKey: e.target.value})} style={inputStyle} /></label>
-                <label>Address: <textarea value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} style={{...inputStyle, height:'60px'}} /></label>
-                <label>Job Card Terms & Conditions:</label>
-                <textarea value={settings.terms} onChange={e => setSettings({...settings, terms: e.target.value})} style={{...inputStyle, height:'120px'}} />
-                <button onClick={saveSettings} style={greenBtn}>SAVE SETTINGS</button>
-            </div>
-        </div>
-    );
-
-    if(mode === 'DASHBOARD') return (
-        <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Arial' }}>
-            <button onClick={() => setMode('ESTIMATE')} style={secondaryBtn}>← Back</button>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <h2 style={{color: theme.primary}}>📊 Financial Dashboard</h2>
-                <button onClick={downloadAccountingCSV} style={{...primaryBtn, fontSize:'0.8em'}}>📥 Export Sales CSV</button>
-            </div>
-            
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'30px'}}>
-                <div style={{padding:'20px', background: theme.light, borderRadius:'8px', border: `1px solid ${theme.border}`}}><h3>Total Sales</h3><div style={{fontSize:'2em', fontWeight:'bold', color: theme.dark}}>£{savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.finalDue || 0), 0).toFixed(2)}</div></div>
-                <div style={{padding:'20px', background: '#ecfccb', borderRadius:'8px'}}><h3>Net Profit</h3><div style={{fontSize:'2em', fontWeight:'bold', color: '#166534'}}>£{(savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.finalDue || 0), 0) - savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).reduce((acc, curr) => acc + (curr.totals?.totalJobCost || 0), 0) - generalExpenses.reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}</div></div>
-            </div>
-            
-            <h3 style={{color:theme.dark}}>Job Costing & Profit</h3>
-            <div style={{marginBottom:'30px', maxHeight:'400px', overflowY:'auto', border:`1px solid ${theme.border}`, borderRadius:'8px'}}>
-                <table style={{width:'100%', borderCollapse:'collapse'}}>
-                    <thead style={{position:'sticky', top:0, background:theme.light}}><tr style={{textAlign:'left', color:theme.dark}}>
-                        <th style={{padding:'10px'}}>Reg</th>
-                        <th style={{padding:'10px'}}>Total Inv</th>
-                        <th style={{padding:'10px'}}>Paint/Mat Cost</th>
-                        <th style={{padding:'10px'}}>Net Profit</th>
-                    </tr></thead>
-                    <tbody>
-                    {savedEstimates.filter(e => e.type && e.type.includes('INVOICE')).map(job => (
-                        <tr key={job.id} style={{borderBottom:'1px solid #eee', background:'white'}}>
-                            <td style={{padding:'10px', fontWeight:'bold'}}>{job.reg}</td>
-                            <td style={{padding:'10px'}}>£{job.totals?.finalDue.toFixed(0)}</td>
-                            <td style={{padding:'10px'}}>
-                                <div style={{display:'flex', alignItems:'center'}}>
-                                    £<input 
-                                        type="number" 
-                                        defaultValue={job.paintAllocated} 
-                                        onBlur={(e) => updatePaintCost(job.id, e.target.value)}
-                                        style={{width:'60px', padding:'5px', marginLeft:'5px', border:`1px solid ${theme.border}`, borderRadius:'4px'}} 
-                                    />
-                                </div>
-                            </td>
-                            <td style={{padding:'10px', fontWeight:'bold', color: job.totals?.jobProfit > 0 ? 'green' : 'red'}}>£{job.totals?.jobProfit.toFixed(0)}</td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <h3>Shop Expenses</h3>
-            <div style={{display:'flex', gap:'10px', marginBottom:'30px'}}>
-                <input placeholder="Desc" value={expDesc} onChange={e => setExpDesc(e.target.value)} style={{flex:1, ...inputStyle}} />
-                <input type="number" placeholder="£" value={expAmount} onChange={e => setExpAmount(e.target.value)} style={{width:'80px', ...inputStyle}} />
-                <button onClick={addGeneralExpense} style={greenBtn}>Add</button>
-            </div>
-            <button onClick={downloadExpensesCSV} style={secondaryBtn}>📥 Export Expenses</button>
-            {generalExpenses.map(ex => (<div key={ex.id} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', padding:'10px'}}><span>{ex.desc}</span><strong>£{ex.amount.toFixed(2)}</strong></div>))}
+    const HeaderNav = ({ prev }) => (
+        <div style={s.navBar} className="no-print">
+            <button style={{...s.btnG('#222'), flex:1}} onClick={() => setView(prev || 'HUB')}>⬅️ BACK CENTRE</button>
+            <button style={{...s.btnG(theme.hub), flex:1}} onClick={() => setView('HUB')}>🏠 HUB CENTRE</button>
         </div>
     );
 
     return (
-        <div style={{ padding: '40px', maxWidth: '900px', margin: '0 auto', fontFamily: 'Arial, sans-serif', background: 'white', paddingBottom: '100px' }}>
-            {mode !== 'ESTIMATE' && <button onClick={() => setMode('ESTIMATE')} className="no-print" style={{...secondaryBtn, marginBottom:'20px'}}>← BACK</button>}
-            
-            {/* LOGO HEADER */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `4px solid ${theme.primary}`, paddingBottom: '20px', marginBottom: '30px' }}>
-                <div>{!logoError ? <img src={process.env.PUBLIC_URL + "/1768838821897.png"} alt="TRIPLE MMM" style={{ maxHeight: '120px' }} onError={() => setLogoError(true)} /> : <h1 style={{color: theme.primary, fontSize: '3em', margin:0}}>TRIPLE MMM</h1>}</div>
-                <div style={{ textAlign: 'right', fontSize: '0.9em', color: theme.text }}><strong>{settings.address}</strong><br/>{settings.phone}<br/>{settings.email}</div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '30px' }}>
-                <h2 style={{ margin: 0, fontSize: '2em', color: theme.text }}>{mode === 'DEAL_FILE' ? '📂 DEAL FILE' : (invoiceType === 'EXCESS' ? 'INVOICE (EXCESS)' : mode)}</h2>
-                {mode !== 'ESTIMATE' && <div style={{ textAlign: 'right' }}><strong>{invoiceNum}</strong><br/>{invoiceDate || new Date().toLocaleDateString()}</div>}
-            </div>
-
-            {/* MAIN FORM */}
-            {mode !== 'DEAL_FILE' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px', border: `1px solid ${theme.grey}`, padding: '20px', borderRadius: '12px' }}>
-                <div>
-                    <h4 style={headerStyle}>CLIENT</h4>
-                    <input placeholder="Name" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
-                    <textarea placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} style={{...inputStyle, height: '60px', fontFamily: 'inherit'}} />
-                    <div style={{display:'flex', gap:'5px'}}><input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /><input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></div>
-                    
-                    {/* UPGRADED INSURANCE BOX */}
-                    {excess > 0 && (
-                        <div className="no-print" style={{marginTop:'20px', background:'white', padding:'20px', borderRadius:'12px', borderLeft:`6px solid ${theme.primary}`, boxShadow:'0 4px 15px rgba(0,0,0,0.05)'}}>
-                            <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
-                                <span style={{fontSize:'1.5em', marginRight:'10px'}}>🛡️</span>
-                                <h4 style={{margin:0, color:theme.text}}>Insurance & Network</h4>
+        <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '180px' }}>
+            <div className="no-print">
+                {/* HUB - PRECISION VISION UI */}
+                {view === 'HUB' && (
+                    <div style={{maxWidth:'850px', margin:'0 auto'}}>
+                        <h1 style={{color:theme.hub, fontSize:'58px', letterSpacing:'-4px', marginBottom:'45px', textAlign:'center'}}>COMMAND HUB</h1>
+                        <div style={s.card(theme.hub)}>
+                            <span style={s.label}>Station 1: Technical Identification</span>
+                            <div style={{display:'flex', gap:'12px', marginBottom:'20px', alignItems:'center'}}>
+                                <input style={{...s.input, flex:4, fontSize:'54px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job?.vehicle?.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
+                                <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px', padding:'25px 15px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
                             </div>
-                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'2px'}}>Insurer Name</label>
-                            <input placeholder="e.g. Admiral, Direct Line..." value={insuranceCo} onChange={e => setInsuranceCo(e.target.value)} style={{...inputStyle, marginBottom:'10px'}} />
-                            
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-                                <div><label style={{fontSize:'0.8em', color:'#888'}}>Claim No.</label><input value={claimNum} onChange={e => setClaimNum(e.target.value)} style={inputStyle} /></div>
-                                <div><label style={{fontSize:'0.8em', color:'#888'}}>Network Code</label><input value={networkCode} onChange={e => setNetworkCode(e.target.value)} style={inputStyle} /></div>
-                            </div>
-
-                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'2px'}}>Insurer Email (For Deal File)</label>
-                            <input placeholder="engineering@insurer.com" value={insuranceEmail} onChange={e => setInsuranceEmail(e.target.value)} style={{...inputStyle, borderColor: theme.primary}} />
-
-                            <label style={{display:'block', fontSize:'0.8em', color:'#888', marginBottom:'2px'}}>Address / Notes</label>
-                            <textarea placeholder="Billing address..." value={insuranceAddr} onChange={e => setInsuranceAddr(e.target.value)} style={{...inputStyle, height:'50px', marginBottom:0}} />
-                        </div>
-                    )}
-                </div>
-                <div>
-                    <h4 style={headerStyle}>VEHICLE</h4>
-                    <div style={{display:'flex', gap:'10px'}}><input placeholder="REG" value={reg} onChange={handleRegChange} onBlur={() => checkHistory(reg)} style={{...inputStyle, fontWeight:'bold', textTransform:'uppercase', background: theme.light}} /><button onClick={lookupReg} className="no-print" style={secondaryBtn}>🔎</button></div>
-                    {foundHistory && <div style={{color:'green', fontSize:'0.8em'}}>✓ Customer Found</div>}
-                    
-                    {/* DEDICATED VEHICLE INFO BOX */}
-                    {vehicleInfo && (
-                        <div style={{background: theme.light, padding:'15px', borderRadius:'8px', border: `1px dashed ${theme.primary}`, marginBottom:'15px'}}>
-                            <h5 style={{margin:'0 0 10px 0', color: theme.dark}}>🚗 Vehicle Report</h5>
-                            <div style={{fontSize:'0.9em', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px'}}>
-                                <div><strong>Make:</strong> {vehicleInfo.make}</div>
-                                <div><strong>Colour:</strong> {vehicleInfo.colour}</div>
-                                <div><strong>Year:</strong> {vehicleInfo.yearOfManufacture}</div>
-                                <div><strong>Fuel:</strong> {vehicleInfo.fuelType}</div>
-                                {vehicleInfo.revenueWeight && <div><strong>Weight:</strong> {vehicleInfo.revenueWeight}kg</div>}
-                                {vehicleInfo.taxStatus && <div><strong>Tax:</strong> {vehicleInfo.taxStatus}</div>}
-                                {vehicleInfo.motStatus && <div><strong>MOT:</strong> {vehicleInfo.motStatus}</div>}
+                            {job.lastSuccess && <div style={{background:theme.deal, color:'#000', padding:'10px', borderRadius:'10px', fontSize:'12px', textAlign:'center', marginBottom:'15px', fontWeight:'bold'}}>AUDIT LOG: DATA VERIFIED AT {job.lastSuccess}</div>}
+                            <span style={s.label}>Station 2: Chassis / VIN Command Block</span>
+                            <input style={{...s.input, fontSize:'20px', padding:'25px'}} placeholder="FULL 17-DIGIT CHASSIS BOX" value={job?.vehicle?.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} />
+                            <div style={s.displayBox}>
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'25px', fontSize:'22px'}}>
+                                    <div><span style={s.label}>Vehicle</span><strong>{job.vehicle.make || 'Pending...'}</strong></div>
+                                    <div><span style={s.label}>Spec</span><strong>{job.vehicle.year} | {job.vehicle.fuel}</strong></div>
+                                    <div><span style={s.label}>Colour</span><strong>{job.vehicle.colour || '-'}</strong></div>
+                                    <div><span style={s.label}>Engine</span><strong>{job.vehicle.engine}cc</strong></div>
+                                    <div><span style={s.label}>MOT Status</span><strong style={{color: job.vehicle.mot === 'VALID' ? theme.deal : theme.danger}}>{job.vehicle.mot || '-'}</strong></div>
+                                    <div><span style={s.label}>MOT Expiry</span><strong>{job.vehicle.motExpiry || '-'}</strong></div>
+                                </div>
                             </div>
                         </div>
-                    )}
 
-                    <input placeholder="Make / Model" value={makeModel} onChange={e => setMakeModel(e.target.value)} style={inputStyle} />
-                    <div style={{display:'flex', gap:'5px'}}><input placeholder="VIN" value={vin} onChange={e => setVin(e.target.value)} style={inputStyle} /><button onClick={decodeVin} className="no-print" style={secondaryBtn} title="Paint">🎨</button><button onClick={decodeParts} className="no-print" style={{...secondaryBtn, background: theme.primary}} title="Parts">🔧</button></div>
-                    <input placeholder="Paint Code" value={paintCode} onChange={e => setPaintCode(e.target.value)} style={inputStyle} />
-                    <div style={{marginTop:'15px', borderTop:'1px dashed #ccc', paddingTop:'10px'}}><h4 style={{fontSize:'0.8em', color:'#888'}}>BOOKING</h4><div style={{display:'flex', gap:'5px'}}><input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} style={inputStyle} /><button onClick={addToGoogleCalendar} className="no-print" style={secondaryBtn}>📅</button></div></div>
-                    <div className="no-print" style={{marginTop:'10px', background: theme.light, padding:'10px', borderRadius:'6px', border: `1px dashed ${theme.primary}`}}><label style={{fontWeight:'bold', color: theme.dark, display:'block', marginBottom:'5px'}}>📸 Upload Photos (Multi)</label><input type="file" multiple accept="image/*" onChange={handlePhotoUpload} disabled={uploading} /></div>
-                </div>
-            </div>
-            )}
-
-            {/* PHOTOS */}
-            {photos.length > 0 && mode !== 'DEAL_FILE' && <div style={{marginBottom:'20px', display:'flex', gap:'10px', overflowX:'auto', padding:'5px'}}>{photos.map((url, i) => (<div key={i} style={{position:'relative', minWidth:'100px', height:'100px'}}><img src={url} alt="Damage" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'6px'}} /><button className="no-print" onClick={() => removePhoto(i)} style={{position:'absolute', top:0, right:0, background:'red', color:'white', border:'none', width:'20px', height:'20px'}}>x</button></div>))}</div>}
-
-            {mode !== 'SATISFACTION' && mode !== 'DEAL_FILE' && (
-                <>
-                    {invoiceType !== 'EXCESS' && (
-                        <>
-                            <div className="no-print" style={{ background: theme.grey, padding: '15px', marginBottom: '15px', borderRadius: '8px' }}>
-                                <div style={{ display: 'flex', gap: '10px' }}><input placeholder="Item Description" value={itemDesc} onChange={e => setItemDesc(e.target.value)} style={{ flexGrow: 1, ...inputStyle, marginBottom:0 }} /><input type="number" placeholder="Cost £" value={itemCostPrice} onChange={e => setItemCostPrice(e.target.value)} style={{ width: '80px', ...inputStyle, marginBottom:0 }} /><button onClick={addItem} style={greenBtn}>Add Item</button></div>
-                            </div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}><thead><tr style={{textAlign:'left', borderBottom:`2px solid ${theme.text}`}}><th style={{padding:'10px'}}>DESCRIPTION</th>{mode !== 'JOBCARD' && <th style={{textAlign:'right'}}>PRICE</th>}</tr></thead><tbody>{items.map((item, i) => (<tr key={i} style={{ borderBottom: '1px solid #eee' }}><td style={{padding:'10px'}}>{item.desc}</td>{mode !== 'JOBCARD' && <td style={{textAlign:'right'}}>£{item.price.toFixed(2)}</td>}<td className="no-print"><button onClick={() => removeItem(i)} style={{color:'red', border:'none', background:'none'}}>x</button></td></tr>))}</tbody></table>
-                        </>
-                    )}
-
-                    {mode !== 'JOBCARD' && (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <div style={{ width: '350px', textAlign: 'right' }}>
-                                {invoiceType !== 'EXCESS' && (
-                                    <>
-                                    <div className="no-print" style={{marginBottom:'10px'}}>Labor: <input type="number" value={laborHours} onChange={e => setLaborHours(e.target.value)} style={{width:'50px', textAlign:'center'}} /> hrs @ £{settings.laborRate}</div>
-                                    <div style={rowStyle}><span>Labor Total:</span> <strong>£{totals.labor.toFixed(2)}</strong></div>
-                                    <div style={rowStyle}><span>Parts Total:</span> <strong>£{totals.partsPrice.toFixed(2)}</strong></div>
-                                    <div style={{...rowStyle, fontSize:'1.2em', borderTop:'2px solid black', marginTop:'10px'}}><span>TOTAL:</span> <strong>£{totals.invoiceTotal.toFixed(2)}</strong></div>
-                                    <div style={{...rowStyle, color:'red'}}><span>Less Excess:</span><span className="no-print"><input type="number" value={excess} onChange={e => setExcess(e.target.value)} style={{width:'60px'}} /></span><span>-£{totals.excessAmount.toFixed(2)}</span></div>
-                                    </>
-                                )}
-                                <div style={{...rowStyle, fontSize:'1.4em', background: theme.grey, padding:'10px', borderRadius:'6px', marginTop:'10px'}}><span>DUE:</span> <strong>£{invoiceType === 'EXCESS' ? parseFloat(excess).toFixed(2) : totals.finalDue.toFixed(2)}</strong></div>
-                                
-                                {/* PAINT COST INPUT - NOW ON INVOICE SCREEN TOO */}
-                                <div className="no-print" style={{marginTop:'15px', padding:'10px', border:`1px dashed ${theme.primary}`, borderRadius:'6px', background:theme.light}}>
-                                    <label style={{fontSize:'0.8em', fontWeight:'bold', color:theme.primary}}>🎨 Internal Paint Cost</label>
-                                    <div style={{display:'flex', alignItems:'center'}}>
-                                        £<input type="number" value={paintAllocated} onChange={e => setPaintAllocated(e.target.value)} style={{width:'100%', marginLeft:'5px', border:'none', background:'transparent', fontWeight:'bold', fontSize:'1.1em'}} placeholder="0.00" />
+                        <div style={s.card(theme.deal)}>
+                            <span style={s.label}>Station 3: CRM Directory</span>
+                            <div style={{background:'#000', padding:'35px', borderRadius:'25px', border:'2px solid #333', height:'400px', overflowY:'auto'}}>
+                                {(addressBook || []).map((c, i) => (
+                                    <div key={i} style={{borderBottom:'1px solid #222', padding:'25px 0', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                        <div><div style={{fontWeight:'900', fontSize:'24px'}}>{c?.name}</div><div style={{fontSize:'14px', color:'#888'}}>{c?.phone}</div></div>
+                                        <button style={{...s.btnG(theme.deal), padding:'15px 25px', fontSize:'14px'}} onClick={() => { setJob({...job, client: { name: c.name, phone: c.phone, email: c.email }}); alert("Client Assigned."); }}>+ ASSIGN</button>
                                     </div>
-                                </div>
+                                ))}
                             </div>
                         </div>
-                    )}
-                    
-                    {/* INVOICE FOOTER (Payment Only) */}
-                    {mode === 'INVOICE' && (
-                        <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop:'20px' }}>
-                            <div style={{width:'60%'}}>
-                                <h4>PAYMENT DETAILS</h4>
-                                <p>Bank: <strong>BANK OF SCOTLAND</strong><br/>Account: <strong>06163462</strong><br/>Sort: <strong>80-22-60</strong><br/>Name: <strong>{settings.companyName} BODY REPAIRS</strong></p>
-                            </div>
-                            <div style={{textAlign:'center', width:'30%'}}>
-                                <div style={{marginBottom:'10px'}}><img src={process.env.PUBLIC_URL + "/qrcode.png"} alt="QR" style={{width:'80px', height:'80px', opacity:0.5}} /><div style={{fontSize:'0.7em'}}>SCAN TO PAY</div></div>
-                                <div className="no-print" style={{border: '1px dashed #ccc', height: '60px', backgroundColor: '#fff', marginBottom:'5px'}}><canvas ref={canvasRef} width={200} height={60} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} /></div>
-                                <div style={{ borderBottom: '1px solid #333' }}></div>
-                                <div style={{fontSize:'0.8em'}}>SIGNED</div>
-                            </div>
-                        </div>
-                    )}
 
-                    {/* JOB CARD FOOTER (T&Cs MOVED HERE) */}
-                    {mode === 'JOBCARD' && (
-                        <div style={{ marginTop: '50px', borderTop: '2px solid #ccc', paddingTop:'20px' }}>
-                            <h4>AUTHORITY & TERMS</h4>
-                            <div style={{fontSize:'0.8em', color:'#333', whiteSpace: 'pre-wrap', marginBottom:'30px'}}>{settings.terms}</div>
-                            
-                            <div style={{display:'flex', justifyContent:'space-between', marginTop:'40px'}}>
-                                <div style={{textAlign:'center', width:'40%'}}><div style={{borderBottom:'1px solid #333', height:'40px'}}></div><div>CUSTOMER SIGNATURE</div></div>
-                                <div style={{textAlign:'center', width:'40%'}}><div style={{borderBottom:'1px solid #333', height:'40px'}}></div><div>TECHNICIAN SIGNATURE</div></div>
+                        <div style={s.card(theme.work)}>
+                            <span style={s.label}>Station 4: AI Nerve Centre</span>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'25px', marginBottom:'25px'}}>
+                                <div style={s.displayBox}><span style={s.label}>Status</span><div style={{display:'flex', gap:'25px', marginTop:'15px'}}><div style={{...s.traffic(job.status==='STRIPPING'), background:theme.danger}} /><div style={{...s.traffic(job.status==='PAINT'), background:theme.work}} /><div style={{...s.traffic(job.status==='QC'), background:theme.deal}} /></div></div>
+                                <div style={{...s.displayBox, background:theme.hub}}><span style={{...s.label, color:'#000'}}>AI READY DATE</span><div style={{color:'#000', fontSize:'38px', fontWeight:'900'}}>{projectedDate}</div></div>
                             </div>
+                            <button style={{...s.btnG(theme.deal), width:'100%', padding:'40px', fontSize:'32px'}} onClick={()=>setView('EST')}>OPEN ESTIMATOR</button>
                         </div>
-                    )}
-                </>
-            )}
+                    </div>
+                )}
 
-            {/* DEAL FILE */}
-            {mode === 'DEAL_FILE' && (
-                <div style={{ marginTop: '20px', padding: '20px', border: `1px solid ${theme.border}`, borderRadius: '12px', background: theme.light }}>
-                    <h2 style={{borderBottom:`2px solid ${theme.primary}`, paddingBottom:'10px', color: theme.dark}}>📂 Digital Deal File</h2>
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
-                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>1. Checklist</h4>
-                            {['terms', 'auth', 'satisfaction', 'methods'].map(type => (
-                                <div key={type} style={{marginBottom:'10px', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>
-                                    <div style={{display:'flex', justifyContent:'space-between'}}><strong>{type.toUpperCase()}</strong><span>{activeJob?.dealFile?.[type] ? '✅' : '❌'}</span></div>
-                                    <input type="file" onChange={(e) => uploadDoc(type, e.target.files[0])} style={{fontSize:'0.8em'}} />
-                                    {activeJob?.dealFile?.[type] && <a href={activeJob.dealFile[type].url} target="_blank" rel="noreferrer" style={{color: theme.primary, fontSize:'0.8em'}}>View</a>}
-                                </div>
-                            ))}
-                        </div>
-                        <div style={{background:'white', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
-                            <h4 style={{color: theme.primary}}>2. Actions</h4>
-                            <div>📸 Photos: {photos.length}</div>
-                            <div>💰 Invoice: {invoiceNum || 'Pending'}</div>
-                            
-                            <div style={{marginTop:'20px', paddingTop:'10px', borderTop:'1px dashed #ccc'}}>
-                                <div style={{fontSize:'0.8em', color:'#666', marginBottom:'5px'}}>SEND TO: <strong>{insuranceEmail || 'No Email Set'}</strong></div>
-                                <button 
-                                    onClick={() => window.location.href = emailLink} 
-                                    disabled={!isDealFileReady}
-                                    style={{
-                                        ...primaryBtn, 
-                                        width:'100%', 
-                                        background: isDealFileReady ? theme.green : theme.disabled,
-                                        cursor: isDealFileReady ? 'pointer' : 'not-allowed'
-                                    }}
-                                >
-                                    {isDealFileReady ? '📧 SEND EMAIL PACK' : '⚠️ COMPLETE CHECKLIST FIRST'}
-                                </button>
+                {/* ESTIMATOR */}
+                {view === 'EST' && (
+                    <div>
+                        <HeaderNav prev="HUB" /><h2 style={{color:theme.hub}}>ESTIMATING: {job?.vehicle?.reg}</h2>
+                        <div style={s.card(theme.hub)}>
+                            <span style={s.label}>Labour Qualified Hours</span>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'15px', marginBottom:'30px'}}>
+                                <div><span style={s.label}>MET</span><input style={s.input} value={job?.repair?.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} /></div>
+                                <div><span style={s.label}>PANEL</span><input style={s.input} value={job?.repair?.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} /></div>
+                                <div><span style={s.label}>PAINT</span><input style={s.input} value={job?.repair?.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
                             </div>
+                            <div style={{background:'#000', padding:'40px', borderRadius:'30px', border:'1px solid #333', marginBottom:'30px'}}>
+                                <div style={{display:'flex', justifyContent:'space-between', fontSize:'32px'}}><span>Grand Total:</span><strong>£{totals.total.toFixed(2)}</strong></div>
+                                <div style={{display:'flex', justifyContent:'space-between', color:theme.deal, borderTop:'2px solid #222', paddingTop:'20px', marginTop:'20px'}}><span>Insurer Balance:</span><strong>£{totals.insurer.toFixed(2)}</strong></div>
+                            </div>
+                            <input style={{...s.input, color:theme.danger, border:`4px solid ${theme.danger}`}} placeholder="EXCESS -£" value={job?.repair?.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'25px'}}><button style={s.btnG('#333')} onClick={() => { setDocType('ESTIMATE'); setTimeout(() => window.print(), 100); }}>PRINT ESTIMATE</button><button style={s.btnG(theme.deal)} onClick={() => { setDocType('INVOICE'); setTimeout(() => window.print(), 100); }}>TO INVOICE</button></div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SETTINGS */}
+                {view === 'SET' && (
+                    <div>
+                        <HeaderNav prev="HUB" /><h1 style={{color:theme.set}}>MASTER SETTINGS</h1>
+                        <div style={s.card(theme.set)}>
+                            <input style={s.input} placeholder="Business Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
+                            <input style={s.input} placeholder="Bank Sort/Acc" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
+                            <input style={s.input} placeholder="DVLA API Key" value={settings.dvlaKey} onChange={e=>setSettings({...settings, dvlaKey:e.target.value})} />
+                            <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Settings Locked."); }}>SAVE SETTINGS</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* BOTTOM NAVIGATION DOCK */}
+                <div className="no-print" style={s.dock}>
+                    <button onClick={()=>setView('HUB')} style={{...s.btnG(view === 'HUB' ? theme.hub : '#222'), minWidth:'110px'}}>HUB</button>
+                    <button onClick={()=>setView('EST')} style={{...s.btnG(view === 'EST' ? theme.hub : '#222'), minWidth:'110px'}}>EST</button>
+                    <button onClick={()=>window.open('https://calendar.google.com/calendar/u/0/r?cid=markmonie72@gmail.com', '_blank')} style={{...s.btnG(theme.set), minWidth:'110px'}}>CAL</button>
+                    <button onClick={()=>setView('RECENT')} style={{...s.btnG('#333'), minWidth:'110px'}}>JOBS</button>
+                    <button onClick={()=>setView('SET')} style={{...s.btnG('#222'), minWidth:'110px'}}>SET</button>
+                    <button style={{...s.btnG(theme.deal), minWidth:'220px'}} onClick={saveMaster}>SAVE MASTER</button>
+                </div>
+            </div>
+
+            {/* PRINT VIEW (RIGID INDUSTRIAL GRID) */}
+            <div className="print-only" style={{display:'none', color:'black', padding:'60px', fontFamily:'Arial', width:'100%', boxSizing:'border-box'}}>
+                <div style={{display:'flex', justifyContent:'space-between', borderBottom:'10px solid #f97316', paddingBottom:'45px', width:'100%'}}>
+                    <div style={{flex:1}}>
+                        <h1 style={{margin:0, color:'#f97316', fontSize:'52px', fontWeight:'900'}}>{settings?.coName}</h1>
+                        <p style={{fontSize:'20px'}}>{settings?.address}<br/>Tel: {settings?.phone}</p>
+                    </div>
+                    <div style={{textAlign:'right', flex:1}}>
+                        <h2 style={{color:'#f97316', fontSize:'70px', margin:0}}>{docType}</h2>
+                        <p style={{marginTop:'25px', fontSize:'24px'}}><strong>Reg:</strong> {job?.vehicle?.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                        <p style={{fontSize:'18px', color:'#555'}}><strong>{job.vehicle.make} | {job.vehicle.year} | {job.vehicle.colour}</strong></p>
+                    </div>
+                </div>
+                <table style={{width:'100%', marginTop:'60px', borderCollapse:'collapse'}}>
+                    <thead><tr style={{background:'#f3f3f3', borderBottom:'6px solid #ddd'}}><th style={{padding:'30px', textAlign:'left', fontSize:'24px'}}>Description</th><th style={{padding:'30px', textAlign:'right', fontSize:'24px'}}>Amount</th></tr></thead>
+                    <tbody>
+                        {(job?.repair?.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'2px solid #eee'}}><td style={{padding:'30px', fontSize:'20px'}}>{it?.desc}</td><td style={{textAlign:'right', padding:'30px', fontWeight:'bold', fontSize:'20px'}}>£{(parseFloat(it?.cost)*(1+(parseFloat(settings?.markup)/100))).toFixed(2)}</td></tr>))}
+                        <tr style={{borderBottom:'2px solid #eee'}}><td style={{padding:'30px', fontSize:'20px'}}>Qualified Bodywork Labour ({totals?.lHrs} hrs)</td><td style={{textAlign:'right', padding:'30px', fontWeight:'bold', fontSize:'20px'}}>£{totals?.lPrice?.toFixed(2)}</td></tr>
+                    </tbody>
+                </table>
+                <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:'50px', marginTop:'80px', width:'100%'}}>
+                    <div style={{textAlign:'center'}}>
+                        {docType === 'INVOICE' && settings?.paypalQr && (
+                            <div>
+                                <img src={settings.paypalQr} style={{width:'320px', height:'320px', objectFit:'contain', marginBottom:'20px'}} />
+                                <div style={{fontSize:'22px', fontWeight:'900', background:'#fff3e0', padding:'35px', borderRadius:'30px', border:'4px solid #f97316'}}>PAYMENT TO: {settings?.bank}</div>
+                            </div>
+                        )}
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                        <h1 style={{color:'#f97316', fontSize:'80px', margin:'0 0 35px 0'}}>£{totals?.total?.toFixed(2)}</h1>
+                        <div style={{background:'#fff3e0', padding:'45px', border:'5px solid #f97316', borderRadius:'40px', textAlign:'left'}}>
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px', fontSize:'22px'}}><span>CLIENT EXCESS:</span><strong style={{fontSize:'34px'}}>£{parseFloat(job?.repair?.excess || 0).toFixed(2)}</strong></div>
+                            <div style={{display:'flex', justifyContent:'space-between', color:'#f97316', borderTop:'4px solid #f97316', paddingTop:'30px', fontSize:'22px'}}><span>INSURER BALANCE:</span><strong style={{fontSize:'54px'}}>£{totals?.insurer?.toFixed(2)}</strong></div>
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* SLIDING BOTTOM BAR */}
-            <div className="no-print" style={{ 
-                position: 'fixed', bottom: 0, left: 0, right: 0, 
-                background: 'white', borderTop: '1px solid #ddd', 
-                padding: '15px', display: 'flex', gap: '12px', 
-                overflowX: 'auto', whiteSpace: 'nowrap', 
-                boxShadow: '0 -4px 20px rgba(0,0,0,0.1)', 
-                zIndex: 1000 
-            }}>
-                <button onClick={() => saveToCloud('ESTIMATE')} style={saveStatus === 'SUCCESS' ? successBtn : greenBtn}>{saveStatus === 'SAVING' ? '⏳' : 'SAVE'}</button>
-                {mode === 'ESTIMATE' && (
-                    <>
-                        <button onClick={() => saveToCloud('INVOICE_MAIN')} style={{...secondaryBtn, background: '#4f46e5'}}>Inv Insurer</button>
-                        <button onClick={() => saveToCloud('INVOICE_EXCESS')} style={{...secondaryBtn, background: '#be123c'}}>Inv Customer</button>
-                    </>
-                )}
-                <button onClick={() => setMode('JOBCARD')} style={secondaryBtn}>Job Card</button>
-                <button onClick={() => setMode('DEAL_FILE')} style={{...secondaryBtn, background: theme.primary}}>Deal File</button>
-                <button onClick={handlePrint} style={secondaryBtn}>Print</button>
-                <button onClick={clearForm} style={{...secondaryBtn, background: '#ef4444'}}>New</button>
-                <button onClick={() => setMode('SETTINGS')} style={secondaryBtn}>⚙️</button>
-                <button onClick={() => setMode('DASHBOARD')} style={secondaryBtn}>📊</button>
             </div>
-
-            <div className="no-print" style={{marginTop:'50px'}}>
-                <div style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #ddd', paddingBottom:'10px'}}><h3>Recent Jobs</h3><input placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{padding:'5px', borderRadius:'4px', border:'1px solid #ccc'}} /></div>
-                {filteredEstimates.map(est => (
-                    <div key={est.id} style={{padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center', background: est.status === 'PAID' ? '#f0fdf4' : 'white'}}>
-                        <div onClick={() => loadJobIntoState(est)} style={{cursor:'pointer'}}><strong>{est.reg}</strong> - {est.customer} <span style={{color:'#888', fontSize:'0.8em'}}>({est.invoiceNumber || 'Est'})</span></div>
-                        <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
-                            <button onClick={() => deleteJob(est.id)} style={{...dangerBtn, fontSize:'0.8em', padding:'5px 10px'}}>X</button>
-                            <button onClick={() => togglePaid(est.id, est.status)} style={{border:'1px solid #ccc', background: est.status === 'PAID' ? theme.green : 'white', color: est.status === 'PAID' ? 'white' : '#333', borderRadius:'4px', padding:'5px 10px'}}>{est.status === 'PAID' ? 'PAID' : 'PAY'}</button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <style>{`@media print { .no-print { display: none !important; } body { padding: 0; } input, textarea { border: none !important; resize: none; font-family: inherit; color: black; } }`}</style>
+            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } }`}</style>
         </div>
     );
 };
 
 const App = () => {
     const [u, sU] = useState(null);
-    useEffect(() => onAuthStateChanged(auth, (user) => user ? sU(user.uid) : signInAnonymously(auth)), []);
-    if (!u) return <div style={{padding:'20px', color:'#ea580c'}}>Loading Triple MMM...</div>;
-    return <EstimateApp userId={u} />;
+    useEffect(() => { onAuthStateChanged(auth, u => u ? sU(u.uid) : signInAnonymously(auth)); }, []);
+    return u ? <EstimateApp userId={u} /> : null;
 };
-
 export default App;
