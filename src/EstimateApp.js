@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- TITAN VISION DESIGN SYSTEM (V86 TITANIUM-MASTER) ---
+// --- TITAN VISION DESIGN SYSTEM (V89 IRON-LOCK) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -85,15 +85,14 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v86_TITANIUM_MASTER');
+        const saved = localStorage.getItem('mmm_v89_IRON_LOCK');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
         onSnapshot(collection(db, 'addressBook'), snap => setAddressBook(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v86_TITANIUM_MASTER', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v89_IRON_LOCK', JSON.stringify(job)); }, [job]);
 
-    // --- AI MATH ENGINE ---
     const totals = useMemo(() => {
         const pCost = (job?.repair?.items || []).reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
         const pPrice = pCost * (1 + (parseFloat(settings.markup) / 100));
@@ -112,7 +111,6 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job?.repair]);
 
-    // --- NATIVE LEGAL HANDSHAKE (SCRUBS SPACES) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
@@ -124,10 +122,10 @@ const EstimateApp = ({ userId }) => {
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'x-api-key': settings.dvlaKey.trim() },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
-            if (!response.ok) throw new Error();
+            if (!response.ok) throw new Error(`${response.status}`);
             const d = await response.json();
             setJob(prev => ({...prev, vehicle: {...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate}}));
-        } catch (e) { alert("DVLA Handshake Error: Verify Key or Proxy."); }
+        } catch (e) { alert("DVLA Link Failed: Verify Key or Proxy."); }
         setLoading(false);
     };
 
@@ -151,8 +149,8 @@ const EstimateApp = ({ userId }) => {
 
     const HeaderNav = ({ prev }) => (
         <div style={s.navBar} className="no-print">
-            <button style={{...s.btnG('#222'), flex:1}} onClick={() => setView(prev || 'HUB')}>⬅️ BACK</button>
-            <button style={{...s.btnG(theme.hub), flex:1}} onClick={() => setView('HUB')}>🏠 HUB</button>
+            <button style={{...s.btnG('#222'), flex:1}} onClick={() => setView(prev || 'HUB')}>⬅️ BACK CENTRE</button>
+            <button style={{...s.btnG(theme.hub), flex:1}} onClick={() => setView('HUB')}>🏠 HUB CENTRE</button>
         </div>
     );
 
@@ -176,9 +174,8 @@ const EstimateApp = ({ userId }) => {
                                     <div><span style={s.label}>Vehicle</span><strong>{job.vehicle.make || 'Pending...'}</strong></div>
                                     <div><span style={s.label}>Spec</span><strong>{job.vehicle.year} | {job.vehicle.fuel}</strong></div>
                                     <div><span style={s.label}>Colour</span><strong>{job.vehicle.colour || '-'}</strong></div>
-                                    <div><span style={s.label}>Engine</span><strong>{job.vehicle.engine}cc</strong></div>
                                     <div><span style={s.label}>MOT Status</span><strong style={{color: job.vehicle.mot === 'VALID' ? theme.deal : theme.danger}}>{job.vehicle.mot || '-'}</strong></div>
-                                    <div><span style={s.label}>MOT Expiry</span><strong>{job.vehicle.motExpiry || '-'}</strong></div>
+                                    <div style={{gridColumn:'span 2'}}><span style={s.label}>MOT Expiry</span><strong>{job.vehicle.motExpiry || '-'}</strong></div>
                                 </div>
                             </div>
                             <div style={{display:'flex', gap:'15px'}}>
@@ -207,10 +204,10 @@ const EstimateApp = ({ userId }) => {
                         </div>
 
                         <div style={s.card(theme.work)}>
-                            <span style={s.label}>Station 4: AI Nerve Centre</span>
+                            <span style={s.label}>Station 4: AI Shop Floor Nerve Centre</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'25px', marginBottom:'25px'}}>
-                                <div style={s.displayBox}><span style={s.label}>Progress</span><div style={{display:'flex', gap:'25px', marginTop:'15px'}}><div style={{...s.traffic(job.status==='STRIPPING'), background:theme.danger}} /><div style={{...s.traffic(job.status==='PAINT'), background:theme.work}} /><div style={{...s.traffic(job.status==='QC'), background:theme.deal}} /></div></div>
-                                <div style={{...s.displayBox, background:theme.hub}}><span style={{...s.label, color:'#000'}}>READY DATE</span><div style={{color:'#000', fontSize:'38px', fontWeight:'900'}}>{projectedDate}</div></div>
+                                <div style={s.displayBox}><span style={s.label}>Status</span><div style={{display:'flex', gap:'25px', marginTop:'15px'}}><div style={{...s.traffic(job.status==='STRIPPING'), background:theme.danger}} /><div style={{...s.traffic(job.status==='PAINT'), background:theme.work}} /><div style={{...s.traffic(job.status==='QC'), background:theme.deal}} /></div></div>
+                                <div style={{...s.displayBox, background:theme.hub}}><span style={{...s.label, color:'#000'}}>AI READY DATE</span><div style={{color:'#000', fontSize:'38px', fontWeight:'900'}}>{projectedDate}</div></div>
                             </div>
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'40px', fontSize:'32px'}} onClick={()=>setView('EST')}>OPEN ESTIMATOR</button>
                         </div>
@@ -238,6 +235,24 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
+                {view === 'WORK' && (
+                    <div>
+                        <HeaderNav prev="EST" /><h1 style={{color:theme.work}}>ADVANCED JOB CARD</h1>
+                        <div style={{display:'flex', gap:'20px', marginBottom:'35px'}}><button onClick={()=>setJob({...job, status:'STRIPPING'})} style={{...s.btnG(job?.status==='STRIPPING'?theme.danger:'#222'), flex:1}}>🔴 STRIPPING</button><button onClick={()=>setJob({...job, status:'PAINT'})} style={{...s.btnG(job?.status==='PAINT'?theme.work:'#222'), flex:1}}>🟡 PAINTING</button><button onClick={()=>setJob({...job, status:'QC'})} style={{...s.btnG(job?.status==='QC'?theme.deal:'#222'), flex:1}}>🟢 READY</button></div>
+                        <div style={s.card(theme.work)}>
+                            <h2 style={{fontSize:'42px', marginBottom:'30px'}}>{job?.vehicle?.reg} | {job?.vehicle?.make}</h2>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'30px', background:'#000', padding:'40px', borderRadius:'30px', border:'1px solid #333'}}>
+                                <div><span style={s.label}>Customer</span><strong>{job?.client?.name}</strong><br/>{job?.client?.phone}</div>
+                                <div><span style={s.label}>Insurer</span><strong>{job?.insurance?.co || 'PRIVATE'}</strong></div>
+                                <div style={{background:theme.hub, color:'#000', padding:'20px', borderRadius:'20px'}}><span style={{...s.label, color:'#000'}}>AI READY</span><strong>{projectedDate}</strong></div>
+                                <div><span style={s.label}>Tech Specs</span>Fuel: {job?.vehicle?.fuel}<br/>MOT: {job?.vehicle?.mot} ({job?.vehicle?.motExpiry})</div>
+                                <div><span style={s.label}>Allocated</span>MET: {job?.repair?.metHrs}h<br/>Panel: {job?.repair?.panelHrs}h</div>
+                                <div><span style={s.label}>Chassis</span>{job?.vehicle?.vin || '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {view === 'RECENT' && (
                     <div>
                         <HeaderNav prev="HUB" /><h1 style={{color:theme.hub}}>REPAIR ARCHIVE</h1>
@@ -245,7 +260,7 @@ const EstimateApp = ({ userId }) => {
                             {(history || []).map((h, i) => (
                                 <div key={i} style={{background:'#000', padding:'35px', borderRadius:'30px', border:'1px solid #333', marginBottom:'25px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                                     <div><div style={{fontWeight:'900', fontSize:'32px'}}>{h?.vehicle?.reg}</div><div style={{fontSize:'16px', color:'#888'}}>{h?.client?.name || 'Private Client'}</div></div>
-                                    <div style={{display:'flex', gap:'15px'}}><button style={{...s.btnG(theme.deal), padding:'18px 28px'}} onClick={() => { setJob(h); setView('HUB'); }}>LOAD</button><button style={{...s.btnG(theme.danger), padding:'18px 22px'}} onClick={async () => { if(window.confirm("Delete Repair?")) await deleteDoc(doc(db, 'estimates', h.id)); }}>X</button></div>
+                                    <div style={{display:'flex', gap:'15px'}}><button style={{...s.btnG(theme.deal), padding:'18px 28px'}} onClick={() => { setJob(h); setView('HUB'); }}>LOAD</button><button style={{...s.btnG(theme.danger), padding:'18px 22px'}} onClick={async () => { if(window.confirm("Wipe Repair?")) await deleteDoc(doc(db, 'estimates', h.id)); }}>X</button></div>
                                 </div>
                             ))}
                         </div></div>
@@ -274,7 +289,7 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* BOTTOM NAVIGATION DOCK (TITANIUM FLEX-LOCK) */}
+                {/* BOTTOM NAVIGATION DOCK */}
                 <div className="no-print" style={s.dock}>
                     <button onClick={()=>setView('HUB')} style={{...s.btnG(view === 'HUB' ? theme.hub : '#222'), minWidth:'110px'}}>HUB</button>
                     <button onClick={()=>setView('EST')} style={{...s.btnG(view === 'EST' ? theme.hub : '#222'), minWidth:'110px'}}>EST</button>
@@ -286,10 +301,11 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT VIEW (FLEX GRID LOCK) */}
+            {/* PRINT VIEW (FLEX GRID LOCK - PREVENTS OVERLAP) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'60px', fontFamily:'Arial', width:'100%', boxSizing:'border-box'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'10px solid #f97316', paddingBottom:'45px', width:'100%'}}>
                     <div style={{flex:1}}>
+                        {settings?.logoUrl && <img src={settings.logoUrl} style={{height:'140px', marginBottom:'25px'}} />}
                         <h1 style={{margin:0, color:'#f97316', fontSize:'52px', fontWeight:'900'}}>{settings?.coName}</h1>
                         <p style={{fontSize:'20px'}}>{settings?.address}<br/>Tel: {settings?.phone}</p>
                     </div>
@@ -317,7 +333,7 @@ const EstimateApp = ({ userId }) => {
                         {job?.vault?.signature && <div style={{marginTop:'45px'}}><span style={{fontSize:'12px', textTransform:'uppercase', color:'#888'}}>Satisfaction Sign-off</span><br/><img src={job.vault.signature} style={{height:'130px'}} /></div>}
                     </div>
                     <div style={{textAlign:'right'}}>
-                        <h1 style={{color:'#f97316', fontSize:'90px', margin:'0 0 35px 0'}}>£{totals?.total?.toFixed(2)}</h1>
+                        <h1 style={{color:'#f97316', fontSize:'80px', margin:'0 0 35px 0'}}>£{totals?.total?.toFixed(2)}</h1>
                         <div style={{background:'#fff3e0', padding:'45px', border:'5px solid #f97316', borderRadius:'40px', textAlign:'left'}}>
                             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px', fontSize:'22px'}}><span>CLIENT EXCESS:</span><strong style={{fontSize:'34px'}}>£{totals?.customer?.toFixed(2)}</strong></div>
                             <div style={{display:'flex', justifyContent:'space-between', color:'#f97316', borderTop:'4px solid #f97316', paddingTop:'30px', fontSize:'22px'}}><span>INSURER BALANCE:</span><strong style={{fontSize:'48px'}}>£{totals?.insurer?.toFixed(2)}</strong></div>
