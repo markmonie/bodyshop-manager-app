@@ -19,11 +19,12 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V185) ---
+// --- THEME: TITAN TUNGSTEN (V200 T&C) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
     input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
+    textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0 }),
@@ -61,13 +62,15 @@ const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
     const [docType, setDocType] = useState('ESTIMATE'); 
-    const [printMode, setPrintMode] = useState('FULL'); // FULL, EXCESS, INSURER
+    const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     
+    // --- SETTINGS (Including T&Cs) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: ''
+        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
+        terms: 'STANDARD TERMS AND CONDITIONS\n\n1. Payment is due upon completion of work.\n2. Vehicles are left at owner\'s risk.\n3. All parts remain property of Triple MMM until paid in full.'
     });
 
     const INITIAL_JOB = {
@@ -83,12 +86,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v185_SPLIT');
+        const saved = localStorage.getItem('mmm_v200_TC');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v185_SPLIT', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v200_TC', JSON.stringify(job)); }, [job]);
 
     // --- MATH ---
     const totals = useMemo(() => {
@@ -109,6 +112,18 @@ const EstimateApp = ({ userId }) => {
         while(count < daysNeeded) { date.setDate(date.getDate() + 1); if(date.getDay() !== 0 && date.getDay() !== 6) count++; }
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
+
+    // --- PRINT LOGIC ---
+    const handlePrint = (type, mode = 'FULL') => {
+        setDocType(type);
+        setPrintMode(mode);
+        const filename = `${job.vehicle.reg || 'ESTIMATE'}_${type === 'INVOICE' ? mode : 'SAT_NOTE'}`;
+        document.title = filename;
+        setTimeout(() => {
+            window.print();
+            setTimeout(() => document.title = "Triple MMM", 2000);
+        }, 100);
+    };
 
     // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
@@ -133,7 +148,7 @@ const EstimateApp = ({ userId }) => {
                     engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
                 }
             }));
-        } catch (e) { alert(`Lookup Failed. Please enter details manually.`); }
+        } catch (e) { alert(`Lookup Failed. Use Manual Input.`); }
         setLoading(false);
     };
 
@@ -172,7 +187,6 @@ const EstimateApp = ({ userId }) => {
                                 <input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
                                 <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
                             </div>
-                            {/* MANUAL OVERRIDE INPUTS */}
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                                 <div><span style={s.label}>MAKE</span><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} /></div>
                                 <div><span style={s.label}>MODEL / SPEC</span><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} /></div>
@@ -195,6 +209,8 @@ const EstimateApp = ({ userId }) => {
                                     <span style={{...s.label, color:theme.set}}>INSURANCE DETAILS</span>
                                     <input style={s.input} placeholder="Company Name" value={job.insurance.name} onChange={e=>setJob({...job, insurance:{...job.insurance, name:e.target.value}})} />
                                     <input style={s.input} placeholder="Address" value={job.insurance.address} onChange={e=>setJob({...job, insurance:{...job.insurance, address:e.target.value}})} />
+                                    <input style={s.input} placeholder="Phone" value={job.insurance.phone} onChange={e=>setJob({...job, insurance:{...job.insurance, phone:e.target.value}})} />
+                                    <input style={s.input} placeholder="Insurance Email" value={job.insurance.email} onChange={e=>setJob({...job, insurance:{...job.insurance, email:e.target.value}})} />
                                     <input style={s.input} placeholder="Claim #" value={job.insurance.claim} onChange={e=>setJob({...job, insurance:{...job.insurance, claim:e.target.value}})} />
                                 </div>
                             </div>
@@ -236,9 +252,9 @@ const EstimateApp = ({ userId }) => {
                             
                             <span style={s.label}>PRINT OPTIONS</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
-                                <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => { setDocType('INVOICE'); setPrintMode('FULL'); setTimeout(() => window.print(), 100); }}>FULL INVOICE</button>
-                                <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => { setDocType('INVOICE'); setPrintMode('INSURER'); setTimeout(() => window.print(), 100); }}>INSURER (NET)</button>
-                                <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => { setDocType('INVOICE'); setPrintMode('EXCESS'); setTimeout(() => window.print(), 100); }}>CUSTOMER EXCESS</button>
+                                <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
+                                <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'INSURER')}>INSURER (NET)</button>
+                                <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'EXCESS')}>CUSTOMER EXCESS</button>
                             </div>
                         </div>
                     </div>
@@ -255,7 +271,7 @@ const EstimateApp = ({ userId }) => {
                                 <p><strong>Client:</strong> {job.client.name}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
                             </div>
                             <NativeSignature onSave={(sig) => setJob({...job, vault: {...job.vault, signature: sig}})} />
-                            <button style={{...s.btnG(theme.deal), width:'100%'}} onClick={() => { setDocType('SATISFACTION NOTE'); setTimeout(() => window.print(), 100); }}>PRINT NOTE</button>
+                            <button style={{...s.btnG(theme.deal), width:'100%'}} onClick={() => handlePrint('SATISFACTION NOTE', 'FULL')}>PRINT NOTE</button>
                         </div>
                     </div>
                 )}
@@ -278,6 +294,9 @@ const EstimateApp = ({ userId }) => {
                             <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'paypalQr')} style={{marginBottom:'20px', color:'#fff'}} />
                             {settings.paypalQr && <img src={settings.paypalQr} style={{height:'100px', display:'block', marginBottom:'20px'}} />}
                             
+                            <span style={s.label}>Terms & Conditions (Auto-Attaches to Estimate)</span>
+                            <textarea style={s.textarea} value={settings.terms} onChange={e=>setSettings({...settings, terms:e.target.value})} placeholder="Enter T&Cs here..." />
+
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Settings Locked."); }}>SAVE GLOBAL SETTINGS</button>
                         </div>
                     </div>
@@ -328,12 +347,14 @@ const EstimateApp = ({ userId }) => {
                                 <>
                                     {job.insurance.name || 'Insurance Co.'}<br/>
                                     {job.insurance.address}<br/>
+                                    {job.insurance.email}<br/>
                                     Ref: {job.insurance.claim}
                                 </>
                             ) : (
                                 <>
                                     {job.client.name}<br/>
-                                    {job.client.address}
+                                    {job.client.address}<br/>
+                                    {job.client.email}
                                 </>
                             )}
                         </div>
@@ -342,6 +363,7 @@ const EstimateApp = ({ userId }) => {
 
                 {docType === 'SATISFACTION NOTE' ? (
                     <div style={{marginTop:'60px', textAlign:'center'}}>
+                        <h1 style={{color:'#f97316', fontSize:'50px', marginBottom:'40px'}}>SATISFACTION NOTE</h1>
                         <p style={{fontSize:'24px', lineHeight:'2'}}>I, <strong>{job.client.name}</strong>, confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
                         {job.vault.signature && <img src={job.vault.signature} style={{width:'400px', marginTop:'50px', borderBottom:'2px solid black'}} />}
                         <p style={{marginTop:'10px', fontSize:'18px'}}>Signed</p>
@@ -378,6 +400,14 @@ const EstimateApp = ({ userId }) => {
                                 {printMode === 'INSURER' && <div style={{marginTop:'10px', color:'#f97316'}}>*Less Client Excess of £{job.repair.excess}</div>}
                             </div>
                         </div>
+
+                        {/* AUTO-ATTACH TERMS AND CONDITIONS FOR ESTIMATES/INVOICES */}
+                        {settings.terms && (
+                            <div style={{pageBreakBefore: 'always', paddingTop: '50px'}}>
+                                <h2 style={{color:'#f97316', borderBottom:'4px solid #f97316', paddingBottom:'10px'}}>TERMS & CONDITIONS</h2>
+                                <p style={{whiteSpace: 'pre-wrap', fontSize:'14px', lineHeight:'1.5', marginTop:'20px'}}>{settings.terms}</p>
+                            </div>
+                        )}
                     </>
                 )}
             </div>
