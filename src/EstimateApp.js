@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc, addDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
@@ -19,18 +19,17 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V230 PLATINUM) ---
+// --- THEME: TITAN TUNGSTEN ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
-    input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
-    textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
+    input: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
+    textarea: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0 }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
-    traffic: (active, color) => ({ width: '50px', height: '50px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' })
 };
 
 const NativeSignature = ({ onSave }) => {
@@ -65,11 +64,12 @@ const EstimateApp = ({ userId }) => {
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     
-    // --- SETTINGS (T&Cs + Invoice Counter) ---
+    // --- SETTINGS (UPDATED KEY) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
+        dvlaKey: 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
+        logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
     });
@@ -114,14 +114,11 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- PRINT & NUMBERING ---
+    // --- ACTIONS ---
     const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
-        
         let currentInvoiceNo = job.invoiceNo;
-
-        // AUTO-ASSIGN INVOICE NUMBER IF MISSING
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
@@ -130,46 +127,43 @@ const EstimateApp = ({ userId }) => {
             await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
             await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, totals }, { merge: true });
         }
-
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
-        setTimeout(() => {
-            window.print();
-            setTimeout(() => document.title = "Triple MMM", 2000);
-        }, 500);
+        setTimeout(() => { window.print(); setTimeout(() => document.title = "Triple MMM", 2000); }, 500);
     };
 
-    // --- CSV LEDGER EXPORT ---
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
-        const rows = history.map(h => [
-            new Date(h.createdAt?.seconds * 1000).toLocaleDateString(),
-            h.invoiceNo || '-',
-            h.vehicle.reg,
-            h.client.name,
-            (h.totals?.total || 0).toFixed(2),
-            (h.repair?.excess || 0),
-            h.status
-        ]);
-        
-        const csvContent = "data:text/csv;charset=utf-8," 
-            + headers.join(",") + "\n" 
-            + rows.map(e => e.join(",")).join("\n");
-            
-        const link = document.createElement("a");
-        link.setAttribute("href", encodeURI(csvContent));
-        link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`);
-        document.body.appendChild(link);
-        link.click();
+        const rows = history.map(h => [ new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || '-', h.vehicle.reg, h.client.name, (h.totals?.total || 0).toFixed(2), (h.repair?.excess || 0), h.status ]);
+        const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
-    // --- DVLA HANDSHAKE (CORS PROXY FIXED) ---
+    const resetJob = () => {
+        if(window.confirm("Start new job? Unsaved data will be lost (unless you clicked SAVE).")) {
+            setJob(INITIAL_JOB);
+            alert("New Job Started");
+        }
+    };
+
+    const loadJob = (savedJob) => {
+        setJob(savedJob);
+        setView('HUB');
+    };
+
+    const deleteJob = async (id) => {
+        if(window.confirm("Permanently delete this record?")) {
+            await deleteDoc(doc(db, 'estimates', id));
+        }
+    };
+
+    // --- DVLA FIX (CorsProxy.io + Uppercase Key) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         
-        // Use CorsProxy.io instead of ThingProxy (More reliable for DVLA headers)
+        // This proxy correctly forwards the API key
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
         
@@ -189,11 +183,7 @@ const EstimateApp = ({ userId }) => {
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: {
-                    ...prev.vehicle, 
-                    make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, 
-                    engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
-                }
+                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
             }));
         } catch (e) { 
             console.error(e);
@@ -218,23 +208,10 @@ const EstimateApp = ({ userId }) => {
         setLoading(false);
     };
 
-    // --- LIST HANDLERS (FIXED ID LOGIC) ---
-    const addLineItem = () => {
-        const newItem = { id: Date.now(), desc: '', cost: '' };
-        setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, newItem] } }));
-    };
-
-    const updateLineItem = (id, field, value) => {
-        const updatedItems = job.repair.items.map(item => 
-            item.id === id ? { ...item, [field]: value } : item
-        );
-        setJob(prev => ({ ...prev, repair: { ...prev.repair, items: updatedItems } }));
-    };
-
-    const deleteLineItem = (id) => {
-        const updatedItems = job.repair.items.filter(item => item.id !== id);
-        setJob(prev => ({ ...prev, repair: { ...prev.repair, items: updatedItems } }));
-    };
+    // --- LIST HANDLERS ---
+    const addLineItem = () => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, { id: Date.now(), desc: '', cost: '' }] } }));
+    const updateLineItem = (id, field, value) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.map(item => item.id === id ? { ...item, [field]: value } : item) } }));
+    const deleteLineItem = (id) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.filter(item => item.id !== id) } }));
 
     const HeaderNav = () => (
         <div style={s.navBar} className="no-print">
@@ -248,7 +225,11 @@ const EstimateApp = ({ userId }) => {
                 {/* HUB */}
                 {view === 'HUB' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}>
-                        <h1 style={{color:theme.hub, fontSize:'65px', letterSpacing:'-4px', marginBottom:'45px', textAlign:'center'}}>COMMAND HUB</h1>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                            <h1 style={{color:theme.hub, fontSize:'65px', letterSpacing:'-4px', margin:0}}>COMMAND HUB</h1>
+                            <button style={{...s.btnG('#333'), padding:'15px'}} onClick={resetJob}>+ NEW JOB</button>
+                        </div>
+                        
                         <div style={s.card(theme.hub)}>
                             <span style={s.label}>Technical ID</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}>
@@ -305,25 +286,11 @@ const EstimateApp = ({ userId }) => {
                             </div>
                             
                             <span style={s.label}>Parts / Line Items</span>
-                            {/* FIXED LIST RENDERING WITH IDS */}
                             {job.repair.items.map((it) => (
                                 <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
-                                    <input 
-                                        style={{...s.input, flex:3, marginBottom:0}} 
-                                        value={it.desc} 
-                                        placeholder="Item Description" 
-                                        onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} 
-                                    />
-                                    <input 
-                                        style={{...s.input, flex:1, marginBottom:0}} 
-                                        value={it.cost} 
-                                        placeholder="£" 
-                                        onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} 
-                                    />
-                                    <button 
-                                        style={{...s.btnG(theme.danger), padding:'15px'}} 
-                                        onClick={() => deleteLineItem(it.id)}
-                                    >X</button>
+                                    <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item Description" onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} />
+                                    <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} />
+                                    <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={() => deleteLineItem(it.id)}>X</button>
                                 </div>
                             ))}
                             <button style={{...s.btnG(theme.work), width:'100%'}} onClick={addLineItem}>+ ADD LINE ITEM</button>
@@ -368,23 +335,41 @@ const EstimateApp = ({ userId }) => {
                             <input style={s.input} placeholder="Business Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
                             <input style={s.input} placeholder="Bank Sort/Acc" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
                             <input style={s.input} placeholder="DVLA API Key" value={settings.dvlaKey} onChange={e=>setSettings({...settings, dvlaKey:e.target.value})} />
-                            
                             <span style={s.label}>Start Invoice Numbering At:</span>
                             <input style={s.input} type="number" value={settings.invoiceCount} onChange={e=>setSettings({...settings, invoiceCount:e.target.value})} />
-
                             <span style={s.label}>Company Logo</span>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'logoUrl')} style={{marginBottom:'20px', color:'#fff'}} />
                             {settings.logoUrl && <img src={settings.logoUrl} style={{height:'100px', display:'block', marginBottom:'20px'}} />}
-                            
                             <span style={s.label}>PayPal QR Code</span>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'paypalQr')} style={{marginBottom:'20px', color:'#fff'}} />
                             {settings.paypalQr && <img src={settings.paypalQr} style={{height:'100px', display:'block', marginBottom:'20px'}} />}
-                            
                             <span style={s.label}>Terms & Conditions (Auto-Attaches)</span>
                             <textarea style={s.textarea} value={settings.terms} onChange={e=>setSettings({...settings, terms:e.target.value})} placeholder="Enter T&Cs here..." />
-
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px'}} onClick={async () => { await setDoc(doc(db, 'settings', 'global'), settings); alert("Settings Locked."); }}>SAVE GLOBAL SETTINGS</button>
                         </div>
+                    </div>
+                )}
+
+                {/* JOB HISTORY / RECENT */}
+                {view === 'RECENT' && (
+                    <div style={{maxWidth:'850px', margin:'0 auto'}}>
+                        <HeaderNav />
+                        <h1 style={{color:theme.hub, marginBottom:'30px'}}>JOB VAULT</h1>
+                        {history.map((h) => (
+                            <div key={h.id} style={{...s.card('#333'), display:'flex', justifyContent:'space-between', alignItems:'center', padding:'25px'}}>
+                                <div>
+                                    <h2 style={{margin:0, color:theme.hub}}>{h.vehicle?.reg || 'UNKNOWN'}</h2>
+                                    <p style={{margin:0, color:'#888'}}>
+                                        {h.client?.name} | {new Date(h.createdAt?.seconds * 1000).toLocaleDateString()}
+                                    </p>
+                                    <p style={{margin:0, fontSize:'14px'}}>£{(h.totals?.total || 0).toFixed(2)}</p>
+                                </div>
+                                <div style={{display:'flex', gap:'10px'}}>
+                                    <button style={{...s.btnG(theme.deal), padding:'10px 20px', fontSize:'14px'}} onClick={() => loadJob(h)}>OPEN</button>
+                                    <button style={{...s.btnG(theme.danger), padding:'10px 20px', fontSize:'14px'}} onClick={() => deleteJob(h.id)}>DEL</button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
 
@@ -434,7 +419,6 @@ const EstimateApp = ({ userId }) => {
                         <p style={{fontSize:'20px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
                         {job.invoiceNo && <p style={{fontSize:'20px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
                         
-                        {/* DYNAMIC BILL TO BLOCK */}
                         <div style={{marginTop:'20px', fontSize:'16px', borderTop:'2px solid #ddd', paddingTop:'10px'}}>
                             <strong>BILL TO:</strong><br/>
                             {printMode === 'INSURER' ? (
@@ -467,15 +451,12 @@ const EstimateApp = ({ userId }) => {
                         <table style={{width:'100%', marginTop:'40px', borderCollapse:'collapse'}}>
                             <thead><tr style={{background:'#eee', borderBottom:'4px solid #ddd'}}><th style={{padding:'20px', textAlign:'left'}}>Description</th><th style={{padding:'20px', textAlign:'right'}}>Amount</th></tr></thead>
                             <tbody>
-                                {/* ONLY SHOW ITEMS IF NOT EXCESS MODE */}
                                 {printMode !== 'EXCESS' && (
                                     <>
                                         {(job.repair.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>))}
                                         <tr><td style={{padding:'15px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{totals.lPrice.toFixed(2)}</td></tr>
                                     </>
                                 )}
-                                
-                                {/* SHOW EXCESS LINE ITEM IN EXCESS MODE */}
                                 {printMode === 'EXCESS' && (
                                     <tr><td style={{padding:'15px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>
                                 )}
@@ -495,7 +476,6 @@ const EstimateApp = ({ userId }) => {
                             </div>
                         </div>
 
-                        {/* AUTO-ATTACH TERMS AND CONDITIONS FOR ESTIMATES/INVOICES */}
                         {settings.terms && (
                             <div style={{pageBreakBefore: 'always', paddingTop: '50px'}}>
                                 <h2 style={{color:'#f97316', borderBottom:'4px solid #f97316', paddingBottom:'10px'}}>TERMS & CONDITIONS</h2>
