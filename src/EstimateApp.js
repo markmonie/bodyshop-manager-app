@@ -163,20 +163,29 @@ const EstimateApp = ({ userId }) => {
         link.click();
     };
 
-    // --- DVLA HANDSHAKE (PROXY FIXED) ---
+    // --- DVLA HANDSHAKE (CORS PROXY FIXED) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
+        
+        // Use CorsProxy.io instead of ThingProxy (More reliable for DVLA headers)
+        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        
         try {
             const response = await fetch(proxyUrl, {
                 method: 'POST',
-                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
+                headers: { 
+                    'x-api-key': settings.dvlaKey.trim(), 
+                    'Content-Type': 'application/json' 
+                },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
+            
             if (!response.ok) throw new Error(`Status ${response.status}`);
             const d = await response.json();
+            
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
@@ -186,7 +195,10 @@ const EstimateApp = ({ userId }) => {
                     engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
                 }
             }));
-        } catch (e) { alert(`Link Failed (${e.message}). Manual Entry Enabled.`); }
+        } catch (e) { 
+            console.error(e);
+            alert(`Link Failed (${e.message}). Manual Entry Enabled.`); 
+        }
         setLoading(false);
     };
 
@@ -204,6 +216,24 @@ const EstimateApp = ({ userId }) => {
         if (path === 'branding') setSettings(prev => ({...prev, [field]: url}));
         else setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}}));
         setLoading(false);
+    };
+
+    // --- LIST HANDLERS (FIXED ID LOGIC) ---
+    const addLineItem = () => {
+        const newItem = { id: Date.now(), desc: '', cost: '' };
+        setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, newItem] } }));
+    };
+
+    const updateLineItem = (id, field, value) => {
+        const updatedItems = job.repair.items.map(item => 
+            item.id === id ? { ...item, [field]: value } : item
+        );
+        setJob(prev => ({ ...prev, repair: { ...prev.repair, items: updatedItems } }));
+    };
+
+    const deleteLineItem = (id) => {
+        const updatedItems = job.repair.items.filter(item => item.id !== id);
+        setJob(prev => ({ ...prev, repair: { ...prev.repair, items: updatedItems } }));
     };
 
     const HeaderNav = () => (
@@ -273,15 +303,30 @@ const EstimateApp = ({ userId }) => {
                                 <div><span style={s.label}>PANEL</span><input style={s.input} value={job.repair.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} /></div>
                                 <div><span style={s.label}>PAINT</span><input style={s.input} value={job.repair.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
                             </div>
+                            
                             <span style={s.label}>Parts / Line Items</span>
-                            {job.repair.items.map((it, i) => (
-                                <div key={i} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
-                                    <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item" onChange={e=>{ let n=[...job.repair.items]; n[i].desc=e.target.value; setJob({...job, repair:{...job.repair, items:n}}); }} />
-                                    <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={e=>{ let n=[...job.repair.items]; n[i].cost=e.target.value; setJob({...job, repair:{...job.repair, items:n}}); }} />
-                                    <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={()=>{ let n=job.repair.items.filter((_, idx)=>idx!==i); setJob({...job, repair:{...job.repair, items:n}}); }}>X</button>
+                            {/* FIXED LIST RENDERING WITH IDS */}
+                            {job.repair.items.map((it) => (
+                                <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                                    <input 
+                                        style={{...s.input, flex:3, marginBottom:0}} 
+                                        value={it.desc} 
+                                        placeholder="Item Description" 
+                                        onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} 
+                                    />
+                                    <input 
+                                        style={{...s.input, flex:1, marginBottom:0}} 
+                                        value={it.cost} 
+                                        placeholder="£" 
+                                        onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} 
+                                    />
+                                    <button 
+                                        style={{...s.btnG(theme.danger), padding:'15px'}} 
+                                        onClick={() => deleteLineItem(it.id)}
+                                    >X</button>
                                 </div>
                             ))}
-                            <button style={{...s.btnG(theme.work), width:'100%'}} onClick={()=>setJob({...job, repair:{...job.repair, items:[...job.repair.items, {desc:'', cost:''}]}})}>+ ADD LINE ITEM</button>
+                            <button style={{...s.btnG(theme.work), width:'100%'}} onClick={addLineItem}>+ ADD LINE ITEM</button>
                         </div>
                         <div style={s.card(theme.deal)}>
                             <h2 style={{fontSize:'45px', textAlign:'right'}}>TOTAL: £{totals.total.toFixed(2)}</h2>
