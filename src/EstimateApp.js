@@ -64,7 +64,7 @@ const EstimateApp = ({ userId }) => {
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     
-    // --- SETTINGS (UPDATED KEY) ---
+    // --- SETTINGS (UPDATED KEY with Uppercase L) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
