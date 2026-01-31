@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V241 DEPLOYMENT READY) ---
+// --- THEME: TITAN TUNGSTEN (V250 FINAL) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -66,6 +66,10 @@ const EstimateApp = ({ userId }) => {
     const [history, setHistory] = useState([]);
     const [printing, setPrinting] = useState(false);
     
+    // --- RESTORED: MISSING STATE VARIABLES (CRITICAL FIX) ---
+    const [vaultSearch, setVaultSearch] = useState('');
+    const [clientMatch, setClientMatch] = useState(null);
+    
     // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
@@ -75,25 +79,56 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
-    const INITIAL_JOB = {
-        status: 'STRIPPING', lastSuccess: '', invoiceNo: '',
+    // --- JOB FACTORY ---
+    const getEmptyJob = () => ({
+        status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
         insurance: { name: '', address: '', phone: '', email: '', claim: '' },
-        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '' },
+        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' },
         repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' },
         vault: { signature: '', expenses: [] }
-    };
+    });
 
-    const [job, setJob] = useState(INITIAL_JOB);
+    const [job, setJob] = useState(getEmptyJob());
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v241_FINAL');
+        const saved = localStorage.getItem('mmm_v250_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v241_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v250_FINAL', JSON.stringify(job)); }, [job]);
+
+    // --- RESTORED: CLIENT RECALL ---
+    const checkClientMatch = (name) => {
+        if(!name || name.length < 3) { setClientMatch(null); return; }
+        const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
+        if(match) setClientMatch(match.client); else setClientMatch(null);
+    };
+    const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
+
+    // --- RESTORED: JOB MANAGEMENT FUNCTIONS (CRITICAL FIX) ---
+    const resetJob = () => {
+        if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
+            localStorage.removeItem('mmm_v250_FINAL');
+            setJob(getEmptyJob());
+            setClientMatch(null); 
+            window.scrollTo(0, 0); 
+        }
+    };
+
+    const loadJob = (savedJob) => {
+        setJob(savedJob);
+        setView('HUB');
+        window.scrollTo(0,0);
+    };
+
+    const deleteJob = async (id) => {
+        if(window.confirm("Permanently delete this record?")) {
+            await deleteDoc(doc(db, 'estimates', id));
+        }
+    };
 
     // --- MATH ---
     const totals = useMemo(() => {
@@ -123,12 +158,9 @@ const EstimateApp = ({ userId }) => {
         
         let currentInvoiceNo = job.invoiceNo;
 
-        // AUTO-ASSIGN INVOICE NUMBER IF MISSING
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
-            
-            // UPDATE STATE & DB BEFORE PRINTING
             setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo }));
             setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
             await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
@@ -138,7 +170,6 @@ const EstimateApp = ({ userId }) => {
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
 
-        // EXTENDED BUFFER TO ENSURE RENDER IS COMPLETE
         setTimeout(() => {
             window.print();
             setPrinting(false); 
@@ -146,7 +177,7 @@ const EstimateApp = ({ userId }) => {
         }, 800);
     };
 
-    // --- CSV LEDGER EXPORT ---
+    // --- RESTORED: CSV EXPORT ---
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
         const rows = history.map(h => [
@@ -170,12 +201,11 @@ const EstimateApp = ({ userId }) => {
         link.click();
     };
 
-    // --- DVLA HANDSHAKE (PROXY RESTORED FOR BROWSER SECURITY) ---
+    // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        // USING PROXY BRIDGE TO BYPASS CORS (REQUIRED FOR MOBILE BROWSERS)
         const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
             const response = await fetch(proxyUrl, {
@@ -213,6 +243,11 @@ const EstimateApp = ({ userId }) => {
         else setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}}));
         setLoading(false);
     };
+
+    // --- RESTORED: LINE ITEM HANDLERS ---
+    const addLineItem = () => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, { id: Date.now(), desc: '', cost: '' }] } }));
+    const updateLineItem = (id, field, value) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.map(item => item.id === id ? { ...item, [field]: value } : item) } }));
+    const deleteLineItem = (id) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.filter(item => item.id !== id) } }));
 
     const HeaderNav = () => (
         <div style={s.navBar} className="no-print">
@@ -254,7 +289,8 @@ const EstimateApp = ({ userId }) => {
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
                                 <div>
                                     <span style={{...s.label, color:theme.deal}}>CLIENT DETAILS</span>
-                                    <input style={s.input} placeholder="Name" value={job.client.name} onChange={e=>setJob({...job, client:{...job.client, name:e.target.value}})} />
+                                    <input style={s.input} placeholder="Name" value={job.client.name} onChange={e => { const val = e.target.value; setJob({...job, client:{...job.client, name:val}}); checkClientMatch(val); }} />
+                                    {clientMatch && ( <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}><span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS CLIENT:</span><br/>{clientMatch.name}<br/><small style={{textDecoration:'underline'}}>Click to Auto-fill</small></div> )}
                                     <input style={s.input} placeholder="Address" value={job.client.address} onChange={e=>setJob({...job, client:{...job.client, address:e.target.value}})} />
                                     <input style={s.input} placeholder="Phone" value={job.client.phone} onChange={e=>setJob({...job, client:{...job.client, phone:e.target.value}})} />
                                     <input style={s.input} placeholder="Email" value={job.client.email} onChange={e=>setJob({...job, client:{...job.client, email:e.target.value}})} />
@@ -275,6 +311,8 @@ const EstimateApp = ({ userId }) => {
                             <div style={s.displayBox}><span style={s.label}>PROBABLE READY DATE</span><div style={{color:theme.hub, fontSize:'45px', fontWeight:'900'}}>{projectedDate}</div></div>
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px', fontSize:'32px'}} onClick={()=>setView('EST')}>OPEN ESTIMATOR</button>
                         </div>
+                        
+                        <button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px', padding:'25px', fontSize:'20px'}} onClick={resetJob}>⚠️ CLEAR ALL FIELDS</button>
                     </div>
                 )}
 
@@ -294,14 +332,14 @@ const EstimateApp = ({ userId }) => {
                             <input style={{...s.input, border:`3px solid ${theme.work}`}} value={job.repair.paintMats} onChange={e=>setJob({...job, repair:{...job.repair, paintMats:e.target.value}})} placeholder="0.00" />
 
                             <span style={{...s.label, marginTop:'20px'}}>Parts / Line Items</span>
-                            {job.repair.items.map((it, i) => (
-                                <div key={i} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
-                                    <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item" onChange={e=>{ let n=[...job.repair.items]; n[i].desc=e.target.value; setJob({...job, repair:{...job.repair, items:n}}); }} />
-                                    <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={e=>{ let n=[...job.repair.items]; n[i].cost=e.target.value; setJob({...job, repair:{...job.repair, items:n}}); }} />
-                                    <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={()=>{ let n=job.repair.items.filter((_, idx)=>idx!==i); setJob({...job, repair:{...job.repair, items:n}}); }}>X</button>
+                            {job.repair.items.map((it) => (
+                                <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                                    <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item Description" onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} />
+                                    <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} />
+                                    <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={() => deleteLineItem(it.id)}>X</button>
                                 </div>
                             ))}
-                            <button style={{...s.btnG(theme.work), width:'100%'}} onClick={()=>setJob({...job, repair:{...job.repair, items:[...job.repair.items, {desc:'', cost:''}]}})}>+ ADD LINE ITEM</button>
+                            <button style={{...s.btnG(theme.work), width:'100%'}} onClick={addLineItem}>+ ADD LINE ITEM</button>
                             
                             <span style={{...s.label, marginTop:'30px', color:theme.work}}>INTERNAL / TECH NOTES (JOB CARD ONLY)</span>
                             <textarea style={{...s.textarea, height:'100px'}} value={job.repair.techNotes} onChange={e=>setJob({...job, repair:{...job.repair, techNotes:e.target.value}})} placeholder="Private notes for the technician..." />
@@ -311,6 +349,9 @@ const EstimateApp = ({ userId }) => {
                             <span style={{...s.label, color:theme.danger}}>INSURANCE EXCESS CONTRIBUTION</span>
                             <input style={{...s.input, color:theme.danger, border:`4px solid ${theme.danger}`}} placeholder="EXCESS -£" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
                             
+                            <span style={s.label}>INVOICE DATE</span>
+                            <input style={s.input} value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} placeholder="DD/MM/YYYY" />
+
                             <span style={s.label}>PRINT OPTIONS</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
