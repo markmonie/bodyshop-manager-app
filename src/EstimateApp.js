@@ -166,73 +166,56 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (V3.1: MANDATORY HEADER PATCH APPLIED) ---
+    // --- DVLA HANDSHAKE (V3.3: DIRECT CONNECT - NO PROXIES) ---
+    // This is the implementation of the code you requested.
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
-        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // Priority 1: Heroku (Because you unlocked it)
-        const proxyA = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
-        const proxyB = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-        const proxyC = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-        const tryFetch = async (url, name) => {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    // --- THE MANDATORY PATCH ---
-                    headers: { 
-                        'x-api-key': NUCLEAR_KEY, 
-                        'Content-Type': 'application/json' 
-                    },
-                    body: JSON.stringify({ registrationNumber: cleanReg }),
-                    // ---------------------------
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                return response;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                throw error;
-            }
-        };
+        // DIRECT OFFICIAL ENDPOINT
+        const url = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        const apiKey = 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc';
 
         try {
-            let response;
-            try { response = await tryFetch(proxyA, "Heroku"); } catch (e) { console.warn("Proxy A Failed"); }
-            if (!response || !response.ok) { try { response = await tryFetch(proxyB, "CodeTabs"); } catch (e) { console.warn("Proxy B Failed"); } }
-            if (!response || !response.ok) { try { response = await tryFetch(proxyC, "CorsProxy"); } catch (e) { console.warn("Proxy C Failed"); } }
+            // DIRECT FETCH REQUEST (As per your instructions)
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'x-api-key': apiKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ registrationNumber: cleanReg })
+            });
 
-            if (!response || !response.ok) {
-                 const status = response ? response.status : "Network Error";
-                 if(status === 403 || status === 0 || status === "Network Error") {
-                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nIt looks like the key needs to be re-authorized.\n\nClick OK to open the Unlock Page again.`)) {
-                        window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
-                    }
-                    setLoading(false);
-                    return;
-                 }
-                 if(status === 404) throw new Error("Vehicle Not Found (404)");
-                 throw new Error(`All Proxies Failed (Status: ${status})`);
+            if (!response.ok) {
+                // If this fails with "Failed to fetch", it is likely a CORS block.
+                throw new Error(`Direct Connection Failed (Status: ${response.status})`);
             }
 
             const d = await response.json();
+            
+            // Success - Update State
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
+                vehicle: { 
+                    ...prev.vehicle, 
+                    make: d.make, 
+                    year: d.yearOfManufacture, 
+                    colour: d.colour, 
+                    fuel: d.fuelType, 
+                    engine: d.engineCapacity, 
+                    mot: d.motStatus, 
+                    motExpiry: d.motExpiryDate 
+                }
             }));
             alert("Vehicle Found!"); 
 
         } catch (e) { 
             console.error(e);
-            alert(`Link Failed: ${e.message}`); 
+            alert(`Link Failed: ${e.message}\n\nNote: If you see "Failed to fetch", the browser is blocking this direct connection.`); 
         }
         setLoading(false);
     };
