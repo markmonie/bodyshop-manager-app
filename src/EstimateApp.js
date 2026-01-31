@@ -76,6 +76,7 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
+    // --- JOB FACTORY (Clean Reset) ---
     const getEmptyJob = () => ({
         status: 'STRIPPING', lastSuccess: '', invoiceNo: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
@@ -111,7 +112,7 @@ const EstimateApp = ({ userId }) => {
         const pPrice = pCost * (1 + (n(settings.markup) / 100));
         const lHrs = n(job.repair.panelHrs) + n(job.repair.paintHrs) + n(job.repair.metHrs);
         const lPrice = lHrs * n(settings.labourRate);
-        const subtotal = pPrice + lPrice + n(job.repair.paintMats); // paintMats added to subtotal
+        const subtotal = pPrice + lPrice + n(job.repair.paintMats); // paintMats included in net
         const total = subtotal * (1 + (n(settings.vatRate) / 100));
         return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice };
     }, [job.repair, settings]);
@@ -124,11 +125,12 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- ACTIONS ---
+    // --- ACTIONS (With Unique Filenames) ---
     const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
         let currentInvoiceNo = job.invoiceNo;
+        // Auto-assign invoice number only if printing an INVOICE
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
@@ -137,8 +139,11 @@ const EstimateApp = ({ userId }) => {
             await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
             await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, totals }, { merge: true });
         }
+        
+        // UNIQUE FILENAME GENERATOR
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
+        
         setTimeout(() => { window.print(); setTimeout(() => document.title = "Triple MMM", 2000); }, 500);
     };
 
@@ -170,7 +175,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE ---
+    // --- DVLA HANDSHAKE (DIRECT) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
@@ -323,7 +328,6 @@ const EstimateApp = ({ userId }) => {
                                 <div><span style={s.label}>PAINT</span><input style={s.input} value={job.repair.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
                             </div>
                             
-                            {/* V3.8: PAINT MATERIALS BOX ADDED HERE */}
                             <span style={s.label}>PAINT & MATERIALS (£)</span>
                             <input style={{...s.input, border:`3px solid ${theme.work}`}} value={job.repair.paintMats} onChange={e=>setJob({...job, repair:{...job.repair, paintMats:e.target.value}})} placeholder="0.00" />
 
@@ -398,7 +402,6 @@ const EstimateApp = ({ userId }) => {
                         <HeaderNav />
                         <h1 style={{color:theme.hub, marginBottom:'30px'}}>JOB VAULT</h1>
                         
-                        {/* SEARCH BAR */}
                         <div style={{marginBottom:'30px'}}>
                             <span style={s.label}>SEARCH ARCHIVE</span>
                             <input 
@@ -409,7 +412,6 @@ const EstimateApp = ({ userId }) => {
                             />
                         </div>
 
-                        {/* FILTERED LIST */}
                         {history
                             .filter(h => {
                                 const term = vaultSearch.toUpperCase();
@@ -517,14 +519,14 @@ const EstimateApp = ({ userId }) => {
                                     <>
                                         {(job.repair.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>))}
                                         
-                                        {/* V3.7: PAINT MATERIALS ROW */}
+                                        {/* PAINT & MATERIALS ROW */}
                                         {parseFloat(job.repair.paintMats) > 0 && (
                                              <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>Paint & Materials</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{parseFloat(job.repair.paintMats).toFixed(2)}</td></tr>
                                         )}
 
                                         <tr><td style={{padding:'15px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{totals.lPrice.toFixed(2)}</td></tr>
                                         
-                                        {/* V3.7: VAT BREAKDOWN */}
+                                        {/* VAT BREAKDOWN */}
                                         <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'15px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
                                         <tr><td style={{padding:'15px', textAlign:'right'}}>VAT @ {settings.vatRate}%:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total - (totals.total / (1 + (parseFloat(settings.vatRate)/100)))).toFixed(2)}</td></tr>
                                     </>
