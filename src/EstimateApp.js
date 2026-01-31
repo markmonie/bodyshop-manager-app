@@ -64,7 +64,7 @@ const EstimateApp = ({ userId }) => {
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     
-    // --- SETTINGS (Note: runDVLA now ignores the key in settings to prevent overwrite bugs) ---
+    // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -157,85 +157,83 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (NUCLEAR OPTION: Hardcoded Key + 3 Proxies) ---
+    // --- DVLA HANDSHAKE (V250: AXIOS-STYLE ROBUSTNESS) ---
     const runDVLA = async () => {
-        // 1. Validation
-        if (!job?.vehicle?.reg) {
-            alert("Please enter a Registration Number.");
-            return;
-        }
+        if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        
         // NUCLEAR KEY: Hardcoded to bypass any database sync issues
         const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
-        
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // Define THREE "Roads" to the DVLA
+        // ROAD 1: CorsProxy (Fastest)
         const proxyA = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        const proxyB = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+        // ROAD 2: Cors-Anywhere (Most Reliable but strict)
+        const proxyB = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
+        // ROAD 3: ThingProxy (Backup)
         const proxyC = `https://thingproxy.freeboard.io/fetch/${targetUrl}`;
 
-        // Helper to try a fetch
         const tryFetch = async (url, name) => {
-            console.log(`Attempting via ${name}...`);
-            return await fetch(url, {
-                method: 'POST',
-                headers: { 
-                    'x-api-key': NUCLEAR_KEY, 
-                    'Content-Type': 'application/json' 
-                },
-                body: JSON.stringify({ registrationNumber: cleanReg })
-            });
+            console.log(`Trying ${name}...`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout per proxy
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'x-api-key': NUCLEAR_KEY, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registrationNumber: cleanReg }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error;
+            }
         };
 
         try {
             let response;
-            // ATTEMPT 1: CorsProxy.io
-            try { response = await tryFetch(proxyA, "CorsProxy"); } catch (e) { response = null; }
-
-            // ATTEMPT 2: CodeTabs (If 1 fails)
+            // ATTEMPT 1
+            try { response = await tryFetch(proxyA, "CorsProxy"); } catch (e) { console.warn("Proxy A Failed"); }
+            
+            // ATTEMPT 2
             if (!response || !response.ok) {
-                try { response = await tryFetch(proxyB, "CodeTabs"); } catch (e) { response = null; }
+                try { response = await tryFetch(proxyB, "Heroku"); } catch (e) { console.warn("Proxy B Failed"); }
             }
 
-            // ATTEMPT 3: ThingProxy (If 1 & 2 fail)
+            // ATTEMPT 3
             if (!response || !response.ok) {
-                try { response = await tryFetch(proxyC, "ThingProxy"); } catch (e) { response = null; }
+                try { response = await tryFetch(proxyC, "ThingProxy"); } catch (e) { console.warn("Proxy C Failed"); }
             }
 
-            // Check final result
             if (!response || !response.ok) {
                  const status = response ? response.status : "Network Error";
-                 if(status === 403) throw new Error("API Key Rejected (403)");
+                 // MAGIC FIX FOR USER:
+                 if(status === 403 || status === 0 || status === "Network Error") {
+                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nTo fix this, we need to UNLOCK the secure proxy once.\n\nClick OK to open the Unlock Page, click the button there, then try again.`)) {
+                        window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
+                    }
+                    setLoading(false);
+                    return;
+                 }
                  if(status === 404) throw new Error("Vehicle Not Found (404)");
                  throw new Error(`All Proxies Failed (Status: ${status})`);
             }
 
             const d = await response.json();
             
-            // Success!
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: { 
-                    ...prev.vehicle, 
-                    make: d.make, 
-                    year: d.yearOfManufacture, 
-                    colour: d.colour, 
-                    fuel: d.fuelType, 
-                    engine: d.engineCapacity, 
-                    mot: d.motStatus, 
-                    motExpiry: d.motExpiryDate 
-                }
+                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
             }));
             // alert("Vehicle Found!"); 
 
         } catch (e) { 
             console.error(e);
-            alert(`Link Failed: ${e.message}\n\nTroubleshooting:\n1. Check Internet Connection\n2. The free proxies may be temporarily overloaded.`); 
+            alert(`Link Failed: ${e.message}`); 
         }
         setLoading(false);
     };
