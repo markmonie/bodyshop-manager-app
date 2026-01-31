@@ -157,7 +157,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (V270: CODETABS PRIORITY) ---
+    // --- DVLA HANDSHAKE (V290: 2-SECOND TIMEOUT) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
@@ -167,15 +167,16 @@ const EstimateApp = ({ userId }) => {
         const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // PRIORITY SWAP: CodeTabs is usually the most robust without needing clicks
-        const proxyA = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-        const proxyB = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        const proxyC = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
+        // PRIORITY #1: HEROKU (Because you verified it is Unlocked)
+        const proxyA = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
+        // Backup Proxies
+        const proxyB = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+        const proxyC = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
         const tryFetch = async (url, name) => {
             console.log(`Trying ${name}...`);
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 SECOND TIMEOUT
             try {
                 const response = await fetch(url, {
                     method: 'POST',
@@ -194,24 +195,24 @@ const EstimateApp = ({ userId }) => {
         try {
             let response;
             
-            // 1. Try CodeTabs (Best for no-click access)
-            try { response = await tryFetch(proxyA, "CodeTabs"); } catch (e) { console.warn("Proxy A Failed"); }
+            // 1. Try Heroku (Fast & Unlocked)
+            try { response = await tryFetch(proxyA, "Heroku (Unlocked)"); } catch (e) { console.warn("Proxy A Failed"); }
             
-            // 2. Try CorsProxy (Backup)
+            // 2. Try CodeTabs
             if (!response || !response.ok) {
-                try { response = await tryFetch(proxyB, "CorsProxy"); } catch (e) { console.warn("Proxy B Failed"); }
+                try { response = await tryFetch(proxyB, "CodeTabs"); } catch (e) { console.warn("Proxy B Failed"); }
             }
 
-            // 3. Try Heroku (Manual Backup)
+            // 3. Try CorsProxy
             if (!response || !response.ok) {
-                try { response = await tryFetch(proxyC, "Heroku"); } catch (e) { console.warn("Proxy C Failed"); }
+                try { response = await tryFetch(proxyC, "CorsProxy"); } catch (e) { console.warn("Proxy C Failed"); }
             }
 
             if (!response || !response.ok) {
                  const status = response ? response.status : "Network Error";
-                 // IF HEROKU FAILED, MIGHT NEED UNLOCK
+                 // IF LOCKED, ASK TO UNLOCK AGAIN
                  if(status === 403 || status === 0 || status === "Network Error") {
-                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nThe automatic proxies are busy. You may need to manually unlock the backup.\n\nClick OK to open the Unlock Page.`)) {
+                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nIt looks like the key needs to be re-authorized.\n\nClick OK to open the Unlock Page again.`)) {
                         window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
                     }
                     setLoading(false);
@@ -227,6 +228,7 @@ const EstimateApp = ({ userId }) => {
                 lastSuccess: new Date().toLocaleString('en-GB'),
                 vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
             }));
+            alert("Vehicle Found!"); 
 
         } catch (e) { 
             console.error(e);
