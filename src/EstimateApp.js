@@ -64,11 +64,11 @@ const EstimateApp = ({ userId }) => {
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     
-    // --- SETTINGS (CORRECT KEY HARDCODED) ---
+    // --- SETTINGS (Note: runDVLA now ignores the key in settings to prevent overwrite bugs) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
+        dvlaKey: 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
         logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
@@ -157,57 +157,66 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (Ultra-Robust: Tries 2 Proxies) ---
+    // --- DVLA HANDSHAKE (NUCLEAR OPTION: Hardcoded Key + 3 Proxies) ---
     const runDVLA = async () => {
         // 1. Validation
-        if (!job?.vehicle?.reg || !settings.dvlaKey) {
-            alert("Missing Reg or API Key. Please check Settings.");
+        if (!job?.vehicle?.reg) {
+            alert("Please enter a Registration Number.");
             return;
         }
 
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        
+        // NUCLEAR KEY: Hardcoded to bypass any database sync issues
+        const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
+        
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // Define our two "Roads" to the DVLA
-        const primaryProxy = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        const backupProxy = `https://thingproxy.freeboard.io/fetch/${targetUrl}`;
+        // Define THREE "Roads" to the DVLA
+        const proxyA = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        const proxyB = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+        const proxyC = `https://thingproxy.freeboard.io/fetch/${targetUrl}`;
 
-        // Helper function to try a specific proxy
-        const tryFetch = async (url) => {
-            const response = await fetch(url, {
+        // Helper to try a fetch
+        const tryFetch = async (url, name) => {
+            console.log(`Attempting via ${name}...`);
+            return await fetch(url, {
                 method: 'POST',
                 headers: { 
-                    'x-api-key': settings.dvlaKey.trim(), 
+                    'x-api-key': NUCLEAR_KEY, 
                     'Content-Type': 'application/json' 
                 },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
-            return response;
         };
 
         try {
-            // ATTEMPT 1: Primary Proxy
             let response;
-            try {
-                response = await tryFetch(primaryProxy);
-            } catch (err) {
-                console.warn("Primary Proxy Failed, trying Backup...");
-                // ATTEMPT 2: Backup Proxy (if primary crashes)
-                response = await tryFetch(backupProxy);
+            // ATTEMPT 1: CorsProxy.io
+            try { response = await tryFetch(proxyA, "CorsProxy"); } catch (e) { response = null; }
+
+            // ATTEMPT 2: CodeTabs (If 1 fails)
+            if (!response || !response.ok) {
+                try { response = await tryFetch(proxyB, "CodeTabs"); } catch (e) { response = null; }
             }
 
-            // Check if the successful connection actually gave us data
-            if (!response.ok) {
-                 if(response.status === 403) throw new Error("API Key Rejected (Check L vs l in SET tab)");
-                 if(response.status === 404) throw new Error("Vehicle Not Found");
-                 if(response.status === 500 || response.status === 503) throw new Error("DVLA Server Down");
-                 throw new Error(`Error Status: ${response.status}`);
+            // ATTEMPT 3: ThingProxy (If 1 & 2 fail)
+            if (!response || !response.ok) {
+                try { response = await tryFetch(proxyC, "ThingProxy"); } catch (e) { response = null; }
+            }
+
+            // Check final result
+            if (!response || !response.ok) {
+                 const status = response ? response.status : "Network Error";
+                 if(status === 403) throw new Error("API Key Rejected (403)");
+                 if(status === 404) throw new Error("Vehicle Not Found (404)");
+                 throw new Error(`All Proxies Failed (Status: ${status})`);
             }
 
             const d = await response.json();
             
-            // Success! Update Job
+            // Success!
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
@@ -222,11 +231,11 @@ const EstimateApp = ({ userId }) => {
                     motExpiry: d.motExpiryDate 
                 }
             }));
-            alert("Vehicle Found!"); 
+            // alert("Vehicle Found!"); 
 
         } catch (e) { 
             console.error(e);
-            alert(`Link Failed: ${e.message}\n\nTroubleshooting:\n1. Check Internet\n2. Go to 'SET' tab and check API Key is uppercase 'L'`); 
+            alert(`Link Failed: ${e.message}\n\nTroubleshooting:\n1. Check Internet Connection\n2. The free proxies may be temporarily overloaded.`); 
         }
         setLoading(false);
     };
