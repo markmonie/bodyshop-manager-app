@@ -64,7 +64,7 @@ const EstimateApp = ({ userId }) => {
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     const [clientMatch, setClientMatch] = useState(null);
-    const [vaultSearch, setVaultSearch] = useState(''); // V3.6: Vault Search State
+    const [vaultSearch, setVaultSearch] = useState('');
     
     // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
@@ -512,7 +512,17 @@ const EstimateApp = ({ userId }) => {
                                 {printMode !== 'EXCESS' && (
                                     <>
                                         {(job.repair.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>))}
+                                        
+                                        {/* V3.7: PAINT MATERIALS ROW */}
+                                        {parseFloat(job.repair.paintMats) > 0 && (
+                                             <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>Paint & Materials</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{parseFloat(job.repair.paintMats).toFixed(2)}</td></tr>
+                                        )}
+
                                         <tr><td style={{padding:'15px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{totals.lPrice.toFixed(2)}</td></tr>
+                                        
+                                        {/* V3.7: VAT BREAKDOWN */}
+                                        <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'15px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
+                                        <tr><td style={{padding:'15px', textAlign:'right'}}>VAT @ {settings.vatRate}%:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total - (totals.total / (1 + (parseFloat(settings.vatRate)/100)))).toFixed(2)}</td></tr>
                                     </>
                                 )}
                                 {printMode === 'EXCESS' && (
