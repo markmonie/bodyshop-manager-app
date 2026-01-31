@@ -66,6 +66,9 @@ const EstimateApp = ({ userId }) => {
     const [clientMatch, setClientMatch] = useState(null);
     const [vaultSearch, setVaultSearch] = useState('');
     
+    // --- V4.9: PRINT TRIGGER STATE ---
+    const [printTrigger, setPrintTrigger] = useState(false);
+    
     // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
@@ -76,7 +79,7 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
-    // --- JOB FACTORY (LIABILITY FIELDS + INVOICE DATE INCLUDED) ---
+    // --- JOB FACTORY ---
     const getEmptyJob = () => ({
         status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
@@ -96,6 +99,20 @@ const EstimateApp = ({ userId }) => {
     }, []);
 
     useEffect(() => { localStorage.setItem('mmm_v230_PLATINUM', JSON.stringify(job)); }, [job]);
+
+    // --- V4.9: THE "EFFECT" PRINT ENGINE ---
+    // This watches for the 'printTrigger'. When it turns true, it waits 800ms (to be safe) then prints.
+    // This ensures the DOM has updated with the new Invoice Number before the print dialog steals focus.
+    useEffect(() => {
+        if (printTrigger) {
+            const timer = setTimeout(() => {
+                window.print();
+                setPrintTrigger(false); // Reset trigger
+                setTimeout(() => document.title = "Triple MMM", 1000); // Reset title
+            }, 800);
+            return () => clearTimeout(timer);
+        }
+    }, [printTrigger]);
 
     // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
@@ -125,45 +142,43 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- V4.8: STATE-FIRST PRINT ENGINE (NO BLOCKING) ---
-    const handlePrint = (type, mode = 'FULL') => {
-        // 1. Immediate UI Update
+    // --- ACTIONS ---
+    const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
         
+        let currentInvoiceNo = job.invoiceNo;
         const today = new Date().toLocaleDateString('en-GB');
-        // Define safe reg for filenames so it never crashes on null
         const safeReg = job.vehicle.reg ? job.vehicle.reg.toUpperCase() : `DRAFT_${Date.now()}`;
         
         let nextJob = { ...job };
         let nextSettings = { ...settings };
         let shouldSaveSettings = false;
 
-        // 2. Local State Calculation (Instant)
-        if (type === 'INVOICE' && !job.invoiceNo) {
+        // 1. STATE CALCULATIONS (Instant)
+        if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
-            nextJob.invoiceNo = nextNum.toString();
+            currentInvoiceNo = nextNum.toString();
+            
+            // Prepare new state
+            nextJob.invoiceNo = currentInvoiceNo;
             nextJob.invoiceDate = today;
             nextSettings.invoiceCount = nextNum;
             shouldSaveSettings = true;
             
-            // Apply to state immediately
+            // Apply State (Async)
             setJob(nextJob);
             setSettings(nextSettings);
         }
 
-        // 3. Set Window Title for Filename
-        const filename = `${safeReg}_${nextJob.invoiceNo || 'EST'}_${type}`;
+        // 2. SET FILENAME
+        const filename = `${safeReg}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
 
-        // 4. Launch Printer (Timed to allow React Render)
-        setTimeout(() => {
-            window.print();
-            // Reset title later
-            setTimeout(() => document.title = "Triple MMM", 2000);
-        }, 500);
+        // 3. TRIGGER THE EFFECT (This starts the wait-then-print process)
+        setPrintTrigger(true);
 
-        // 5. Silent Background Save (Fire and Forget)
+        // 4. BACKGROUND SAVE (Silent)
         const saveInBackground = async () => {
             try {
                 if (shouldSaveSettings) {
@@ -174,9 +189,9 @@ const EstimateApp = ({ userId }) => {
                     totals, 
                     createdAt: serverTimestamp() 
                 }, { merge: true });
-                console.log("Background Save Success");
+                console.log("Bg Save OK");
             } catch (e) {
-                console.error("Background Save Error (Printing likely succeeded though)", e);
+                console.warn("Bg Save Fail", e);
             }
         };
         saveInBackground();
@@ -210,7 +225,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (MANUAL MODE - CODE PRESERVED) ---
+    // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
         setLoading(true);
@@ -479,7 +494,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT ENGINE (V4.8: COMPACT + JOB CARD + INSTANT PRINT) */}
+            {/* PRINT ENGINE (V4.8: COMPACT + JOB CARD + ROBUST + STATE-FIRST) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
@@ -572,7 +587,6 @@ const EstimateApp = ({ userId }) => {
                             </tbody>
                         </table>
 
-                        {/* JOB CARD NOTES SECTION */}
                         {docType === 'JOB CARD' ? (
                             <div style={{marginTop:'30px', border:'2px dashed #333', padding:'20px'}}>
                                 <h3 style={{marginTop:0}}>INTERNAL TECH NOTES:</h3>
@@ -580,11 +594,10 @@ const EstimateApp = ({ userId }) => {
                                 <div style={{marginTop:'50px', borderTop:'1px solid black', width:'200px'}}>Quality Checked By</div>
                             </div>
                         ) : (
-                            // INVOICE / ESTIMATE FOOTER
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'30px'}}>
                                 <div style={{flex:1, textAlign:'center', border:'4px solid #f97316', borderRadius:'20px', padding:'20px', marginRight:'20px'}}>
-                                    <div style={{fontSize:'26px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
-                                    {settings.paypalQr && <img src={settings.paypalQr} style={{height:'180px'}} />}
+                                    <div style={{fontSize:'22px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
+                                    {settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} />}
                                 </div>
                                 <div style={{flex:1, textAlign:'right'}}>
                                     <h1 style={{fontSize:'45px', margin:0, color:'#f97316'}}>
