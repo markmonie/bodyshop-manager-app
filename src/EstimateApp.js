@@ -76,7 +76,6 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
-    // --- JOB FACTORY ---
     const getEmptyJob = () => ({
         status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
@@ -130,7 +129,6 @@ const EstimateApp = ({ userId }) => {
         setDocType(type);
         setPrintMode(mode);
         let currentInvoiceNo = job.invoiceNo;
-        // Auto-assign invoice number ONLY for INVOICES (not Estimates)
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
@@ -247,7 +245,6 @@ const EstimateApp = ({ userId }) => {
                                 <div><span style={s.label}>MODEL / SPEC</span><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} /></div>
                                 <div><span style={s.label}>COLOUR</span><input style={s.input} value={job.vehicle.colour} onChange={e=>setJob({...job, vehicle:{...job.vehicle, colour:e.target.value}})} /></div>
                                 <div><span style={s.label}>VIN / CHASSIS</span><input style={s.input} value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} /></div>
-                                {/* NEW LIABILITY FIELDS */}
                                 <div><span style={s.label}>MILEAGE (Miles)</span><input style={s.input} value={job.vehicle.mileage} onChange={e=>setJob({...job, vehicle:{...job.vehicle, mileage:e.target.value}})} /></div>
                                 <div><span style={s.label}>FUEL LEVEL</span><input style={s.input} value={job.vehicle.fuelLevel} onChange={e=>setJob({...job, vehicle:{...job.vehicle, fuelLevel:e.target.value}})} placeholder="e.g. 1/4 Tank" /></div>
                             </div>
@@ -319,12 +316,11 @@ const EstimateApp = ({ userId }) => {
                             <input style={s.input} value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} placeholder="DD/MM/YYYY" />
 
                             <span style={s.label}>PRINT OPTIONS</span>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'10px'}}>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
                                 <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'INSURER')}>INSURER (NET)</button>
                                 <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'EXCESS')}>CUSTOMER EXCESS</button>
                             </div>
-                            {/* V4.2: DEDICATED ESTIMATE BUTTON */}
                             <button style={{...s.btnG(theme.work), width:'100%', marginTop:'10px'}} onClick={() => handlePrint('ESTIMATE', 'FULL')}>PRINT ESTIMATE</button>
                         </div>
                     </div>
@@ -438,20 +434,20 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT ENGINE */}
-            <div className="print-only" style={{display:'none', color:'black', padding:'50px', fontFamily:'Arial', width:'100%', boxSizing:'border-box'}}>
-                <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'35px'}}>
+            {/* PRINT ENGINE (V4.3 COMPACT EDITION) */}
+            <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
+                <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
-                        {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'15px'}} />}
-                        <h1 style={{margin:0, color:'#f97316', fontSize:'40px'}}>{settings.coName}</h1>
-                        <p style={{fontSize:'16px'}}>{settings.address}<br/>{settings.phone}</p>
+                        {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} />}
+                        <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>
+                        <p style={{fontSize:'12px', lineHeight:'1.4'}}>{settings.address}<br/>{settings.phone}</p>
                     </div>
                     <div style={{textAlign:'right', flex:1}}>
-                        <h2 style={{color:'#f97316', fontSize:'60px', margin:0}}>{printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
-                        <p style={{fontSize:'20px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate || new Date().toLocaleDateString()}</p>
-                        {job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'20px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
+                        <h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
+                        <p style={{fontSize:'16px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate || new Date().toLocaleDateString()}</p>
+                        {job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
                         
-                        <div style={{marginTop:'20px', fontSize:'16px', borderTop:'2px solid #ddd', paddingTop:'10px'}}>
+                        <div style={{marginTop:'15px', fontSize:'12px', borderTop:'2px solid #ddd', paddingTop:'10px'}}>
                             <strong>BILL TO:</strong><br/>
                             {printMode === 'INSURER' ? (
                                 <>
@@ -473,60 +469,61 @@ const EstimateApp = ({ userId }) => {
 
                 {docType === 'SATISFACTION NOTE' ? (
                     <div style={{marginTop:'60px', textAlign:'center'}}>
-                        <h1 style={{color:'#f97316', fontSize:'50px', marginBottom:'40px'}}>SATISFACTION NOTE</h1>
-                        <p style={{fontSize:'24px', lineHeight:'2'}}>I, <strong>{job.client.name}</strong>, confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
-                        {job.vault.signature && <img src={job.vault.signature} style={{width:'400px', marginTop:'50px', borderBottom:'2px solid black'}} />}
-                        <p style={{marginTop:'10px', fontSize:'18px'}}>Signed</p>
+                        <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
+                        <p style={{fontSize:'20px', lineHeight:'1.8'}}>I, <strong>{job.client.name}</strong>, confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
+                        {job.vault.signature && <img src={job.vault.signature} style={{width:'300px', marginTop:'40px', borderBottom:'2px solid black'}} />}
+                        <p style={{marginTop:'10px', fontSize:'16px'}}>Signed</p>
                     </div>
                 ) : (
                     <>
-                        <table style={{width:'100%', marginTop:'40px', borderCollapse:'collapse'}}>
-                            <thead><tr style={{background:'#eee', borderBottom:'4px solid #ddd'}}><th style={{padding:'20px', textAlign:'left'}}>Description</th><th style={{padding:'20px', textAlign:'right'}}>Amount</th></tr></thead>
+                        <table style={{width:'100%', marginTop:'10px', borderCollapse:'collapse', fontSize:'12px'}}>
+                            <thead><tr style={{background:'#eee', borderBottom:'2px solid #ddd'}}><th style={{padding:'8px', textAlign:'left'}}>Description</th><th style={{padding:'8px', textAlign:'right'}}>Amount</th></tr></thead>
                             <tbody>
                                 {printMode !== 'EXCESS' && (
                                     <>
-                                        {(job.repair.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>))}
+                                        {(job.repair.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'8px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>))}
                                         
                                         {parseFloat(job.repair.paintMats) > 0 && (
-                                             <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>Paint & Materials</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{parseFloat(job.repair.paintMats).toFixed(2)}</td></tr>
+                                             <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'8px'}}>Paint & Materials</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.paintMats).toFixed(2)}</td></tr>
                                         )}
 
-                                        <tr><td style={{padding:'15px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{totals.lPrice.toFixed(2)}</td></tr>
+                                        <tr><td style={{padding:'8px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{totals.lPrice.toFixed(2)}</td></tr>
                                         
-                                        <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'15px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
-                                        <tr><td style={{padding:'15px', textAlign:'right'}}>VAT @ {settings.vatRate}%:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total - (totals.total / (1 + (parseFloat(settings.vatRate)/100)))).toFixed(2)}</td></tr>
+                                        <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'8px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'8px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
+                                        <tr><td style={{padding:'8px', textAlign:'right'}}>VAT @ {settings.vatRate}%:</td><td style={{textAlign:'right', padding:'8px'}}>£{(totals.total - (totals.total / (1 + (parseFloat(settings.vatRate)/100)))).toFixed(2)}</td></tr>
                                     </>
                                 )}
                                 {printMode === 'EXCESS' && (
-                                    <tr><td style={{padding:'15px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>
+                                    <tr><td style={{padding:'8px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>
                                 )}
                             </tbody>
                         </table>
 
-                        <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:'40px', marginTop:'60px'}}>
-                            {/* V4.2: SUPER-SIZED PAYMENT BOX */}
-                            <div style={{textAlign:'center', border:'4px solid #f97316', borderRadius:'25px', padding:'30px'}}>
-                                <div style={{fontSize:'26px', fontWeight:'900', marginBottom:'20px'}}>BACS PAYMENT: {settings.bank}</div>
-                                {settings.paypalQr && <img src={settings.paypalQr} style={{height:'180px'}} />}
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'30px'}}>
+                            <div style={{flex:1, textAlign:'center', border:'4px solid #f97316', borderRadius:'20px', padding:'20px', marginRight:'20px'}}>
+                                <div style={{fontSize:'22px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
+                                {settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} />}
                             </div>
-                            <div style={{textAlign:'right'}}>
-                                <h1 style={{fontSize:'75px', margin:0, color:'#f97316'}}>
+                            <div style={{flex:1, textAlign:'right'}}>
+                                <h1 style={{fontSize:'45px', margin:0, color:'#f97316'}}>
                                     £{printMode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printMode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}
                                 </h1>
-                                {printMode === 'INSURER' && <div style={{marginTop:'10px', color:'#f97316'}}>*Less Client Excess of £{job.repair.excess}</div>}
+                                {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Less Client Excess of £{job.repair.excess}</div>}
                             </div>
                         </div>
 
                         {settings.terms && (
-                            <div style={{pageBreakBefore: 'always', paddingTop: '50px'}}>
-                                <h2 style={{color:'#f97316', borderBottom:'4px solid #f97316', paddingBottom:'10px'}}>TERMS & CONDITIONS</h2>
-                                <p style={{whiteSpace: 'pre-wrap', fontSize:'14px', lineHeight:'1.5', marginTop:'20px'}}>{settings.terms}</p>
+                            <div style={{pageBreakBefore: 'always', paddingTop: '20px'}}>
+                                <h2 style={{color:'#f97316', borderBottom:'4px solid #f97316', paddingBottom:'10px', fontSize:'18px', margin:0}}>TERMS & CONDITIONS</h2>
+                                <div style={{columnCount: 2, columnGap: '30px', fontSize:'10px', lineHeight:'1.4', marginTop:'15px', whiteSpace: 'pre-wrap'}}>
+                                    {settings.terms}
+                                </div>
                             </div>
                         )}
                     </>
                 )}
             </div>
-            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } }`}</style>
+            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } @page { margin: 10mm; } }`}</style>
         </div>
     );
 };
