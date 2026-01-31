@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc, addDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V240 FINAL) ---
+// --- THEME: TITAN TUNGSTEN (V241 DEPLOYMENT READY) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -64,9 +64,9 @@ const EstimateApp = ({ userId }) => {
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
-    const [printing, setPrinting] = useState(false); // New Visual State
+    const [printing, setPrinting] = useState(false);
     
-    // --- SETTINGS (T&Cs + Invoice Counter) ---
+    // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -88,12 +88,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v240_FINAL');
+        const saved = localStorage.getItem('mmm_v241_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v240_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v241_FINAL', JSON.stringify(job)); }, [job]);
 
     // --- MATH ---
     const totals = useMemo(() => {
@@ -117,7 +117,7 @@ const EstimateApp = ({ userId }) => {
 
     // --- SYNCHRONIZED PRINT ENGINE ---
     const handlePrint = async (type, mode = 'FULL') => {
-        setPrinting(true); // LOCK UI
+        setPrinting(true); 
         setDocType(type);
         setPrintMode(mode);
         
@@ -141,7 +141,7 @@ const EstimateApp = ({ userId }) => {
         // EXTENDED BUFFER TO ENSURE RENDER IS COMPLETE
         setTimeout(() => {
             window.print();
-            setPrinting(false); // UNLOCK UI
+            setPrinting(false); 
             setTimeout(() => document.title = "Triple MMM", 2000);
         }, 800);
     };
