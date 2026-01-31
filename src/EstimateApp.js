@@ -149,9 +149,9 @@ const EstimateApp = ({ userId }) => {
     };
 
     const resetJob = () => {
-        if(window.confirm("Start new job? Unsaved data will be lost (unless you clicked SAVE).")) {
+        if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
             setJob(INITIAL_JOB);
-            alert("New Job Started");
+            window.scrollTo(0, 0); // Scroll to top
         }
     };
 
@@ -167,7 +167,6 @@ const EstimateApp = ({ userId }) => {
     };
 
     // --- DVLA HANDSHAKE (V3.3: DIRECT CONNECT - NO PROXIES) ---
-    // This is the implementation of the code you requested.
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
@@ -190,7 +189,6 @@ const EstimateApp = ({ userId }) => {
             });
 
             if (!response.ok) {
-                // If this fails with "Failed to fetch", it is likely a CORS block.
                 throw new Error(`Direct Connection Failed (Status: ${response.status})`);
             }
 
@@ -315,6 +313,9 @@ const EstimateApp = ({ userId }) => {
                             <div style={s.displayBox}><span style={s.label}>PROBABLE READY DATE</span><div style={{color:theme.hub, fontSize:'45px', fontWeight:'900'}}>{projectedDate}</div></div>
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px', fontSize:'32px'}} onClick={()=>setView('EST')}>OPEN ESTIMATOR</button>
                         </div>
+                        
+                        {/* V3.4: CLEAR FIELDS BUTTON */}
+                        <button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px'}} onClick={resetJob}>⚠️ CLEAR ALL FIELDS</button>
                     </div>
                 )}
 
