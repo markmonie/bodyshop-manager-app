@@ -64,6 +64,7 @@ const EstimateApp = ({ userId }) => {
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     const [clientMatch, setClientMatch] = useState(null);
+    const [vaultSearch, setVaultSearch] = useState(''); // V3.6: Vault Search State
     
     // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
@@ -75,16 +76,16 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
-    const INITIAL_JOB = {
+    const getEmptyJob = () => ({
         status: 'STRIPPING', lastSuccess: '', invoiceNo: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
         insurance: { name: '', address: '', phone: '', email: '', claim: '' },
         vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '' },
         repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' },
         vault: { signature: '', expenses: [] }
-    };
+    });
 
-    const [job, setJob] = useState(INITIAL_JOB);
+    const [job, setJob] = useState(getEmptyJob());
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
@@ -95,7 +96,7 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => { localStorage.setItem('mmm_v230_PLATINUM', JSON.stringify(job)); }, [job]);
 
-    // --- CLIENT RECALL LOGIC ---
+    // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
         if(!name || name.length < 3) { setClientMatch(null); return; }
         const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
@@ -150,14 +151,17 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
-            setJob(INITIAL_JOB);
-            window.scrollTo(0, 0); // Scroll to top
+            localStorage.removeItem('mmm_v230_PLATINUM');
+            setJob(getEmptyJob());
+            setClientMatch(null); 
+            window.scrollTo(0, 0); 
         }
     };
 
     const loadJob = (savedJob) => {
         setJob(savedJob);
         setView('HUB');
+        window.scrollTo(0,0);
     };
 
     const deleteJob = async (id) => {
@@ -166,35 +170,25 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (V3.3: DIRECT CONNECT - NO PROXIES) ---
+    // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        
-        // DIRECT OFFICIAL ENDPOINT
         const url = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         const apiKey = 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc';
 
         try {
-            // DIRECT FETCH REQUEST (As per your instructions)
             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'x-api-key': apiKey,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
 
-            if (!response.ok) {
-                throw new Error(`Direct Connection Failed (Status: ${response.status})`);
-            }
+            if (!response.ok) throw new Error(`Direct Connection Failed (Status: ${response.status})`);
 
             const d = await response.json();
-            
-            // Success - Update State
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
@@ -275,7 +269,6 @@ const EstimateApp = ({ userId }) => {
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
                                 <div>
                                     <span style={{...s.label, color:theme.deal}}>CLIENT DETAILS</span>
-                                    {/* SMART CLIENT INPUT */}
                                     <input 
                                         style={s.input} 
                                         placeholder="Name (Type to Search History)" 
@@ -314,8 +307,7 @@ const EstimateApp = ({ userId }) => {
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px', fontSize:'32px'}} onClick={()=>setView('EST')}>OPEN ESTIMATOR</button>
                         </div>
                         
-                        {/* V3.4: CLEAR FIELDS BUTTON */}
-                        <button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px'}} onClick={resetJob}>⚠️ CLEAR ALL FIELDS</button>
+                        <button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px', padding:'25px', fontSize:'20px'}} onClick={resetJob}>⚠️ CLEAR ALL FIELDS</button>
                     </div>
                 )}
 
@@ -396,12 +388,32 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* JOB HISTORY / RECENT */}
+                {/* V3.6: JOB VAULT WITH SEARCH */}
                 {view === 'RECENT' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}>
                         <HeaderNav />
-                        <h1 style={{color:theme.hub, marginBottom:'30px'}}>JOB VAULT</h1>
-                        {history.map((h) => (
+                        <h1 style={{color:theme.hub, marginBottom:'20px'}}>JOB VAULT</h1>
+                        
+                        {/* SEARCH BAR */}
+                        <div style={{marginBottom:'30px'}}>
+                            <span style={s.label}>SEARCH ARCHIVE</span>
+                            <input 
+                                style={s.input} 
+                                placeholder="Search Reg or Name..." 
+                                value={vaultSearch}
+                                onChange={(e) => setVaultSearch(e.target.value)}
+                            />
+                        </div>
+
+                        {/* FILTERED LIST */}
+                        {history
+                            .filter(h => {
+                                const term = vaultSearch.toUpperCase();
+                                const reg = (h.vehicle?.reg || '').toUpperCase();
+                                const client = (h.client?.name || '').toUpperCase();
+                                return reg.includes(term) || client.includes(term);
+                            })
+                            .map((h) => (
                             <div key={h.id} style={{...s.card('#333'), display:'flex', justifyContent:'space-between', alignItems:'center', padding:'25px'}}>
                                 <div>
                                     <h2 style={{margin:0, color:theme.hub}}>{h.vehicle?.reg || 'UNKNOWN'}</h2>
