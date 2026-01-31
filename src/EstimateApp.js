@@ -124,21 +124,41 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- ACTIONS ---
+    // --- ACTIONS (V4.4 ROBUST PRINT FIX) ---
     const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
+        
         let currentInvoiceNo = job.invoiceNo;
-        if (type === 'INVOICE' && !currentInvoiceNo) {
-            const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
-            currentInvoiceNo = nextNum.toString();
-            const today = new Date().toLocaleDateString('en-GB');
-            setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
-            setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
-            await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
-            await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
+        
+        // 1. GENERATE INVOICE NUMBER (If needed)
+        try {
+            if (type === 'INVOICE' && !currentInvoiceNo) {
+                const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
+                currentInvoiceNo = nextNum.toString();
+                const today = new Date().toLocaleDateString('en-GB');
+                
+                // Update State Immediately
+                setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
+                setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
+                
+                // Update DB - AWAIT THIS so number is generated before print
+                await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
+                
+                // Save Job Record with new number
+                const safeReg = job.vehicle.reg || `DRAFT_${Date.now()}`;
+                await setDoc(doc(db, 'estimates', safeReg), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
+            } else {
+                // Just save the record in background (don't block printing)
+                const safeReg = job.vehicle.reg || `DRAFT_${Date.now()}`;
+                setDoc(doc(db, 'estimates', safeReg), { ...job, totals }, { merge: true }).catch(e => console.warn("Bg save fail", e));
+            }
+        } catch (e) {
+            console.error("Number Gen Failed", e);
+            alert("Warning: Could not save to database. Printing anyway.");
         }
         
+        // 2. TRIGGER PRINT (Always happens, even if save fails)
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
         setTimeout(() => { window.print(); setTimeout(() => document.title = "Triple MMM", 2000); }, 500);
@@ -196,7 +216,8 @@ const EstimateApp = ({ userId }) => {
     };
 
     const saveMaster = async () => {
-        await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
+        const safeReg = job.vehicle.reg || `DRAFT_${Date.now()}`;
+        await setDoc(doc(db, 'estimates', safeReg), { ...job, totals, createdAt: serverTimestamp() });
         alert("Master File Saved.");
     };
 
