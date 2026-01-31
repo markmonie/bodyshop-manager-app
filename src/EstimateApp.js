@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc, addDoc, writeBatch } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
@@ -19,17 +19,18 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN ---
+// --- THEME: TITAN TUNGSTEN (V240 FINAL) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
-    input: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
-    textarea: { width: '100%', background: '#000', border: '1px solid #444', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
+    input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
+    textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0 }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
+    traffic: (active, color) => ({ width: '50px', height: '50px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' })
 };
 
 const NativeSignature = ({ onSave }) => {
@@ -63,64 +64,36 @@ const EstimateApp = ({ userId }) => {
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
-    const [clientMatch, setClientMatch] = useState(null);
-    const [vaultSearch, setVaultSearch] = useState('');
+    const [printing, setPrinting] = useState(false); // New Visual State
     
-    // --- V4.9: PRINT TRIGGER STATE ---
-    const [printTrigger, setPrintTrigger] = useState(false);
-    
-    // --- SETTINGS ---
+    // --- SETTINGS (T&Cs + Invoice Counter) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
-        logoUrl: '', paypalQr: '',
+        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
     });
 
-    // --- JOB FACTORY ---
-    const getEmptyJob = () => ({
-        status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
+    const INITIAL_JOB = {
+        status: 'STRIPPING', lastSuccess: '', invoiceNo: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
         insurance: { name: '', address: '', phone: '', email: '', claim: '' },
-        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' },
+        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '' },
         repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' },
         vault: { signature: '', expenses: [] }
-    });
+    };
 
-    const [job, setJob] = useState(getEmptyJob());
+    const [job, setJob] = useState(INITIAL_JOB);
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v230_PLATINUM');
+        const saved = localStorage.getItem('mmm_v240_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v230_PLATINUM', JSON.stringify(job)); }, [job]);
-
-    // --- V4.9: THE "EFFECT" PRINT ENGINE ---
-    // This watches for the 'printTrigger'. When it turns true, it waits 800ms (to be safe) then prints.
-    // This ensures the DOM has updated with the new Invoice Number before the print dialog steals focus.
-    useEffect(() => {
-        if (printTrigger) {
-            const timer = setTimeout(() => {
-                window.print();
-                setPrintTrigger(false); // Reset trigger
-                setTimeout(() => document.title = "Triple MMM", 1000); // Reset title
-            }, 800);
-            return () => clearTimeout(timer);
-        }
-    }, [printTrigger]);
-
-    // --- CLIENT RECALL ---
-    const checkClientMatch = (name) => {
-        if(!name || name.length < 3) { setClientMatch(null); return; }
-        const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
-        if(match) setClientMatch(match.client); else setClientMatch(null);
-    };
-    const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
+    useEffect(() => { localStorage.setItem('mmm_v240_FINAL', JSON.stringify(job)); }, [job]);
 
     // --- MATH ---
     const totals = useMemo(() => {
@@ -142,115 +115,91 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- ACTIONS ---
+    // --- SYNCHRONIZED PRINT ENGINE ---
     const handlePrint = async (type, mode = 'FULL') => {
+        setPrinting(true); // LOCK UI
         setDocType(type);
         setPrintMode(mode);
         
         let currentInvoiceNo = job.invoiceNo;
-        const today = new Date().toLocaleDateString('en-GB');
-        const safeReg = job.vehicle.reg ? job.vehicle.reg.toUpperCase() : `DRAFT_${Date.now()}`;
-        
-        let nextJob = { ...job };
-        let nextSettings = { ...settings };
-        let shouldSaveSettings = false;
 
-        // 1. STATE CALCULATIONS (Instant)
+        // AUTO-ASSIGN INVOICE NUMBER IF MISSING
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
             
-            // Prepare new state
-            nextJob.invoiceNo = currentInvoiceNo;
-            nextJob.invoiceDate = today;
-            nextSettings.invoiceCount = nextNum;
-            shouldSaveSettings = true;
-            
-            // Apply State (Async)
-            setJob(nextJob);
-            setSettings(nextSettings);
+            // UPDATE STATE & DB BEFORE PRINTING
+            setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo }));
+            setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
+            await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
+            await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, totals }, { merge: true });
         }
 
-        // 2. SET FILENAME
-        const filename = `${safeReg}_${currentInvoiceNo || 'EST'}_${type}`;
+        const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
 
-        // 3. TRIGGER THE EFFECT (This starts the wait-then-print process)
-        setPrintTrigger(true);
-
-        // 4. BACKGROUND SAVE (Silent)
-        const saveInBackground = async () => {
-            try {
-                if (shouldSaveSettings) {
-                    await setDoc(doc(db, 'settings', 'global'), nextSettings);
-                }
-                await setDoc(doc(db, 'estimates', safeReg), { 
-                    ...nextJob, 
-                    totals, 
-                    createdAt: serverTimestamp() 
-                }, { merge: true });
-                console.log("Bg Save OK");
-            } catch (e) {
-                console.warn("Bg Save Fail", e);
-            }
-        };
-        saveInBackground();
+        // EXTENDED BUFFER TO ENSURE RENDER IS COMPLETE
+        setTimeout(() => {
+            window.print();
+            setPrinting(false); // UNLOCK UI
+            setTimeout(() => document.title = "Triple MMM", 2000);
+        }, 800);
     };
 
+    // --- CSV LEDGER EXPORT ---
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
-        const rows = history.map(h => [ new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || '-', h.vehicle.reg, h.client.name, (h.totals?.total || 0).toFixed(2), (h.repair?.excess || 0), h.status ]);
-        const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
+        const rows = history.map(h => [
+            new Date(h.createdAt?.seconds * 1000).toLocaleDateString(),
+            h.invoiceNo || '-',
+            h.vehicle.reg,
+            h.client.name,
+            (h.totals?.total || 0).toFixed(2),
+            (h.repair?.excess || 0),
+            h.status
+        ]);
+        
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n" 
+            + rows.map(e => e.join(",")).join("\n");
+            
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`);
+        document.body.appendChild(link);
+        link.click();
     };
 
-    const resetJob = () => {
-        if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
-            localStorage.removeItem('mmm_v230_PLATINUM');
-            setJob(getEmptyJob());
-            setClientMatch(null); 
-            window.scrollTo(0, 0); 
-        }
-    };
-
-    const loadJob = (savedJob) => {
-        setJob(savedJob);
-        setView('HUB');
-        window.scrollTo(0,0);
-    };
-
-    const deleteJob = async (id) => {
-        if(window.confirm("Permanently delete this record?")) {
-            await deleteDoc(doc(db, 'estimates', id));
-        }
-    };
-
-    // --- DVLA HANDSHAKE ---
+    // --- DVLA HANDSHAKE (PROXY RESTORED FOR BROWSER SECURITY) ---
     const runDVLA = async () => {
-        if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
+        if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        const url = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        const apiKey = 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc';
+        // USING PROXY BRIDGE TO BYPASS CORS (REQUIRED FOR MOBILE BROWSERS)
+        const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
-            const response = await fetch(url, {
-                method: 'POST', headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
-            if (!response.ok) throw new Error(`Direct Connection Failed (Status: ${response.status})`);
+            if (!response.ok) throw new Error(`Status ${response.status}`);
             const d = await response.json();
             setJob(prev => ({
-                ...prev, lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
+                ...prev, 
+                lastSuccess: new Date().toLocaleString('en-GB'),
+                vehicle: {
+                    ...prev.vehicle, 
+                    make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, 
+                    engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
+                }
             }));
-            alert("Vehicle Found!"); 
-        } catch (e) { console.error(e); alert(`Link Failed: ${e.message}`); }
+        } catch (e) { alert(`Link Failed (${e.message}). Manual Entry Enabled.`); }
         setLoading(false);
     };
 
     const saveMaster = async () => {
-        const safeReg = job.vehicle.reg || `DRAFT_${Date.now()}`;
-        await setDoc(doc(db, 'estimates', safeReg), { ...job, totals, createdAt: serverTimestamp() });
+        await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
         alert("Master File Saved.");
     };
 
@@ -265,11 +214,6 @@ const EstimateApp = ({ userId }) => {
         setLoading(false);
     };
 
-    // --- LIST HANDLERS ---
-    const addLineItem = () => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, { id: Date.now(), desc: '', cost: '' }] } }));
-    const updateLineItem = (id, field, value) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.map(item => item.id === id ? { ...item, [field]: value } : item) } }));
-    const deleteLineItem = (id) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.filter(item => item.id !== id) } }));
-
     const HeaderNav = () => (
         <div style={s.navBar} className="no-print">
             <button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK TO HUB</button>
@@ -278,29 +222,30 @@ const EstimateApp = ({ userId }) => {
 
     return (
         <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '180px' }}>
+            {/* LOADING OVERLAY FOR PRINTING */}
+            {printing && (
+                <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.9)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column'}}>
+                    <h1 style={{color:theme.hub, fontSize:'40px'}}>GENERATING DOCUMENT...</h1>
+                    <p style={{color:'#fff'}}>Please wait while we lock the data.</p>
+                </div>
+            )}
+
             <div className="no-print">
                 {/* HUB */}
                 {view === 'HUB' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}>
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                            <h1 style={{color:theme.hub, fontSize:'65px', letterSpacing:'-4px', margin:0}}>COMMAND HUB</h1>
-                            <button style={{...s.btnG('#333'), padding:'15px'}} onClick={resetJob}>+ NEW JOB</button>
-                        </div>
-                        
+                        <h1 style={{color:theme.hub, fontSize:'65px', letterSpacing:'-4px', marginBottom:'45px', textAlign:'center'}}>COMMAND HUB</h1>
                         <div style={s.card(theme.hub)}>
                             <span style={s.label}>Technical ID</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}>
                                 <input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
-                                {/* DVLA BUTTON HIDDEN (MANUAL MODE) */}
-                                {/* <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button> */}
+                                <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
                             </div>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                                 <div><span style={s.label}>MAKE</span><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} /></div>
                                 <div><span style={s.label}>MODEL / SPEC</span><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} /></div>
                                 <div><span style={s.label}>COLOUR</span><input style={s.input} value={job.vehicle.colour} onChange={e=>setJob({...job, vehicle:{...job.vehicle, colour:e.target.value}})} /></div>
                                 <div><span style={s.label}>VIN / CHASSIS</span><input style={s.input} value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} /></div>
-                                <div><span style={s.label}>MILEAGE (Miles)</span><input style={s.input} value={job.vehicle.mileage} onChange={e=>setJob({...job, vehicle:{...job.vehicle, mileage:e.target.value}})} /></div>
-                                <div><span style={s.label}>FUEL LEVEL</span><input style={s.input} value={job.vehicle.fuelLevel} onChange={e=>setJob({...job, vehicle:{...job.vehicle, fuelLevel:e.target.value}})} placeholder="e.g. 1/4 Tank" /></div>
                             </div>
                         </div>
 
@@ -309,8 +254,7 @@ const EstimateApp = ({ userId }) => {
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
                                 <div>
                                     <span style={{...s.label, color:theme.deal}}>CLIENT DETAILS</span>
-                                    <input style={s.input} placeholder="Name (Search)" value={job.client.name} onChange={e => { const val = e.target.value; setJob({...job, client:{...job.client, name:val}}); checkClientMatch(val); }} />
-                                    {clientMatch && ( <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}><span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS CLIENT:</span><br/>{clientMatch.name}<br/><small style={{textDecoration:'underline'}}>Click to Auto-fill</small></div> )}
+                                    <input style={s.input} placeholder="Name" value={job.client.name} onChange={e=>setJob({...job, client:{...job.client, name:e.target.value}})} />
                                     <input style={s.input} placeholder="Address" value={job.client.address} onChange={e=>setJob({...job, client:{...job.client, address:e.target.value}})} />
                                     <input style={s.input} placeholder="Phone" value={job.client.phone} onChange={e=>setJob({...job, client:{...job.client, phone:e.target.value}})} />
                                     <input style={s.input} placeholder="Email" value={job.client.email} onChange={e=>setJob({...job, client:{...job.client, email:e.target.value}})} />
@@ -331,8 +275,6 @@ const EstimateApp = ({ userId }) => {
                             <div style={s.displayBox}><span style={s.label}>PROBABLE READY DATE</span><div style={{color:theme.hub, fontSize:'45px', fontWeight:'900'}}>{projectedDate}</div></div>
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px', fontSize:'32px'}} onClick={()=>setView('EST')}>OPEN ESTIMATOR</button>
                         </div>
-                        
-                        <button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px', padding:'25px', fontSize:'20px'}} onClick={resetJob}>⚠️ CLEAR ALL FIELDS</button>
                     </div>
                 )}
 
@@ -352,14 +294,14 @@ const EstimateApp = ({ userId }) => {
                             <input style={{...s.input, border:`3px solid ${theme.work}`}} value={job.repair.paintMats} onChange={e=>setJob({...job, repair:{...job.repair, paintMats:e.target.value}})} placeholder="0.00" />
 
                             <span style={{...s.label, marginTop:'20px'}}>Parts / Line Items</span>
-                            {job.repair.items.map((it) => (
-                                <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
-                                    <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item Description" onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} />
-                                    <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} />
-                                    <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={() => deleteLineItem(it.id)}>X</button>
+                            {job.repair.items.map((it, i) => (
+                                <div key={i} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                                    <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item" onChange={e=>{ let n=[...job.repair.items]; n[i].desc=e.target.value; setJob({...job, repair:{...job.repair, items:n}}); }} />
+                                    <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={e=>{ let n=[...job.repair.items]; n[i].cost=e.target.value; setJob({...job, repair:{...job.repair, items:n}}); }} />
+                                    <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={()=>{ let n=job.repair.items.filter((_, idx)=>idx!==i); setJob({...job, repair:{...job.repair, items:n}}); }}>X</button>
                                 </div>
                             ))}
-                            <button style={{...s.btnG(theme.work), width:'100%'}} onClick={addLineItem}>+ ADD LINE ITEM</button>
+                            <button style={{...s.btnG(theme.work), width:'100%'}} onClick={()=>setJob({...job, repair:{...job.repair, items:[...job.repair.items, {desc:'', cost:''}]}})}>+ ADD LINE ITEM</button>
                             
                             <span style={{...s.label, marginTop:'30px', color:theme.work}}>INTERNAL / TECH NOTES (JOB CARD ONLY)</span>
                             <textarea style={{...s.textarea, height:'100px'}} value={job.repair.techNotes} onChange={e=>setJob({...job, repair:{...job.repair, techNotes:e.target.value}})} placeholder="Private notes for the technician..." />
@@ -369,9 +311,6 @@ const EstimateApp = ({ userId }) => {
                             <span style={{...s.label, color:theme.danger}}>INSURANCE EXCESS CONTRIBUTION</span>
                             <input style={{...s.input, color:theme.danger, border:`4px solid ${theme.danger}`}} placeholder="EXCESS -£" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
                             
-                            <span style={s.label}>INVOICE DATE</span>
-                            <input style={s.input} value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} placeholder="DD/MM/YYYY" />
-
                             <span style={s.label}>PRINT OPTIONS</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
@@ -494,7 +433,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT ENGINE (V4.8: COMPACT + JOB CARD + ROBUST + STATE-FIRST) */}
+            {/* PRINT ENGINE (V5.0: NO MARGIN LOCK + JOB CARD + INSTANT PRINT) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
@@ -596,7 +535,7 @@ const EstimateApp = ({ userId }) => {
                         ) : (
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'30px'}}>
                                 <div style={{flex:1, textAlign:'center', border:'4px solid #f97316', borderRadius:'20px', padding:'20px', marginRight:'20px'}}>
-                                    <div style={{fontSize:'22px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
+                                    <div style={{fontSize:'26px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
                                     {settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} />}
                                 </div>
                                 <div style={{flex:1, textAlign:'right'}}>
@@ -619,7 +558,7 @@ const EstimateApp = ({ userId }) => {
                     </>
                 )}
             </div>
-            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } @page { margin: 10mm; } }`}</style>
+            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } }`}</style>
         </div>
     );
 };
