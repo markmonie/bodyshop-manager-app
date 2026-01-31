@@ -111,7 +111,7 @@ const EstimateApp = ({ userId }) => {
         const pPrice = pCost * (1 + (n(settings.markup) / 100));
         const lHrs = n(job.repair.panelHrs) + n(job.repair.paintHrs) + n(job.repair.metHrs);
         const lPrice = lHrs * n(settings.labourRate);
-        const subtotal = pPrice + lPrice + n(job.repair.paintMats);
+        const subtotal = pPrice + lPrice + n(job.repair.paintMats); // paintMats added to subtotal
         const total = subtotal * (1 + (n(settings.vatRate) / 100));
         return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice };
     }, [job.repair, settings]);
@@ -323,7 +323,11 @@ const EstimateApp = ({ userId }) => {
                                 <div><span style={s.label}>PAINT</span><input style={s.input} value={job.repair.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} /></div>
                             </div>
                             
-                            <span style={s.label}>Parts / Line Items</span>
+                            {/* V3.8: PAINT MATERIALS BOX ADDED HERE */}
+                            <span style={s.label}>PAINT & MATERIALS (£)</span>
+                            <input style={{...s.input, border:`3px solid ${theme.work}`}} value={job.repair.paintMats} onChange={e=>setJob({...job, repair:{...job.repair, paintMats:e.target.value}})} placeholder="0.00" />
+
+                            <span style={{...s.label, marginTop:'20px'}}>Parts / Line Items</span>
                             {job.repair.items.map((it) => (
                                 <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
                                     <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item Description" onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} />
@@ -388,11 +392,11 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 )}
 
-                {/* V3.6: JOB VAULT WITH SEARCH */}
+                {/* JOB HISTORY / RECENT */}
                 {view === 'RECENT' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}>
                         <HeaderNav />
-                        <h1 style={{color:theme.hub, marginBottom:'20px'}}>JOB VAULT</h1>
+                        <h1 style={{color:theme.hub, marginBottom:'30px'}}>JOB VAULT</h1>
                         
                         {/* SEARCH BAR */}
                         <div style={{marginBottom:'30px'}}>
