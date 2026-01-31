@@ -76,7 +76,7 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
-    // --- JOB FACTORY ---
+    // --- JOB FACTORY (LIABILITY FIELDS + INVOICE DATE INCLUDED) ---
     const getEmptyJob = () => ({
         status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
@@ -125,33 +125,61 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- ACTIONS ---
-    const handlePrint = async (type, mode = 'FULL') => {
+    // --- V4.8: STATE-FIRST PRINT ENGINE (NO BLOCKING) ---
+    const handlePrint = (type, mode = 'FULL') => {
+        // 1. Immediate UI Update
         setDocType(type);
         setPrintMode(mode);
         
-        let currentInvoiceNo = job.invoiceNo;
         const today = new Date().toLocaleDateString('en-GB');
-        const safeReg = job.vehicle.reg || `DRAFT_${Date.now()}`;
-
-        try {
-            if (type === 'INVOICE' && !currentInvoiceNo) {
-                const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
-                currentInvoiceNo = nextNum.toString();
-                setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
-                setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
-                await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
-                await setDoc(doc(db, 'estimates', safeReg), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
-            } else {
-                setDoc(doc(db, 'estimates', safeReg), { ...job, totals }, { merge: true }).catch(e => console.warn("Bg save fail", e));
-            }
-        } catch (e) {
-            console.error("Number Gen Failed", e);
-        }
+        // Define safe reg for filenames so it never crashes on null
+        const safeReg = job.vehicle.reg ? job.vehicle.reg.toUpperCase() : `DRAFT_${Date.now()}`;
         
-        const filename = `${safeReg}_${currentInvoiceNo || 'EST'}_${type}`;
+        let nextJob = { ...job };
+        let nextSettings = { ...settings };
+        let shouldSaveSettings = false;
+
+        // 2. Local State Calculation (Instant)
+        if (type === 'INVOICE' && !job.invoiceNo) {
+            const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
+            nextJob.invoiceNo = nextNum.toString();
+            nextJob.invoiceDate = today;
+            nextSettings.invoiceCount = nextNum;
+            shouldSaveSettings = true;
+            
+            // Apply to state immediately
+            setJob(nextJob);
+            setSettings(nextSettings);
+        }
+
+        // 3. Set Window Title for Filename
+        const filename = `${safeReg}_${nextJob.invoiceNo || 'EST'}_${type}`;
         document.title = filename;
-        setTimeout(() => { window.print(); setTimeout(() => document.title = "Triple MMM", 2000); }, 500);
+
+        // 4. Launch Printer (Timed to allow React Render)
+        setTimeout(() => {
+            window.print();
+            // Reset title later
+            setTimeout(() => document.title = "Triple MMM", 2000);
+        }, 500);
+
+        // 5. Silent Background Save (Fire and Forget)
+        const saveInBackground = async () => {
+            try {
+                if (shouldSaveSettings) {
+                    await setDoc(doc(db, 'settings', 'global'), nextSettings);
+                }
+                await setDoc(doc(db, 'estimates', safeReg), { 
+                    ...nextJob, 
+                    totals, 
+                    createdAt: serverTimestamp() 
+                }, { merge: true });
+                console.log("Background Save Success");
+            } catch (e) {
+                console.error("Background Save Error (Printing likely succeeded though)", e);
+            }
+        };
+        saveInBackground();
     };
 
     const downloadCSV = () => {
@@ -182,7 +210,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE ---
+    // --- DVLA HANDSHAKE (MANUAL MODE - CODE PRESERVED) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
         setLoading(true);
@@ -318,7 +346,6 @@ const EstimateApp = ({ userId }) => {
                             ))}
                             <button style={{...s.btnG(theme.work), width:'100%'}} onClick={addLineItem}>+ ADD LINE ITEM</button>
                             
-                            {/* V4.6: INTERNAL TECH NOTES */}
                             <span style={{...s.label, marginTop:'30px', color:theme.work}}>INTERNAL / TECH NOTES (JOB CARD ONLY)</span>
                             <textarea style={{...s.textarea, height:'100px'}} value={job.repair.techNotes} onChange={e=>setJob({...job, repair:{...job.repair, techNotes:e.target.value}})} placeholder="Private notes for the technician..." />
                         </div>
@@ -338,7 +365,6 @@ const EstimateApp = ({ userId }) => {
                             </div>
                             <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => handlePrint('ESTIMATE', 'FULL')}>PRINT ESTIMATE</button>
-                                {/* V4.6: JOB CARD BUTTON */}
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px', background:'#f59e0b', color:'black'}} onClick={() => handlePrint('JOB CARD', 'FULL')}>PRINT JOB CARD</button>
                             </div>
                         </div>
@@ -453,7 +479,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT ENGINE (V4.6: JOB CARD + INVOICE + NOTES) */}
+            {/* PRINT ENGINE (V4.8: COMPACT + JOB CARD + INSTANT PRINT) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
@@ -462,14 +488,11 @@ const EstimateApp = ({ userId }) => {
                         <p style={{fontSize:'12px', lineHeight:'1.4'}}>{settings.address}<br/>{settings.phone}</p>
                     </div>
                     <div style={{textAlign:'right', flex:1}}>
-                        {/* V4.6: Dynamic Title */}
                         <h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{docType === 'JOB CARD' ? 'WORKSHOP JOB CARD' : printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
                         <p style={{fontSize:'16px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate || new Date().toLocaleDateString()}</p>
                         
-                        {/* Hide Invoice No. on Job Card */}
                         {job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
                         
-                        {/* V4.6: LIABILITY INFO ON JOB CARD */}
                         {docType === 'JOB CARD' && (
                             <div style={{marginTop:'10px', fontSize:'14px', fontWeight:'bold', border:'1px solid black', padding:'5px'}}>
                                 Mileage: {job.vehicle.mileage || '_______'} | Fuel: {job.vehicle.fuelLevel || '_______'}
@@ -519,7 +542,6 @@ const EstimateApp = ({ userId }) => {
                                             </tr>
                                         ))}
                                         
-                                        {/* Paint logic - show quantity on job card if you want, or just check */}
                                         {parseFloat(job.repair.paintMats) > 0 && (
                                              <tr style={{borderBottom:'1px solid #eee'}}>
                                                  <td style={{padding:'8px'}}>Paint & Materials</td>
@@ -529,7 +551,6 @@ const EstimateApp = ({ userId }) => {
                                              </tr>
                                         )}
 
-                                        {/* Labour Logic */}
                                         <tr>
                                             <td style={{padding:'8px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td>
                                             <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>
@@ -537,7 +558,6 @@ const EstimateApp = ({ userId }) => {
                                             </td>
                                         </tr>
                                         
-                                        {/* ONLY SHOW TOTALS IF NOT A JOB CARD */}
                                         {docType !== 'JOB CARD' && (
                                             <>
                                                 <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'8px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'8px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
@@ -552,7 +572,7 @@ const EstimateApp = ({ userId }) => {
                             </tbody>
                         </table>
 
-                        {/* V4.6: JOB CARD SPECIFIC SECTION */}
+                        {/* JOB CARD NOTES SECTION */}
                         {docType === 'JOB CARD' ? (
                             <div style={{marginTop:'30px', border:'2px dashed #333', padding:'20px'}}>
                                 <h3 style={{marginTop:0}}>INTERNAL TECH NOTES:</h3>
@@ -563,8 +583,8 @@ const EstimateApp = ({ userId }) => {
                             // INVOICE / ESTIMATE FOOTER
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'30px'}}>
                                 <div style={{flex:1, textAlign:'center', border:'4px solid #f97316', borderRadius:'20px', padding:'20px', marginRight:'20px'}}>
-                                    <div style={{fontSize:'22px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
-                                    {settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} />}
+                                    <div style={{fontSize:'26px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
+                                    {settings.paypalQr && <img src={settings.paypalQr} style={{height:'180px'}} />}
                                 </div>
                                 <div style={{flex:1, textAlign:'right'}}>
                                     <h1 style={{fontSize:'45px', margin:0, color:'#f97316'}}>
