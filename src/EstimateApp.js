@@ -157,27 +157,25 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (V250: AXIOS-STYLE ROBUSTNESS) ---
+    // --- DVLA HANDSHAKE (V260: PRIORITY SWAP) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        // NUCLEAR KEY: Hardcoded to bypass any database sync issues
+        // NUCLEAR KEY
         const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // ROAD 1: CorsProxy (Fastest)
-        const proxyA = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        // ROAD 2: Cors-Anywhere (Most Reliable but strict)
-        const proxyB = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
-        // ROAD 3: ThingProxy (Backup)
+        // PRIORITY SWAP: We put "Heroku" (the one you unlocked) FIRST.
+        const proxyA = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
+        const proxyB = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
         const proxyC = `https://thingproxy.freeboard.io/fetch/${targetUrl}`;
 
         const tryFetch = async (url, name) => {
             console.log(`Trying ${name}...`);
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout per proxy
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
             try {
                 const response = await fetch(url, {
                     method: 'POST',
@@ -195,24 +193,25 @@ const EstimateApp = ({ userId }) => {
 
         try {
             let response;
-            // ATTEMPT 1
-            try { response = await tryFetch(proxyA, "CorsProxy"); } catch (e) { console.warn("Proxy A Failed"); }
             
-            // ATTEMPT 2
+            // 1. Try Heroku (Fast & Unlocked)
+            try { response = await tryFetch(proxyA, "Heroku (Unlocked)"); } catch (e) { console.warn("Proxy A Failed"); }
+            
+            // 2. Try CorsProxy (Backup)
             if (!response || !response.ok) {
-                try { response = await tryFetch(proxyB, "Heroku"); } catch (e) { console.warn("Proxy B Failed"); }
+                try { response = await tryFetch(proxyB, "CorsProxy"); } catch (e) { console.warn("Proxy B Failed"); }
             }
 
-            // ATTEMPT 3
+            // 3. Try ThingProxy (Last Resort)
             if (!response || !response.ok) {
                 try { response = await tryFetch(proxyC, "ThingProxy"); } catch (e) { console.warn("Proxy C Failed"); }
             }
 
             if (!response || !response.ok) {
                  const status = response ? response.status : "Network Error";
-                 // MAGIC FIX FOR USER:
+                 // IF LOCKED, ASK TO UNLOCK AGAIN
                  if(status === 403 || status === 0 || status === "Network Error") {
-                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nTo fix this, we need to UNLOCK the secure proxy once.\n\nClick OK to open the Unlock Page, click the button there, then try again.`)) {
+                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nIt looks like the key needs to be re-authorized.\n\nClick OK to open the Unlock Page again.`)) {
                         window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
                     }
                     setLoading(false);
@@ -223,13 +222,11 @@ const EstimateApp = ({ userId }) => {
             }
 
             const d = await response.json();
-            
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
                 vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
             }));
-            // alert("Vehicle Found!"); 
 
         } catch (e) { 
             console.error(e);
