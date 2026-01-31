@@ -157,7 +157,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (V260: PRIORITY SWAP) ---
+    // --- DVLA HANDSHAKE (V270: CODETABS PRIORITY) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
@@ -167,10 +167,10 @@ const EstimateApp = ({ userId }) => {
         const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // PRIORITY SWAP: We put "Heroku" (the one you unlocked) FIRST.
-        const proxyA = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
+        // PRIORITY SWAP: CodeTabs is usually the most robust without needing clicks
+        const proxyA = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
         const proxyB = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        const proxyC = `https://thingproxy.freeboard.io/fetch/${targetUrl}`;
+        const proxyC = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
 
         const tryFetch = async (url, name) => {
             console.log(`Trying ${name}...`);
@@ -194,24 +194,24 @@ const EstimateApp = ({ userId }) => {
         try {
             let response;
             
-            // 1. Try Heroku (Fast & Unlocked)
-            try { response = await tryFetch(proxyA, "Heroku (Unlocked)"); } catch (e) { console.warn("Proxy A Failed"); }
+            // 1. Try CodeTabs (Best for no-click access)
+            try { response = await tryFetch(proxyA, "CodeTabs"); } catch (e) { console.warn("Proxy A Failed"); }
             
             // 2. Try CorsProxy (Backup)
             if (!response || !response.ok) {
                 try { response = await tryFetch(proxyB, "CorsProxy"); } catch (e) { console.warn("Proxy B Failed"); }
             }
 
-            // 3. Try ThingProxy (Last Resort)
+            // 3. Try Heroku (Manual Backup)
             if (!response || !response.ok) {
-                try { response = await tryFetch(proxyC, "ThingProxy"); } catch (e) { console.warn("Proxy C Failed"); }
+                try { response = await tryFetch(proxyC, "Heroku"); } catch (e) { console.warn("Proxy C Failed"); }
             }
 
             if (!response || !response.ok) {
                  const status = response ? response.status : "Network Error";
-                 // IF LOCKED, ASK TO UNLOCK AGAIN
+                 // IF HEROKU FAILED, MIGHT NEED UNLOCK
                  if(status === 403 || status === 0 || status === "Network Error") {
-                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nIt looks like the key needs to be re-authorized.\n\nClick OK to open the Unlock Page again.`)) {
+                    if(window.confirm(`Connection Blocked (Status: ${status}).\n\nThe automatic proxies are busy. You may need to manually unlock the backup.\n\nClick OK to open the Unlock Page.`)) {
                         window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
                     }
                     setLoading(false);
