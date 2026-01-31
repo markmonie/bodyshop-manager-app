@@ -157,23 +157,25 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA FIX (Robust Proxy + Error Handling) ---
+    // --- DVLA HANDSHAKE (Ultra-Robust: Tries 2 Proxies) ---
     const runDVLA = async () => {
+        // 1. Validation
         if (!job?.vehicle?.reg || !settings.dvlaKey) {
             alert("Missing Reg or API Key. Please check Settings.");
             return;
         }
+
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        
-        // Target: Official DVLA API
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // Proxy: CorsProxy.io (Supports Headers)
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        
-        try {
-            const response = await fetch(proxyUrl, {
+        // Define our two "Roads" to the DVLA
+        const primaryProxy = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        const backupProxy = `https://thingproxy.freeboard.io/fetch/${targetUrl}`;
+
+        // Helper function to try a specific proxy
+        const tryFetch = async (url) => {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 
                     'x-api-key': settings.dvlaKey.trim(), 
@@ -181,24 +183,50 @@ const EstimateApp = ({ userId }) => {
                 },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
-            
+            return response;
+        };
+
+        try {
+            // ATTEMPT 1: Primary Proxy
+            let response;
+            try {
+                response = await tryFetch(primaryProxy);
+            } catch (err) {
+                console.warn("Primary Proxy Failed, trying Backup...");
+                // ATTEMPT 2: Backup Proxy (if primary crashes)
+                response = await tryFetch(backupProxy);
+            }
+
+            // Check if the successful connection actually gave us data
             if (!response.ok) {
-                 if(response.status === 403) throw new Error("API Key Rejected. Double check key in Settings.");
-                 if(response.status === 404) throw new Error("Vehicle Not Found. Check Reg.");
-                 throw new Error(`Connection Error: ${response.status}`);
+                 if(response.status === 403) throw new Error("API Key Rejected (Check L vs l in SET tab)");
+                 if(response.status === 404) throw new Error("Vehicle Not Found");
+                 if(response.status === 500 || response.status === 503) throw new Error("DVLA Server Down");
+                 throw new Error(`Error Status: ${response.status}`);
             }
 
             const d = await response.json();
             
+            // Success! Update Job
             setJob(prev => ({
                 ...prev, 
                 lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
+                vehicle: { 
+                    ...prev.vehicle, 
+                    make: d.make, 
+                    year: d.yearOfManufacture, 
+                    colour: d.colour, 
+                    fuel: d.fuelType, 
+                    engine: d.engineCapacity, 
+                    mot: d.motStatus, 
+                    motExpiry: d.motExpiryDate 
+                }
             }));
-            alert("Vehicle Found!");
+            alert("Vehicle Found!"); 
+
         } catch (e) { 
             console.error(e);
-            alert(`Link Failed: ${e.message}\n\nNote: If Key is correct, the free proxy might be busy. Try again in 1 minute.`); 
+            alert(`Link Failed: ${e.message}\n\nTroubleshooting:\n1. Check Internet\n2. Go to 'SET' tab and check API Key is uppercase 'L'`); 
         }
         setLoading(false);
     };
