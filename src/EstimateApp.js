@@ -76,12 +76,12 @@ const EstimateApp = ({ userId }) => {
         invoiceCount: 1000 
     });
 
-    // --- JOB FACTORY (Clean Reset) ---
+    // --- JOB FACTORY ---
     const getEmptyJob = () => ({
-        status: 'STRIPPING', lastSuccess: '', invoiceNo: '',
+        status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
         client: { name: '', address: '', phone: '', email: '', claim: '' },
         insurance: { name: '', address: '', phone: '', email: '', claim: '' },
-        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '' },
+        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' },
         repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' },
         vault: { signature: '', expenses: [] }
     });
@@ -112,7 +112,7 @@ const EstimateApp = ({ userId }) => {
         const pPrice = pCost * (1 + (n(settings.markup) / 100));
         const lHrs = n(job.repair.panelHrs) + n(job.repair.paintHrs) + n(job.repair.metHrs);
         const lPrice = lHrs * n(settings.labourRate);
-        const subtotal = pPrice + lPrice + n(job.repair.paintMats); // paintMats included in net
+        const subtotal = pPrice + lPrice + n(job.repair.paintMats);
         const total = subtotal * (1 + (n(settings.vatRate) / 100));
         return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice };
     }, [job.repair, settings]);
@@ -125,25 +125,24 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- ACTIONS (With Unique Filenames) ---
+    // --- ACTIONS ---
     const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
         let currentInvoiceNo = job.invoiceNo;
-        // Auto-assign invoice number only if printing an INVOICE
+        // Auto-assign invoice number ONLY for INVOICES (not Estimates)
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
-            setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo }));
+            const today = new Date().toLocaleDateString('en-GB');
+            setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
             setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
             await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
-            await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, totals }, { merge: true });
+            await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
         
-        // UNIQUE FILENAME GENERATOR
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
-        
         setTimeout(() => { window.print(); setTimeout(() => document.title = "Triple MMM", 2000); }, 500);
     };
 
@@ -175,45 +174,26 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (DIRECT) ---
+    // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
-
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         const url = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         const apiKey = 'LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc';
-
         try {
             const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ registrationNumber: cleanReg })
             });
-
             if (!response.ok) throw new Error(`Direct Connection Failed (Status: ${response.status})`);
-
             const d = await response.json();
             setJob(prev => ({
-                ...prev, 
-                lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: { 
-                    ...prev.vehicle, 
-                    make: d.make, 
-                    year: d.yearOfManufacture, 
-                    colour: d.colour, 
-                    fuel: d.fuelType, 
-                    engine: d.engineCapacity, 
-                    mot: d.motStatus, 
-                    motExpiry: d.motExpiryDate 
-                }
+                ...prev, lastSuccess: new Date().toLocaleString('en-GB'),
+                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
             }));
             alert("Vehicle Found!"); 
-
-        } catch (e) { 
-            console.error(e);
-            alert(`Link Failed: ${e.message}\n\nNote: If you see "Failed to fetch", the browser is blocking this direct connection.`); 
-        }
+        } catch (e) { console.error(e); alert(`Link Failed: ${e.message}`); }
         setLoading(false);
     };
 
@@ -259,13 +239,17 @@ const EstimateApp = ({ userId }) => {
                             <span style={s.label}>Technical ID</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}>
                                 <input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
-                                <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button>
+                                {/* DVLA BUTTON HIDDEN (MANUAL MODE) */}
+                                {/* <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px'}} onClick={runDVLA}>{loading ? '...' : 'FIND'}</button> */}
                             </div>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                                 <div><span style={s.label}>MAKE</span><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} /></div>
                                 <div><span style={s.label}>MODEL / SPEC</span><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} /></div>
                                 <div><span style={s.label}>COLOUR</span><input style={s.input} value={job.vehicle.colour} onChange={e=>setJob({...job, vehicle:{...job.vehicle, colour:e.target.value}})} /></div>
                                 <div><span style={s.label}>VIN / CHASSIS</span><input style={s.input} value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value}})} /></div>
+                                {/* NEW LIABILITY FIELDS */}
+                                <div><span style={s.label}>MILEAGE (Miles)</span><input style={s.input} value={job.vehicle.mileage} onChange={e=>setJob({...job, vehicle:{...job.vehicle, mileage:e.target.value}})} /></div>
+                                <div><span style={s.label}>FUEL LEVEL</span><input style={s.input} value={job.vehicle.fuelLevel} onChange={e=>setJob({...job, vehicle:{...job.vehicle, fuelLevel:e.target.value}})} placeholder="e.g. 1/4 Tank" /></div>
                             </div>
                         </div>
 
@@ -274,23 +258,8 @@ const EstimateApp = ({ userId }) => {
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
                                 <div>
                                     <span style={{...s.label, color:theme.deal}}>CLIENT DETAILS</span>
-                                    <input 
-                                        style={s.input} 
-                                        placeholder="Name (Type to Search History)" 
-                                        value={job.client.name} 
-                                        onChange={e => {
-                                            const val = e.target.value;
-                                            setJob({...job, client:{...job.client, name:val}});
-                                            checkClientMatch(val);
-                                        }} 
-                                    />
-                                    {clientMatch && (
-                                        <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}>
-                                            <span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS CLIENT:</span><br/>
-                                            {clientMatch.name} - {clientMatch.phone}<br/>
-                                            <small style={{textDecoration:'underline'}}>Click to Auto-fill</small>
-                                        </div>
-                                    )}
+                                    <input style={s.input} placeholder="Name (Search)" value={job.client.name} onChange={e => { const val = e.target.value; setJob({...job, client:{...job.client, name:val}}); checkClientMatch(val); }} />
+                                    {clientMatch && ( <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}><span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS CLIENT:</span><br/>{clientMatch.name}<br/><small style={{textDecoration:'underline'}}>Click to Auto-fill</small></div> )}
                                     <input style={s.input} placeholder="Address" value={job.client.address} onChange={e=>setJob({...job, client:{...job.client, address:e.target.value}})} />
                                     <input style={s.input} placeholder="Phone" value={job.client.phone} onChange={e=>setJob({...job, client:{...job.client, phone:e.target.value}})} />
                                     <input style={s.input} placeholder="Email" value={job.client.email} onChange={e=>setJob({...job, client:{...job.client, email:e.target.value}})} />
@@ -346,12 +315,17 @@ const EstimateApp = ({ userId }) => {
                             <span style={{...s.label, color:theme.danger}}>INSURANCE EXCESS CONTRIBUTION</span>
                             <input style={{...s.input, color:theme.danger, border:`4px solid ${theme.danger}`}} placeholder="EXCESS -£" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
                             
+                            <span style={s.label}>INVOICE DATE</span>
+                            <input style={s.input} value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} placeholder="DD/MM/YYYY" />
+
                             <span style={s.label}>PRINT OPTIONS</span>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
                                 <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'INSURER')}>INSURER (NET)</button>
                                 <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'EXCESS')}>CUSTOMER EXCESS</button>
                             </div>
+                            {/* V4.2: DEDICATED ESTIMATE BUTTON */}
+                            <button style={{...s.btnG(theme.work), width:'100%', marginTop:'10px'}} onClick={() => handlePrint('ESTIMATE', 'FULL')}>PRINT ESTIMATE</button>
                         </div>
                     </div>
                 )}
@@ -381,6 +355,14 @@ const EstimateApp = ({ userId }) => {
                             <input style={s.input} placeholder="Business Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
                             <input style={s.input} placeholder="Bank Sort/Acc" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
                             <input style={s.input} placeholder="DVLA API Key" value={settings.dvlaKey} onChange={e=>setSettings({...settings, dvlaKey:e.target.value})} />
+                            
+                            <span style={s.label}>Financial Variables</span>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'15px'}}>
+                                <div><span style={s.label}>Markup (%)</span><input style={s.input} value={settings.markup} onChange={e=>setSettings({...settings, markup:e.target.value})} /></div>
+                                <div><span style={s.label}>Labour (£/hr)</span><input style={s.input} value={settings.labourRate} onChange={e=>setSettings({...settings, labourRate:e.target.value})} /></div>
+                                <div><span style={s.label}>VAT (%)</span><input style={s.input} value={settings.vatRate} onChange={e=>setSettings({...settings, vatRate:e.target.value})} /></div>
+                            </div>
+
                             <span style={s.label}>Start Invoice Numbering At:</span>
                             <input style={s.input} type="number" value={settings.invoiceCount} onChange={e=>setSettings({...settings, invoiceCount:e.target.value})} />
                             <span style={s.label}>Company Logo</span>
@@ -401,31 +383,17 @@ const EstimateApp = ({ userId }) => {
                     <div style={{maxWidth:'850px', margin:'0 auto'}}>
                         <HeaderNav />
                         <h1 style={{color:theme.hub, marginBottom:'30px'}}>JOB VAULT</h1>
-                        
-                        <div style={{marginBottom:'30px'}}>
-                            <span style={s.label}>SEARCH ARCHIVE</span>
-                            <input 
-                                style={s.input} 
-                                placeholder="Search Reg or Name..." 
-                                value={vaultSearch}
-                                onChange={(e) => setVaultSearch(e.target.value)}
-                            />
-                        </div>
-
-                        {history
-                            .filter(h => {
+                        <div style={{marginBottom:'30px'}}><span style={s.label}>SEARCH ARCHIVE</span><input style={s.input} placeholder="Search Reg or Name..." value={vaultSearch} onChange={(e) => setVaultSearch(e.target.value)}/></div>
+                        {history.filter(h => {
                                 const term = vaultSearch.toUpperCase();
                                 const reg = (h.vehicle?.reg || '').toUpperCase();
                                 const client = (h.client?.name || '').toUpperCase();
                                 return reg.includes(term) || client.includes(term);
-                            })
-                            .map((h) => (
+                            }).map((h) => (
                             <div key={h.id} style={{...s.card('#333'), display:'flex', justifyContent:'space-between', alignItems:'center', padding:'25px'}}>
                                 <div>
                                     <h2 style={{margin:0, color:theme.hub}}>{h.vehicle?.reg || 'UNKNOWN'}</h2>
-                                    <p style={{margin:0, color:'#888'}}>
-                                        {h.client?.name} | {new Date(h.createdAt?.seconds * 1000).toLocaleDateString()}
-                                    </p>
+                                    <p style={{margin:0, color:'#888'}}>{h.client?.name} | {new Date(h.createdAt?.seconds * 1000).toLocaleDateString()}</p>
                                     <p style={{margin:0, fontSize:'14px'}}>£{(h.totals?.total || 0).toFixed(2)}</p>
                                 </div>
                                 <div style={{display:'flex', gap:'10px'}}>
@@ -480,8 +448,8 @@ const EstimateApp = ({ userId }) => {
                     </div>
                     <div style={{textAlign:'right', flex:1}}>
                         <h2 style={{color:'#f97316', fontSize:'60px', margin:0}}>{printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
-                        <p style={{fontSize:'20px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
-                        {job.invoiceNo && <p style={{fontSize:'20px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
+                        <p style={{fontSize:'20px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate || new Date().toLocaleDateString()}</p>
+                        {job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'20px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
                         
                         <div style={{marginTop:'20px', fontSize:'16px', borderTop:'2px solid #ddd', paddingTop:'10px'}}>
                             <strong>BILL TO:</strong><br/>
@@ -519,14 +487,12 @@ const EstimateApp = ({ userId }) => {
                                     <>
                                         {(job.repair.items || []).map((it, i) => (<tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>{it.desc}</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}</td></tr>))}
                                         
-                                        {/* PAINT & MATERIALS ROW */}
                                         {parseFloat(job.repair.paintMats) > 0 && (
                                              <tr style={{borderBottom:'1px solid #eee'}}><td style={{padding:'15px'}}>Paint & Materials</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{parseFloat(job.repair.paintMats).toFixed(2)}</td></tr>
                                         )}
 
                                         <tr><td style={{padding:'15px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td><td style={{textAlign:'right', padding:'15px', fontWeight:'bold'}}>£{totals.lPrice.toFixed(2)}</td></tr>
                                         
-                                        {/* VAT BREAKDOWN */}
                                         <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'15px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
                                         <tr><td style={{padding:'15px', textAlign:'right'}}>VAT @ {settings.vatRate}%:</td><td style={{textAlign:'right', padding:'15px'}}>£{(totals.total - (totals.total / (1 + (parseFloat(settings.vatRate)/100)))).toFixed(2)}</td></tr>
                                     </>
@@ -538,9 +504,10 @@ const EstimateApp = ({ userId }) => {
                         </table>
 
                         <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:'40px', marginTop:'60px'}}>
-                            <div style={{textAlign:'center', border:'2px solid #f97316', borderRadius:'25px', padding:'25px'}}>
-                                <div style={{fontSize:'18px', fontWeight:'900', marginBottom:'15px'}}>BACS PAYMENT: {settings.bank}</div>
-                                {settings.paypalQr && <img src={settings.paypalQr} style={{height:'120px'}} />}
+                            {/* V4.2: SUPER-SIZED PAYMENT BOX */}
+                            <div style={{textAlign:'center', border:'4px solid #f97316', borderRadius:'25px', padding:'30px'}}>
+                                <div style={{fontSize:'26px', fontWeight:'900', marginBottom:'20px'}}>BACS PAYMENT: {settings.bank}</div>
+                                {settings.paypalQr && <img src={settings.paypalQr} style={{height:'180px'}} />}
                             </div>
                             <div style={{textAlign:'right'}}>
                                 <h1 style={{fontSize:'75px', margin:0, color:'#f97316'}}>
