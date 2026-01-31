@@ -63,6 +63,7 @@ const EstimateApp = ({ userId }) => {
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
+    const [clientMatch, setClientMatch] = useState(null); // V300: Client Recall State
     
     // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
@@ -93,6 +94,22 @@ const EstimateApp = ({ userId }) => {
     }, []);
 
     useEffect(() => { localStorage.setItem('mmm_v230_PLATINUM', JSON.stringify(job)); }, [job]);
+
+    // --- V300: SMART CLIENT SEARCH ---
+    const checkClientMatch = (name) => {
+        if(!name || name.length < 3) { setClientMatch(null); return; }
+        // Find most recent job with matching name
+        const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
+        if(match) setClientMatch(match.client);
+        else setClientMatch(null);
+    };
+
+    const autofillClient = () => {
+        if(clientMatch) {
+            setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}}));
+            setClientMatch(null); // Hide button after fill
+        }
+    };
 
     // --- MATH ---
     const totals = useMemo(() => {
@@ -157,7 +174,7 @@ const EstimateApp = ({ userId }) => {
         }
     };
 
-    // --- DVLA HANDSHAKE (V290: 2-SECOND TIMEOUT) ---
+    // --- DVLA HANDSHAKE (V290) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg) { alert("Please enter a Registration Number."); return; }
 
@@ -167,14 +184,13 @@ const EstimateApp = ({ userId }) => {
         const NUCLEAR_KEY = "LXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc";
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
-        // PRIORITY #1: HEROKU (Because you verified it is Unlocked)
+        // PRIORITY #1: HEROKU
         const proxyA = `https://cors-anywhere.herokuapp.com/${targetUrl}`;
         // Backup Proxies
         const proxyB = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
         const proxyC = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
         const tryFetch = async (url, name) => {
-            console.log(`Trying ${name}...`);
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 SECOND TIMEOUT
             try {
@@ -194,23 +210,12 @@ const EstimateApp = ({ userId }) => {
 
         try {
             let response;
-            
-            // 1. Try Heroku (Fast & Unlocked)
             try { response = await tryFetch(proxyA, "Heroku (Unlocked)"); } catch (e) { console.warn("Proxy A Failed"); }
-            
-            // 2. Try CodeTabs
-            if (!response || !response.ok) {
-                try { response = await tryFetch(proxyB, "CodeTabs"); } catch (e) { console.warn("Proxy B Failed"); }
-            }
-
-            // 3. Try CorsProxy
-            if (!response || !response.ok) {
-                try { response = await tryFetch(proxyC, "CorsProxy"); } catch (e) { console.warn("Proxy C Failed"); }
-            }
+            if (!response || !response.ok) { try { response = await tryFetch(proxyB, "CodeTabs"); } catch (e) { console.warn("Proxy B Failed"); } }
+            if (!response || !response.ok) { try { response = await tryFetch(proxyC, "CorsProxy"); } catch (e) { console.warn("Proxy C Failed"); } }
 
             if (!response || !response.ok) {
                  const status = response ? response.status : "Network Error";
-                 // IF LOCKED, ASK TO UNLOCK AGAIN
                  if(status === 403 || status === 0 || status === "Network Error") {
                     if(window.confirm(`Connection Blocked (Status: ${status}).\n\nIt looks like the key needs to be re-authorized.\n\nClick OK to open the Unlock Page again.`)) {
                         window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
@@ -294,7 +299,25 @@ const EstimateApp = ({ userId }) => {
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
                                 <div>
                                     <span style={{...s.label, color:theme.deal}}>CLIENT DETAILS</span>
-                                    <input style={s.input} placeholder="Name" value={job.client.name} onChange={e=>setJob({...job, client:{...job.client, name:e.target.value}})} />
+                                    {/* V300: SMART SEARCH INPUT */}
+                                    <input 
+                                        style={s.input} 
+                                        placeholder="Name (Type to Search History)" 
+                                        value={job.client.name} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setJob({...job, client:{...job.client, name:val}});
+                                            checkClientMatch(val);
+                                        }} 
+                                    />
+                                    {clientMatch && (
+                                        <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}>
+                                            <span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS CLIENT:</span><br/>
+                                            {clientMatch.name} - {clientMatch.phone}<br/>
+                                            <small style={{textDecoration:'underline'}}>Click to Auto-fill</small>
+                                        </div>
+                                    )}
+
                                     <input style={s.input} placeholder="Address" value={job.client.address} onChange={e=>setJob({...job, client:{...job.client, address:e.target.value}})} />
                                     <input style={s.input} placeholder="Phone" value={job.client.phone} onChange={e=>setJob({...job, client:{...job.client, phone:e.target.value}})} />
                                     <input style={s.input} placeholder="Email" value={job.client.email} onChange={e=>setJob({...job, client:{...job.client, email:e.target.value}})} />
