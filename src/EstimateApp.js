@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V330 DUAL-LAYER) ---
+// --- THEME: TITAN TUNGSTEN (V340 RESTORED) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -61,13 +61,11 @@ const NativeSignature = ({ onSave }) => {
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
-    
-    // --- PRINT ENGINE STATE ---
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
-    const [printTrigger, setPrintTrigger] = useState(0);
-
     const [history, setHistory] = useState([]);
+    
+    // --- RESTORED VARIABLES (MUSCLE) ---
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
@@ -93,28 +91,14 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v330_READY');
+        const saved = localStorage.getItem('mmm_v340_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v330_READY', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v340_FINAL', JSON.stringify(job)); }, [job]);
 
-    // --- TRIGGER PRINT (Dual Layer System) ---
-    useEffect(() => {
-        if(printTrigger > 0) {
-            const filename = `${job.vehicle.reg || 'DOC'}_${job.invoiceNo || 'EST'}_${docType}`;
-            document.title = filename;
-            // Short 100ms safety buffer for Android Chrome
-            const t = setTimeout(() => {
-                window.print();
-                setTimeout(() => document.title = "Triple MMM", 1000);
-            }, 100);
-            return () => clearTimeout(t);
-        }
-    }, [printTrigger]);
-
-    // --- CLIENT RECALL ---
+    // --- CLIENT RECALL (RESTORED) ---
     const checkClientMatch = (name) => {
         if(!name || name.length < 3) { setClientMatch(null); return; }
         const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
@@ -122,10 +106,10 @@ const EstimateApp = ({ userId }) => {
     };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
 
-    // --- JOB MANAGEMENT ---
+    // --- JOB MANAGEMENT (RESTORED) ---
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v330_READY');
+            localStorage.removeItem('mmm_v340_FINAL');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -164,8 +148,8 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- EXECUTE PRINT ---
-    const executePrint = async (type, mode = 'FULL') => {
+    // --- PRINT ENGINE (CLASSIC 500MS DELAY - RESTORED) ---
+    const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
         
@@ -177,15 +161,23 @@ const EstimateApp = ({ userId }) => {
             currentInvoiceNo = nextNum.toString();
             setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
             setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
-            await setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
-            await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
+            
+            // Database Saves
+            setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
+            setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
-        
-        // Triggers the useEffect above
-        setPrintTrigger(prev => prev + 1);
+
+        const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
+        document.title = filename;
+
+        // CLASSIC DELAY METHOD
+        setTimeout(() => {
+            window.print();
+            setTimeout(() => document.title = "Triple MMM", 2000);
+        }, 500);
     };
 
-    // --- CSV EXPORT ---
+    // --- CSV EXPORT (RESTORED) ---
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
         const rows = history.map(h => [
@@ -201,7 +193,7 @@ const EstimateApp = ({ userId }) => {
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
-    // --- DVLA HANDSHAKE ---
+    // --- DVLA HANDSHAKE (RESTORED) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
@@ -257,8 +249,6 @@ const EstimateApp = ({ userId }) => {
 
     return (
         <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '180px' }}>
-            
-            {/* --- SCREEN VIEW (CONTROLS) --- */}
             <div className="no-print">
                 {/* HUB */}
                 {view === 'HUB' && (
@@ -350,13 +340,13 @@ const EstimateApp = ({ userId }) => {
 
                             <span style={s.label}>PRINT OPTIONS</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
-                                <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => executePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
-                                <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => executePrint('INVOICE', 'INSURER')}>INSURER (NET)</button>
-                                <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => executePrint('INVOICE', 'EXCESS')}>CUSTOMER EXCESS</button>
+                                <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'FULL')}>FULL INVOICE</button>
+                                <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'INSURER')}>INSURER (NET)</button>
+                                <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => handlePrint('INVOICE', 'EXCESS')}>CUSTOMER EXCESS</button>
                             </div>
                             <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
-                                <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => executePrint('ESTIMATE', 'FULL')}>PRINT ESTIMATE</button>
-                                <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px', background:'#f59e0b', color:'black'}} onClick={() => executePrint('JOB CARD', 'FULL')}>PRINT JOB CARD</button>
+                                <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => handlePrint('ESTIMATE', 'FULL')}>PRINT ESTIMATE</button>
+                                <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px', background:'#f59e0b', color:'black'}} onClick={() => handlePrint('JOB CARD', 'FULL')}>PRINT JOB CARD</button>
                             </div>
                         </div>
                     </div>
@@ -373,7 +363,7 @@ const EstimateApp = ({ userId }) => {
                                 <p><strong>Client:</strong> {job.client.name}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
                             </div>
                             <NativeSignature onSave={(sig) => setJob({...job, vault: {...job.vault, signature: sig}})} />
-                            <button style={{...s.btnG(theme.deal), width:'100%'}} onClick={() => executePrint('SATISFACTION NOTE', 'FULL')}>PRINT NOTE</button>
+                            <button style={{...s.btnG(theme.deal), width:'100%'}} onClick={() => handlePrint('SATISFACTION NOTE', 'FULL')}>PRINT NOTE</button>
                         </div>
                     </div>
                 )}
@@ -470,7 +460,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* --- PRINT VIEW (ALWAYS MOUNTED / HIDDEN) --- */}
+            {/* PRINT ENGINE (V5.0: NO MARGIN LOCK + JOB CARD + INSTANT PRINT) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
@@ -526,7 +516,7 @@ const EstimateApp = ({ userId }) => {
                                 {printMode !== 'EXCESS' && (
                                     <>
                                         {(job.repair.items || []).map((it, i) => (
-                                            <tr key={it.id} style={{borderBottom:'1px solid #eee'}}>
+                                            <tr key={i} style={{borderBottom:'1px solid #eee'}}>
                                                 <td style={{padding:'8px'}}>{it.desc}</td>
                                                 <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>
                                                     {docType === 'JOB CARD' ? '[   ]' : `£${(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}`}
