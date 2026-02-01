@@ -35,13 +35,21 @@ const s = {
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
-// --- SAFETY HELPER (PREVENTS CRASHES) ---
+// --- SAFETY HELPER ---
 const safeFloat = (val) => {
     const num = parseFloat(val);
     return isNaN(num) ? 0 : num;
 };
 
-// --- COMPONENT: SIGNATURE PAD ---
+// --- COMPONENTS ---
+const LoadingOverlay = () => (
+    <div style={s.loader}>
+        <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '60px', height: '60px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
+        PROCESSING...
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+    </div>
+);
+
 const NativeSignature = ({ onSave }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -90,7 +98,7 @@ const EstimateApp = ({ userId }) => {
     const [exDate, setExDate] = useState(new Date().toISOString().split('T')[0]);
     const [exFile, setExFile] = useState(null);
 
-    // SETTINGS (DVLA KEY BAKED IN)
+    // SETTINGS
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -139,7 +147,7 @@ const EstimateApp = ({ userId }) => {
         let income = 0;
         let expense = 0;
 
-        // Sum Income (Only jobs with Invoice Numbers count as "Real" income, optional logic, usually total is fine)
+        // Sum Income
         history.forEach(h => {
             income += safeFloat(h.totals?.total);
         });
@@ -318,7 +326,7 @@ const EstimateApp = ({ userId }) => {
                         <input style={s.input} placeholder="Client Excess £" value={job.repair.excess} onChange={e=>setJob({...job, repair:{...job.repair, excess:e.target.value}})} />
                         <input style={s.input} placeholder="Invoice Date" value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} />
                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'20px'}}>
-                            <button style={s.btnG('#fff')} style={{...s.btnG('#fff'), color:'#000'}} onClick={()=>openDocument('INVOICE', 'FULL')}>FULL INVOICE</button>
+                            <button style={{...s.btnG('#fff'), color:'#000'}} onClick={()=>openDocument('INVOICE', 'FULL')}>FULL INVOICE</button>
                             <button style={s.btnG(theme.danger)} onClick={()=>openDocument('INVOICE', 'EXCESS')}>EXCESS INV</button>
                             <button style={s.btnG(theme.deal)} onClick={()=>openDocument('INVOICE', 'INSURER')}>INSURER INV</button>
                             <button style={s.btnG(theme.work)} onClick={()=>openDocument('JOB CARD', 'FULL')}>JOB CARD</button>
@@ -433,7 +441,7 @@ const EstimateApp = ({ userId }) => {
                         </div>
                         
                         <table style={{width:'100%', marginTop:'30px', borderCollapse:'collapse'}}>
-                            <thead><tr style={{background:'#eee'}}><th style={{textAlign:'left', padding:'10px'}}>Description</th><th style={{textAlign:'right', padding:'10px'}}>Cost</th></tr></thead>
+                            <thead><tr style={{background:'#eee', borderBottom:'2px solid #333'}}><th style={{textAlign:'left', padding:'10px'}}>Description</th><th style={{textAlign:'right', padding:'10px'}}>Cost</th></tr></thead>
                             <tbody>
                                 {printMode !== 'EXCESS' && (
                                     <>
