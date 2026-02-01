@@ -91,12 +91,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v400_CLEAN');
+        const saved = localStorage.getItem('mmm_v420_CENTERED');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v400_CLEAN', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v420_CENTERED', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -108,7 +108,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v400_CLEAN');
+            localStorage.removeItem('mmm_v420_CENTERED');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -154,16 +154,12 @@ const EstimateApp = ({ userId }) => {
             await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
+        // SET TITLE HERE (BEFORE PRINT)
+        const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
+        document.title = filename;
+
         setView('PREVIEW');
         window.scrollTo(0,0);
-    };
-
-    // --- STEP 2: PRINT ---
-    const triggerPrint = () => {
-        const filename = `${job.vehicle.reg || 'DOC'}_${job.invoiceNo || 'EST'}_${docType}`;
-        document.title = filename;
-        window.print();
-        setTimeout(() => document.title = "Triple MMM", 2000);
     };
 
     const downloadCSV = () => {
@@ -239,8 +235,9 @@ const EstimateApp = ({ userId }) => {
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {/* FLOATING ACTION BAR */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
-                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'24px', fontWeight:'900'}} onClick={triggerPrint}>🖨️ PRINT / PDF</button>
-                    <button style={{...s.btnG('#333'), flex:1, fontSize:'20px'}} onClick={() => setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST')}>BACK</button>
+                    {/* RAW PRINT COMMAND - NO LOGIC - PURE CLICK */}
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'24px', fontWeight:'900'}} onClick={() => window.print()}>🖨️ PRINT / PDF</button>
+                    <button style={{...s.btnG('#333'), flex:1, fontSize:'20px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
                 </div>
 
                 <div style={{padding:'120px 40px 40px 40px'}}>
@@ -263,16 +260,16 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     </div>
 
-                    {/* CONTENT - SATISFACTION NOTE */}
+                    {/* CONTENT SWAP */}
                     {docType === 'SATISFACTION NOTE' ? (
-                        <div style={{marginTop:'40px'}}>
+                        <div style={{marginTop:'40px', maxWidth:'800px', marginLeft:'auto', marginRight:'auto'}}>
                             <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px', textAlign:'center'}}>SATISFACTION NOTE</h1>
-                            <div style={{border:'2px solid #000', padding:'15px', borderRadius:'10px', marginBottom:'30px', background:'#f8f8f8'}}>
+                            <div style={{border:'2px solid #000', padding:'15px', borderRadius:'10px', marginBottom:'30px', background:'#f8f8f8', maxWidth:'600px', margin:'0 auto'}}>
                                 <table style={{width:'100%', fontSize:'16px', fontWeight:'bold'}}>
                                     <tbody>
-                                        <tr><td style={{padding:'8px', width:'150px'}}>VEHICLE:</td><td>{job.vehicle.make} {job.vehicle.year}</td></tr>
-                                        <tr><td style={{padding:'8px'}}>REGISTRATION:</td><td>{job.vehicle.reg}</td></tr>
-                                        {job.insurance.claim && <tr><td style={{padding:'8px'}}>CLAIM REF:</td><td>{job.insurance.claim}</td></tr>}
+                                        <tr><td style={{padding:'8px', width:'150px', textAlign:'right'}}>VEHICLE:</td><td style={{padding:'8px'}}>{job.vehicle.make} {job.vehicle.year}</td></tr>
+                                        <tr><td style={{padding:'8px', textAlign:'right'}}>REGISTRATION:</td><td style={{padding:'8px'}}>{job.vehicle.reg}</td></tr>
+                                        {job.insurance.claim && <tr><td style={{padding:'8px', textAlign:'right'}}>CLAIM REF:</td><td style={{padding:'8px'}}>{job.insurance.claim}</td></tr>}
                                     </tbody>
                                 </table>
                             </div>
@@ -283,7 +280,6 @@ const EstimateApp = ({ userId }) => {
                             </div>
                         </div>
                     ) : (
-                        /* CONTENT - INVOICE / JOB CARD */
                         <div>
                             <table style={{width:'100%', marginTop:'10px', borderCollapse:'collapse', fontSize:'12px'}}>
                                 <thead><tr style={{background:'#eee', borderBottom:'2px solid #ddd'}}><th style={{padding:'8px', textAlign:'left'}}>Task / Description</th><th style={{padding:'8px', textAlign:'right'}}>{docType === 'JOB CARD' ? 'Check' : 'Amount'}</th></tr></thead>
