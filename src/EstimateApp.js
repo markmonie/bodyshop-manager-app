@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME (RESTORED ORIGINAL) ---
+// --- THEME ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -37,7 +37,7 @@ const s = {
 const LoadingOverlay = () => (
     <div style={s.loader}>
         <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '50px', height: '50px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
-        CONNECTING...
+        PROCESSING...
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
 );
@@ -101,12 +101,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v460_FINAL');
+        const saved = localStorage.getItem('mmm_v510_LOGIC');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v460_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v510_LOGIC', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -118,7 +118,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v460_FINAL');
+            localStorage.removeItem('mmm_v510_LOGIC');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -147,7 +147,7 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- STEP 1: PREPARE VIEW ---
+    // --- STEP 1: PREPARE VIEW & SET FILENAME ---
     const openDocument = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -164,49 +164,54 @@ const EstimateApp = ({ userId }) => {
             await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
-        const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
+        // --- LOGIC: FILENAME SET ---
+        const cleanDate = (today).replace(/\//g, '-');
+        const filename = `${cleanDate}_${job.vehicle.reg || 'REG'}_${currentInvoiceNo || 'DOC'}`;
         document.title = filename;
 
         setView('PREVIEW');
         window.scrollTo(0,0);
     };
 
-    // --- DVLA PROXY ROTATOR ---
+    // --- LOGIC: DVLA FETCH (SINGLE SOURCE OF TRUTH) ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Enter Reg & Check API Key"); return; }
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         
-        const proxies = ['https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
+        // Single, reliable proxy endpoint. If this fails, we fall back to manual.
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        
-        let success = false;
-        let data = null;
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
 
-        for (const proxy of proxies) {
-            if(success) break;
-            try {
-                const response = await fetch(proxy + encodeURIComponent(targetUrl), {
-                    method: 'POST',
-                    headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ registrationNumber: cleanReg })
-                });
-                if (response.ok) {
-                    data = await response.json();
-                    success = true;
-                }
-            } catch (e) { console.warn(`Proxy failed.`); }
+        try {
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ registrationNumber: cleanReg })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setJob(prev => ({
+                    ...prev, 
+                    lastSuccess: new Date().toLocaleString('en-GB'),
+                    vehicle: {
+                        ...prev.vehicle, 
+                        make: data.make, 
+                        year: data.yearOfManufacture, 
+                        colour: data.colour, 
+                        fuel: data.fuelType, 
+                        engine: data.engineCapacity, 
+                        mot: data.motStatus, 
+                        motExpiry: data.motExpiryDate
+                    }
+                }));
+            } else {
+                throw new Error("API Blocked");
+            }
+        } catch (e) {
+            alert("Vehicle lookup failed. Please enter details manually.");
         }
-
-        if (success && data) {
-            setJob(prev => ({
-                ...prev, lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: {
-                    ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType, 
-                    engine: data.engineCapacity, mot: data.motStatus, motExpiry: data.motExpiryDate
-                }
-            }));
-        } else { alert("DVLA Lookup Failed. Enter manually."); }
         setLoading(false);
     };
 
@@ -251,7 +256,7 @@ const EstimateApp = ({ userId }) => {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
-                {/* FLOATING ACTION BAR - SPLIT BUTTONS */}
+                {/* FLOATING ACTION BAR - LOGIC: PURE NATIVE PRINT */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
                     <button style={{...s.btnG('#fff'), color:'#000', flex:1, fontSize:'20px', fontWeight:'900'}} onClick={() => window.print()}>🖨️ PRINT</button>
                     <button style={{...s.btnG('#f97316'), color:'#fff', flex:1, fontSize:'20px', fontWeight:'900'}} onClick={() => window.print()}>📄 SAVE PDF</button>
@@ -536,10 +541,10 @@ const EstimateApp = ({ userId }) => {
                             <input style={s.input} type="number" value={settings.invoiceCount} onChange={e=>setSettings({...settings, invoiceCount:e.target.value})} />
                             <span style={s.label}>Company Logo</span>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'logoUrl')} style={{marginBottom:'20px', color:'#fff'}} />
-                            {settings.logoUrl && <img src={settings.logoUrl} style={{height:'100px', display:'block', marginBottom:'20px'}} alt="Logo" />}
+                            {settings.logoUrl && <img src={settings.logoUrl} style={{height:'100px', display:'block', marginBottom:'20px'}} />}
                             <span style={s.label}>PayPal QR Code</span>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'branding', 'paypalQr')} style={{marginBottom:'20px', color:'#fff'}} />
-                            {settings.paypalQr && <img src={settings.paypalQr} style={{height:'100px', display:'block', marginBottom:'20px'}} alt="QR" />}
+                            {settings.paypalQr && <img src={settings.paypalQr} style={{height:'100px', display:'block', marginBottom:'20px'}} />}
                             <span style={s.label}>Terms & Conditions (Auto-Attaches)</span>
                             <textarea style={s.textarea} value={settings.terms} onChange={e=>setSettings({...settings, terms:e.target.value})} placeholder="Enter T&Cs here..." />
                             <button style={{...s.btnG(theme.deal), width:'100%', padding:'35px'}} onClick={async () => { setLoading(true); await setDoc(doc(db, 'settings', 'global'), settings); setLoading(false); alert("Settings Locked."); }}>SAVE GLOBAL SETTINGS</button>
