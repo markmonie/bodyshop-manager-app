@@ -89,10 +89,11 @@ const EstimateApp = ({ userId }) => {
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
+    // --- SETTINGS (DVLA Key removed/dormant) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
+        dvlaKey: '', // Key removed here
         logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
@@ -481,6 +482,22 @@ const EstimateApp = ({ userId }) => {
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => openDocument('ESTIMATE', 'FULL')}>VIEW ESTIMATE</button>
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px', background:'#f59e0b', color:'black'}} onClick={() => openDocument('JOB CARD', 'FULL')}>VIEW JOB CARD</button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SATISFACTION NOTE */}
+                {view === 'SAT' && (
+                    <div style={{maxWidth:'850px', margin:'0 auto'}}>
+                        <HeaderNav />
+                        <div style={s.card(theme.deal)}>
+                            <h1 style={{textAlign:'center', color:theme.deal}}>SATISFACTION NOTE</h1>
+                            <div style={{marginBottom:'30px', fontSize:'18px', lineHeight:'1.6'}}>
+                                <p>I hereby confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
+                                <p><strong>Client:</strong> {job.client.name}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                            </div>
+                            <NativeSignature onSave={(sig) => setJob({...job, vault: {...job.vault, signature: sig}})} />
+                            <button style={{...s.btnG(theme.deal), width:'100%'}} onClick={() => openDocument('SATISFACTION NOTE', 'FULL')}>VIEW NOTE</button>
                         </div>
                     </div>
                 )}
