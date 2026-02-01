@@ -89,11 +89,11 @@ const EstimateApp = ({ userId }) => {
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
-    // --- SETTINGS (DVLA Key removed/dormant) ---
+    // --- SETTINGS (DVLA Key DORMANT) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: '', // Key removed here
+        dvlaKey: '', 
         logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
