@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V300 CLASSIC) ---
+// --- THEME: TITAN TUNGSTEN (V310 GHOST PROTOCOL) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -61,11 +61,11 @@ const NativeSignature = ({ onSave }) => {
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
-    const [docType, setDocType] = useState('ESTIMATE'); 
-    const [printMode, setPrintMode] = useState('FULL'); 
-    const [history, setHistory] = useState([]);
     
-    // --- STATE VARIABLES ---
+    // --- PRINT ENGINE STATE (GHOST PROTOCOL) ---
+    const [printConfig, setPrintConfig] = useState({ type: 'ESTIMATE', mode: 'FULL' });
+    
+    const [history, setHistory] = useState([]);
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
@@ -91,12 +91,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v300_CLASSIC');
+        const saved = localStorage.getItem('mmm_v310_GHOST');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v300_CLASSIC', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v310_GHOST', JSON.stringify(job)); }, [job]);
 
     // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
@@ -108,8 +108,8 @@ const EstimateApp = ({ userId }) => {
 
     // --- JOB MANAGEMENT ---
     const resetJob = () => {
-        if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
-            localStorage.removeItem('mmm_v300_CLASSIC');
+        if(window.confirm("⚠️ Clear all fields?")) {
+            localStorage.removeItem('mmm_v310_GHOST');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -148,34 +148,35 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- V300: CLASSIC PRINT ENGINE (DIRECT EXECUTION) ---
+    // --- V310: GHOST PRINT ENGINE (INSTANT FIRE) ---
     const handlePrint = async (type, mode = 'FULL') => {
-        setDocType(type);
-        setPrintMode(mode);
+        // 1. Set the Hidden Ghost Document
+        setPrintConfig({ type, mode });
         
         let currentInvoiceNo = job.invoiceNo;
+        const today = new Date().toLocaleDateString('en-GB');
 
-        // AUTO-ASSIGN INVOICE NUMBER
+        // 2. Invoice Logic (Instant Save)
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
-            setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo }));
+            setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
             setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
             
-            // Fire and forget save (don't block UI)
+            // Fire & Forget Database Saves
             setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
-            setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, totals }, { merge: true });
+            setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
-        // AUTO-NAME PDF
+        // 3. Name the File
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
 
-        // DIRECT FIRE - NO PREVIEW SCREEN, JUST PRINT
+        // 4. INSTANT FIRE (50ms) - Beats the Popup Blocker
         setTimeout(() => {
             window.print();
             setTimeout(() => document.title = "Triple MMM", 2000);
-        }, 500);
+        }, 50);
     };
 
     // --- CSV EXPORT ---
@@ -190,16 +191,8 @@ const EstimateApp = ({ userId }) => {
             (h.repair?.excess || 0),
             h.status
         ]);
-        
-        const csvContent = "data:text/csv;charset=utf-8," 
-            + headers.join(",") + "\n" 
-            + rows.map(e => e.join(",")).join("\n");
-            
-        const link = document.createElement("a");
-        link.setAttribute("href", encodeURI(csvContent));
-        link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`);
-        document.body.appendChild(link);
-        link.click();
+        const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
     // --- DVLA HANDSHAKE ---
@@ -256,7 +249,6 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
 
-    // --- STANDARD HUB RENDERER ---
     return (
         <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '180px' }}>
             <div className="no-print">
@@ -470,22 +462,22 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT ENGINE (V5.0: NO MARGIN LOCK + JOB CARD + INSTANT PRINT) */}
+            {/* PRINT ENGINE: GHOST DOCUMENT (HIDDEN UNTIL PRINTED) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
                         {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} />}
                         {/* HIDE CO NAME ON JOB CARD */}
-                        {docType !== 'JOB CARD' && <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>}
+                        {printConfig.type !== 'JOB CARD' && <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>}
                         <p style={{fontSize:'12px', lineHeight:'1.4'}}>{settings.address}<br/>{settings.phone}</p>
                     </div>
                     <div style={{textAlign:'right', flex:1}}>
-                        <h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{docType === 'JOB CARD' ? 'WORKSHOP JOB CARD' : printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
+                        <h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{printConfig.type === 'JOB CARD' ? 'WORKSHOP JOB CARD' : printConfig.mode === 'EXCESS' ? 'INVOICE (EXCESS)' : printConfig.type}</h2>
                         <p style={{fontSize:'16px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate || new Date().toLocaleDateString()}</p>
                         
-                        {job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
+                        {job.invoiceNo && printConfig.type === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
                         
-                        {docType === 'JOB CARD' && (
+                        {printConfig.type === 'JOB CARD' && (
                             <div style={{marginTop:'10px', fontSize:'14px', fontWeight:'bold', border:'1px solid black', padding:'5px'}}>
                                 Mileage: {job.vehicle.mileage || '_______'} | Fuel: {job.vehicle.fuelLevel || '_______'}
                             </div>
@@ -493,7 +485,7 @@ const EstimateApp = ({ userId }) => {
 
                         <div style={{marginTop:'15px', fontSize:'12px', borderTop:'2px solid #ddd', paddingTop:'10px'}}>
                             <strong>BILL TO:</strong><br/>
-                            {printMode === 'INSURER' ? (
+                            {printConfig.mode === 'INSURER' ? (
                                 <>
                                     {job.insurance.name || 'Insurance Co.'}<br/>
                                     {job.insurance.address}<br/>
@@ -511,7 +503,7 @@ const EstimateApp = ({ userId }) => {
                     </div>
                 </div>
 
-                {docType === 'SATISFACTION NOTE' ? (
+                {printConfig.type === 'SATISFACTION NOTE' ? (
                     <div style={{marginTop:'60px', textAlign:'center'}}>
                         <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
                         <p style={{fontSize:'20px', lineHeight:'1.8'}}>I, <strong>{job.client.name}</strong>, confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
@@ -521,15 +513,15 @@ const EstimateApp = ({ userId }) => {
                 ) : (
                     <>
                         <table style={{width:'100%', marginTop:'10px', borderCollapse:'collapse', fontSize:'12px'}}>
-                            <thead><tr style={{background:'#eee', borderBottom:'2px solid #ddd'}}><th style={{padding:'8px', textAlign:'left'}}>Task / Description</th><th style={{padding:'8px', textAlign:'right'}}>{docType === 'JOB CARD' ? 'Check' : 'Amount'}</th></tr></thead>
+                            <thead><tr style={{background:'#eee', borderBottom:'2px solid #ddd'}}><th style={{padding:'8px', textAlign:'left'}}>Task / Description</th><th style={{padding:'8px', textAlign:'right'}}>{printConfig.type === 'JOB CARD' ? 'Check' : 'Amount'}</th></tr></thead>
                             <tbody>
-                                {printMode !== 'EXCESS' && (
+                                {printConfig.mode !== 'EXCESS' && (
                                     <>
                                         {(job.repair.items || []).map((it, i) => (
                                             <tr key={i} style={{borderBottom:'1px solid #eee'}}>
                                                 <td style={{padding:'8px'}}>{it.desc}</td>
                                                 <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>
-                                                    {docType === 'JOB CARD' ? '[   ]' : `£${(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}`}
+                                                    {printConfig.type === 'JOB CARD' ? '[   ]' : `£${(parseFloat(it.cost)*(1+(parseFloat(settings.markup)/100))).toFixed(2)}`}
                                                 </td>
                                             </tr>
                                         ))}
@@ -538,7 +530,7 @@ const EstimateApp = ({ userId }) => {
                                              <tr style={{borderBottom:'1px solid #eee'}}>
                                                  <td style={{padding:'8px'}}>Paint & Materials</td>
                                                  <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>
-                                                     {docType === 'JOB CARD' ? '[   ]' : `£${parseFloat(job.repair.paintMats).toFixed(2)}`}
+                                                     {printConfig.type === 'JOB CARD' ? '[   ]' : `£${parseFloat(job.repair.paintMats).toFixed(2)}`}
                                                  </td>
                                              </tr>
                                         )}
@@ -546,11 +538,11 @@ const EstimateApp = ({ userId }) => {
                                         <tr>
                                             <td style={{padding:'8px'}}>Qualified Bodywork Labour ({totals.lHrs} hrs)</td>
                                             <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>
-                                                {docType === 'JOB CARD' ? '[   ]' : `£${totals.lPrice.toFixed(2)}`}
+                                                {printConfig.type === 'JOB CARD' ? '[   ]' : `£${totals.lPrice.toFixed(2)}`}
                                             </td>
                                         </tr>
                                         
-                                        {docType !== 'JOB CARD' && (
+                                        {printConfig.type !== 'JOB CARD' && (
                                             <>
                                                 <tr style={{borderTop:'2px solid #777'}}><td style={{padding:'8px', textAlign:'right', fontWeight:'bold'}}>Net Subtotal:</td><td style={{textAlign:'right', padding:'8px'}}>£{(totals.total / (1 + (parseFloat(settings.vatRate)/100))).toFixed(2)}</td></tr>
                                                 <tr><td style={{padding:'8px', textAlign:'right'}}>VAT @ {settings.vatRate}%:</td><td style={{textAlign:'right', padding:'8px'}}>£{(totals.total - (totals.total / (1 + (parseFloat(settings.vatRate)/100)))).toFixed(2)}</td></tr>
@@ -558,13 +550,13 @@ const EstimateApp = ({ userId }) => {
                                         )}
                                     </>
                                 )}
-                                {printMode === 'EXCESS' && (
+                                {printConfig.mode === 'EXCESS' && (
                                     <tr><td style={{padding:'8px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>
                                 )}
                             </tbody>
                         </table>
 
-                        {docType === 'JOB CARD' ? (
+                        {printConfig.type === 'JOB CARD' ? (
                             <div style={{marginTop:'30px', border:'2px dashed #333', padding:'20px'}}>
                                 <h3 style={{marginTop:0}}>INTERNAL TECH NOTES:</h3>
                                 <p style={{fontSize:'16px', whiteSpace:'pre-wrap'}}>{job.repair.techNotes || 'No notes added.'}</p>
@@ -578,15 +570,15 @@ const EstimateApp = ({ userId }) => {
                                 </div>
                                 <div style={{flex:1, textAlign:'right'}}>
                                     <h1 style={{fontSize:'45px', margin:0, color:'#f97316'}}>
-                                        £{printMode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printMode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}
+                                        £{printConfig.mode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printConfig.mode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}
                                     </h1>
-                                    {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Less Client Excess of £{job.repair.excess}</div>}
+                                    {printConfig.mode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Less Client Excess of £{job.repair.excess}</div>}
                                 </div>
                             </div>
                         )}
 
-                        {/* HIDE TERMS ON JOB CARD */}
-                        {docType !== 'JOB CARD' && settings.terms && (
+                        {/* T&Cs - HIDDEN FOR JOB CARD */}
+                        {printConfig.type !== 'JOB CARD' && settings.terms && (
                             <div style={{pageBreakBefore: 'always', paddingTop: '20px'}}>
                                 <h2 style={{color:'#f97316', borderBottom:'4px solid #f97316', paddingBottom:'10px', fontSize:'18px', margin:0}}>TERMS & CONDITIONS</h2>
                                 <div style={{columnCount: 2, columnGap: '30px', fontSize:'10px', lineHeight:'1.4', marginTop:'15px', whiteSpace: 'pre-wrap'}}>
