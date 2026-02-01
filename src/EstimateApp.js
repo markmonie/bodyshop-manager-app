@@ -101,12 +101,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v460_FINAL');
+        const saved = localStorage.getItem('mmm_v470_FILE');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v460_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v470_FILE', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -118,7 +118,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v460_FINAL');
+            localStorage.removeItem('mmm_v470_FILE');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -147,7 +147,7 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- STEP 1: PREPARE VIEW ---
+    // --- STEP 1: PREPARE VIEW & SET FILENAME ---
     const openDocument = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -164,7 +164,9 @@ const EstimateApp = ({ userId }) => {
             await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
-        const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
+        // --- FILENAME GENERATION (Date_Reg_Doc#) ---
+        const cleanDate = (today).replace(/\//g, '-');
+        const filename = `${cleanDate}_${job.vehicle.reg || 'REG'}_${currentInvoiceNo || 'DOC'}`;
         document.title = filename;
 
         setView('PREVIEW');
@@ -487,9 +489,9 @@ const EstimateApp = ({ userId }) => {
 
                             <span style={s.label}>PRINT OPTIONS</span>
                             <div style={{display:'flex', flexWrap:'wrap', gap:'10px', marginTop:'10px'}}>
-                                <button style={{...s.btnG('#333'), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'FULL')}>FULL INVOICE</button>
-                                <button style={{...s.btnG(theme.deal), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'INSURER')}>INSURER (NET)</button>
-                                <button style={{...s.btnG(theme.danger), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'EXCESS')}>CUST EXCESS</button>
+                                <button style={{...s.btnG('#333'), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'FULL')}>VIEW FULL INVOICE</button>
+                                <button style={{...s.btnG(theme.deal), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'INSURER')}>VIEW INSURER (NET)</button>
+                                <button style={{...s.btnG(theme.danger), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'EXCESS')}>VIEW CUST EXCESS</button>
                             </div>
                             <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => openDocument('ESTIMATE', 'FULL')}>VIEW ESTIMATE</button>
