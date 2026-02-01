@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V280 DIRECT FIRE) ---
+// --- THEME: TITAN TUNGSTEN (V290 STABLE) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -89,12 +89,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v280_DIRECT');
+        const saved = localStorage.getItem('mmm_v290_STABLE');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v280_DIRECT', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v290_STABLE', JSON.stringify(job)); }, [job]);
 
     // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
@@ -107,7 +107,7 @@ const EstimateApp = ({ userId }) => {
     // --- JOB MANAGEMENT ---
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
-            localStorage.removeItem('mmm_v280_DIRECT');
+            localStorage.removeItem('mmm_v290_STABLE');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -146,7 +146,7 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- KIOSK MODE PRINT ENGINE (DIRECT FIRE) ---
+    // --- PRINT ENGINE (DIRECT FIRE - NO TIMEOUTS) ---
     const preparePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -168,7 +168,7 @@ const EstimateApp = ({ userId }) => {
     const triggerSystemPrint = () => {
         const filename = `${job.vehicle.reg || 'DOC'}_${job.invoiceNo || 'EST'}_${docType}`;
         document.title = filename;
-        // DIRECT FIRE: No timeouts, no focus logic. Just go.
+        // DIRECT FIRE: Browser handles this immediately
         window.print();
         setTimeout(() => document.title = "Triple MMM", 2000);
     };
@@ -251,7 +251,7 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
 
-    // --- PREVIEW RENDERER (DIRECT FIRE) ---
+    // --- PREVIEW RENDERER ---
     if (view === 'PREVIEW') {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
