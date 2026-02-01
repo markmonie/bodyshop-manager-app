@@ -30,14 +30,13 @@ const s = {
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
-    traffic: (active, color) => ({ width: '50px', height: '50px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' }),
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
 const LoadingOverlay = () => (
     <div style={s.loader}>
         <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '50px', height: '50px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
-        PROCESSING...
+        SAVING...
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
 );
@@ -83,7 +82,7 @@ const EstimateApp = ({ userId }) => {
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
+        dvlaKey: '', logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
     });
@@ -101,12 +100,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v510_LOGIC');
+        const saved = localStorage.getItem('mmm_v520_MANUAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v510_LOGIC', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v520_MANUAL', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -118,7 +117,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v510_LOGIC');
+            localStorage.removeItem('mmm_v520_MANUAL');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -164,55 +163,12 @@ const EstimateApp = ({ userId }) => {
             await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
-        // --- LOGIC: FILENAME SET ---
-        const cleanDate = (today).replace(/\//g, '-');
-        const filename = `${cleanDate}_${job.vehicle.reg || 'REG'}_${currentInvoiceNo || 'DOC'}`;
+        const safeDate = (today).replace(/\//g, '-');
+        const filename = `${safeDate}_${job.vehicle.reg || 'REG'}_${currentInvoiceNo || 'DOC'}`;
         document.title = filename;
 
         setView('PREVIEW');
         window.scrollTo(0,0);
-    };
-
-    // --- LOGIC: DVLA FETCH (SINGLE SOURCE OF TRUTH) ---
-    const runDVLA = async () => {
-        if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Enter Reg & Check API Key"); return; }
-        setLoading(true);
-        const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        
-        // Single, reliable proxy endpoint. If this fails, we fall back to manual.
-        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
-
-        try {
-            const response = await fetch(proxyUrl, {
-                method: 'POST',
-                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ registrationNumber: cleanReg })
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                setJob(prev => ({
-                    ...prev, 
-                    lastSuccess: new Date().toLocaleString('en-GB'),
-                    vehicle: {
-                        ...prev.vehicle, 
-                        make: data.make, 
-                        year: data.yearOfManufacture, 
-                        colour: data.colour, 
-                        fuel: data.fuelType, 
-                        engine: data.engineCapacity, 
-                        mot: data.motStatus, 
-                        motExpiry: data.motExpiryDate
-                    }
-                }));
-            } else {
-                throw new Error("API Blocked");
-            }
-        } catch (e) {
-            alert("Vehicle lookup failed. Please enter details manually.");
-        }
-        setLoading(false);
     };
 
     const downloadCSV = () => {
@@ -226,7 +182,9 @@ const EstimateApp = ({ userId }) => {
     };
 
     const saveMaster = async () => {
+        setLoading(true);
         await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
+        setLoading(false);
         alert("Master File Saved.");
     };
 
@@ -256,7 +214,7 @@ const EstimateApp = ({ userId }) => {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
-                {/* FLOATING ACTION BAR - LOGIC: PURE NATIVE PRINT */}
+                {/* FLOATING ACTION BAR - SPLIT BUTTONS */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
                     <button style={{...s.btnG('#fff'), color:'#000', flex:1, fontSize:'20px', fontWeight:'900'}} onClick={() => window.print()}>🖨️ PRINT</button>
                     <button style={{...s.btnG('#f97316'), color:'#fff', flex:1, fontSize:'20px', fontWeight:'900'}} onClick={() => window.print()}>📄 SAVE PDF</button>
@@ -410,7 +368,7 @@ const EstimateApp = ({ userId }) => {
                             <span style={s.label}>Technical ID</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}>
                                 <input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
-                                <button style={{...s.btnG(theme.hub), flex:1, fontSize:'20px'}} onClick={runDVLA}>FIND</button>
+                                {/* MANUAL INPUT - NO DVLA BUTTON */}
                             </div>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                                 <div><span style={s.label}>MAKE</span><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} /></div>
