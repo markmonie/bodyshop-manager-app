@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME & STYLES ---
+// --- THEME ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -27,19 +27,11 @@ const s = {
     textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
-    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none', touchAction: 'manipulation' }),
+    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.1s', fontSize: '16px', flexShrink: 0, userSelect: 'none', touchAction: 'manipulation' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
-
-const LoadingOverlay = () => (
-    <div style={s.loader}>
-        <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '60px', height: '60px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
-        PROCESSING...
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-    </div>
-);
 
 const NativeSignature = ({ onSave }) => {
     const canvasRef = useRef(null);
@@ -70,15 +62,12 @@ const NativeSignature = ({ onSave }) => {
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
-    
-    // --- STATE VARIABLES ---
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
-    // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -100,14 +89,13 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v600_MASTER');
+        const saved = localStorage.getItem('mmm_v610_PRO');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v600_MASTER', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v610_PRO', JSON.stringify(job)); }, [job]);
 
-    // --- LOGIC ---
     const checkClientMatch = (name) => {
         if(!name || name.length < 3) { setClientMatch(null); return; }
         const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
@@ -117,7 +105,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v600_MASTER');
+            localStorage.removeItem('mmm_v610_PRO');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -146,7 +134,6 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- CSV LOGIC (DEFINED GLOBALLY WITHIN EstimateApp) ---
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
         const rows = history.map(h => [
@@ -157,7 +144,6 @@ const EstimateApp = ({ userId }) => {
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
-    // --- DVLA LOGIC ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Check Reg & API Key"); return; }
         setLoading(true);
@@ -185,7 +171,6 @@ const EstimateApp = ({ userId }) => {
         setLoading(false);
     };
 
-    // --- PREPARE VIEW ---
     const openDocument = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -229,7 +214,6 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
 
-    // --- RENDER VIEW: PREVIEW ---
     if (view === 'PREVIEW') {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
@@ -300,7 +284,7 @@ const EstimateApp = ({ userId }) => {
                             {docType === 'JOB CARD' ? (
                                 <div style={{marginTop:'30px', border:'2px dashed #333', padding:'20px'}}>
                                     <h3 style={{marginTop:0}}>INTERNAL TECH NOTES:</h3>
-                                    <p style={{fontSize:'16px', whiteSpace:'pre-wrap'}}>{job.repair.techNotes || 'No notes added.'}</p>
+                                    <p style={{fontSize:'16px', whiteSpace:'pre-wrap'}}>{job.repair.techNotes || 'No notes.'}</p>
                                     <div style={{marginTop:'50px', borderTop:'1px solid black', width:'200px'}}>Quality Checked By</div>
                                 </div>
                             ) : (
@@ -328,14 +312,13 @@ const EstimateApp = ({ userId }) => {
                     <button style={{...s.btnG(theme.hub), width:'100%', fontSize:'26px', padding:'30px', border:'5px solid #fff'}} onClick={() => window.print()}>🖨️ OPEN PRINTER</button>
                 </div>
                 <style>{`
-                    @media screen { body { background: #fff !important; } }
+                    @media screen { body { background: #fff !important; } .btn-print-active { transform: scale(0.95); opacity: 0.8; } }
                     @media print { .no-print { display: none !important; } body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
                 `}</style>
             </div>
         );
     }
 
-    // --- RENDER VIEW: HUB ---
     return (
         <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '180px' }}>
             {loading && <LoadingOverlay />}
@@ -469,11 +452,11 @@ const EstimateApp = ({ userId }) => {
                             <div key={h.id} style={{...s.card('#333'), display:'flex', justifyContent:'space-between', alignItems:'center', padding:'25px'}}>
                                 <div>
                                     <h2 style={{margin:0, color:theme.hub}}>{h.vehicle?.reg || 'UNKNOWN'}</h2>
-                                    <p style={{margin:0}}>{h.client?.name} | {new Date(h.createdAt?.seconds * 1000).toLocaleDateString()}</p>
+                                    <p style={{margin:0}}>{h.client?.name}</p>
                                 </div>
                                 <div style={{display:'flex', gap:'10px'}}>
-                                    <button style={{...s.btnG(theme.deal), padding:'10px 20px', fontSize:'14px'}} onClick={() => loadJob(h)}>OPEN</button>
-                                    <button style={{...s.btnG(theme.danger), padding:'10px 20px', fontSize:'14px'}} onClick={() => deleteJob(h.id)}>DEL</button>
+                                    <button style={{...s.btnG(theme.deal), padding:'10px 20px'}} onClick={() => loadJob(h)}>OPEN</button>
+                                    <button style={{...s.btnG(theme.danger), padding:'10px 20px'}} onClick={() => deleteJob(h.id)}>DEL</button>
                                 </div>
                             </div>
                         ))}
@@ -489,8 +472,8 @@ const EstimateApp = ({ userId }) => {
                                 <div style={s.displayBox}><span style={s.label}>RECEIPTS</span><div style={{fontSize:'40px', fontWeight:'900', color:theme.danger}}>{job.vault?.expenses?.length || 0}</div></div>
                             </div>
                             <button style={{...s.btnG(theme.fin), width:'100%', marginBottom:'30px'}} onClick={downloadCSV}>TAX LEDGER (CSV)</button>
-                            <input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} style={{marginBottom:'20px'}} />
-                            <div style={{display:'flex', gap:'10px', overflowX:'auto'}}>
+                            <input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} />
+                            <div style={{display:'flex', gap:'10px', overflowX:'auto', marginTop:'20px'}}>
                                 {(job.vault?.expenses || []).map((url, i) => <img key={i} src={url} style={{height:'100px', border:'2px solid #333'}} alt="Receipt" />)}
                             </div>
                         </div>
