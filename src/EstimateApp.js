@@ -89,7 +89,7 @@ const EstimateApp = ({ userId }) => {
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
-    // --- SETTINGS (DVLA Key INSERTED) ---
+    // --- SETTINGS (DVLA KEY HARDCODED) ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -209,12 +209,20 @@ const EstimateApp = ({ userId }) => {
     };
 
     const runDVLA = async () => {
-        if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Please enter Reg and ensure API Key is in Settings"); return; }
+        if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Please enter Reg"); return; }
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
+        
+        // --- UPDATED PROXY METHOD (CORSPROXY.IO) ---
+        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+
         try {
-            const response = await fetch(proxyUrl, { method: 'POST', headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' }, body: JSON.stringify({ registrationNumber: cleanReg }) });
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ registrationNumber: cleanReg })
+            });
             if (!response.ok) throw new Error(`Status ${response.status}`);
             const d = await response.json();
             if(d.errors) throw new Error(d.errors[0]?.detail || "DVLA Error");
