@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc, addDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V260 CERTIFIED) ---
+// --- THEME: TITAN TUNGSTEN (V270 FORCE TOUCH) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -64,8 +64,6 @@ const EstimateApp = ({ userId }) => {
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
-    
-    // --- STATE VARIABLES (VERIFIED PRESENT) ---
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
@@ -91,14 +89,14 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v260_CERTIFIED');
+        const saved = localStorage.getItem('mmm_v270_FORCE');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v260_CERTIFIED', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v270_FORCE', JSON.stringify(job)); }, [job]);
 
-    // --- CLIENT RECALL (VERIFIED) ---
+    // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
         if(!name || name.length < 3) { setClientMatch(null); return; }
         const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
@@ -106,10 +104,10 @@ const EstimateApp = ({ userId }) => {
     };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
 
-    // --- JOB MANAGEMENT (VERIFIED) ---
+    // --- JOB MANAGEMENT ---
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
-            localStorage.removeItem('mmm_v260_CERTIFIED');
+            localStorage.removeItem('mmm_v270_FORCE');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -148,11 +146,11 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- KIOSK MODE PRINT ENGINE (VERIFIED) ---
+    // --- KIOSK MODE PRINT ENGINE (FORCE TOUCH FIX) ---
     const preparePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
-        setView('PREVIEW'); // SWITCH TO PREVIEW MODE
+        setView('PREVIEW'); 
         
         let currentInvoiceNo = job.invoiceNo;
 
@@ -167,11 +165,19 @@ const EstimateApp = ({ userId }) => {
         window.scrollTo(0,0);
     };
 
-    const triggerSystemPrint = () => {
+    const triggerSystemPrint = (e) => {
+        if(e) e.preventDefault(); // Stop phantom clicks
         const filename = `${job.vehicle.reg || 'DOC'}_${job.invoiceNo || 'EST'}_${docType}`;
         document.title = filename;
-        window.print();
-        setTimeout(() => document.title = "Triple MMM", 2000);
+        
+        // FORCE FOCUS - Critical for Android Chrome
+        window.focus();
+        
+        // Short timeout to ensure focus registers
+        setTimeout(() => {
+            window.print();
+            setTimeout(() => document.title = "Triple MMM", 2000);
+        }, 50);
     };
 
     // --- CSV EXPORT ---
@@ -198,7 +204,7 @@ const EstimateApp = ({ userId }) => {
         link.click();
     };
 
-    // --- DVLA HANDSHAKE (PROXY VERIFIED) ---
+    // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
@@ -252,14 +258,14 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
 
-    // --- PREVIEW RENDERER (KIOSK MODE) ---
+    // --- PREVIEW RENDERER (V270 FORCE TOUCH) ---
     if (view === 'PREVIEW') {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {/* FLOATING ACTION BAR FOR MOBILE */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
-                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'20px'}} onClick={triggerSystemPrint}>🖨️ TAP TO PRINT PDF</button>
-                    <button style={{...s.btnG('#333'), flex:1, fontSize:'20px'}} onClick={() => setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST')}>CLOSE</button>
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'20px', touchAction:'manipulation'}} onClick={(e) => triggerSystemPrint(e)}>🖨️ TAP TO PRINT PDF</button>
+                    <button style={{...s.btnG('#333'), flex:1, fontSize:'20px', touchAction:'manipulation'}} onClick={() => setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST')}>CLOSE</button>
                 </div>
 
                 <div style={{padding:'100px 40px 40px 40px'}}>
@@ -418,7 +424,7 @@ const EstimateApp = ({ userId }) => {
                             <input style={{...s.input, border:`3px solid ${theme.work}`}} value={job.repair.paintMats} onChange={e=>setJob({...job, repair:{...job.repair, paintMats:e.target.value}})} placeholder="0.00" />
 
                             <span style={{...s.label, marginTop:'20px'}}>Parts / Line Items</span>
-                            {job.repair.items.map((it) => (
+                            {job.repair.items.map((it, i) => (
                                 <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
                                     <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item Description" onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} />
                                     <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} />
