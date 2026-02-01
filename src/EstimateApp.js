@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V270 FORCE TOUCH) ---
+// --- THEME: TITAN TUNGSTEN (V280 DIRECT FIRE) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -67,7 +67,7 @@ const EstimateApp = ({ userId }) => {
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
-    // --- SETTINGS (T&Cs + Invoice Counter) ---
+    // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -89,12 +89,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v270_FORCE');
+        const saved = localStorage.getItem('mmm_v280_DIRECT');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v270_FORCE', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v280_DIRECT', JSON.stringify(job)); }, [job]);
 
     // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
@@ -107,7 +107,7 @@ const EstimateApp = ({ userId }) => {
     // --- JOB MANAGEMENT ---
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields? Any unsaved data will be lost.")) {
-            localStorage.removeItem('mmm_v270_FORCE');
+            localStorage.removeItem('mmm_v280_DIRECT');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -146,7 +146,7 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- KIOSK MODE PRINT ENGINE (FORCE TOUCH FIX) ---
+    // --- KIOSK MODE PRINT ENGINE (DIRECT FIRE) ---
     const preparePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -165,19 +165,12 @@ const EstimateApp = ({ userId }) => {
         window.scrollTo(0,0);
     };
 
-    const triggerSystemPrint = (e) => {
-        if(e) e.preventDefault(); // Stop phantom clicks
+    const triggerSystemPrint = () => {
         const filename = `${job.vehicle.reg || 'DOC'}_${job.invoiceNo || 'EST'}_${docType}`;
         document.title = filename;
-        
-        // FORCE FOCUS - Critical for Android Chrome
-        window.focus();
-        
-        // Short timeout to ensure focus registers
-        setTimeout(() => {
-            window.print();
-            setTimeout(() => document.title = "Triple MMM", 2000);
-        }, 50);
+        // DIRECT FIRE: No timeouts, no focus logic. Just go.
+        window.print();
+        setTimeout(() => document.title = "Triple MMM", 2000);
     };
 
     // --- CSV EXPORT ---
@@ -258,13 +251,13 @@ const EstimateApp = ({ userId }) => {
         </div>
     );
 
-    // --- PREVIEW RENDERER (V270 FORCE TOUCH) ---
+    // --- PREVIEW RENDERER (DIRECT FIRE) ---
     if (view === 'PREVIEW') {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
-                {/* FLOATING ACTION BAR FOR MOBILE */}
+                {/* FLOATING ACTION BAR */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
-                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'20px', touchAction:'manipulation'}} onClick={(e) => triggerSystemPrint(e)}>🖨️ TAP TO PRINT PDF</button>
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'20px', touchAction:'manipulation'}} onClick={triggerSystemPrint}>🖨️ TAP TO PRINT PDF</button>
                     <button style={{...s.btnG('#333'), flex:1, fontSize:'20px', touchAction:'manipulation'}} onClick={() => setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST')}>CLOSE</button>
                 </div>
 
@@ -273,7 +266,8 @@ const EstimateApp = ({ userId }) => {
                     <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                         <div style={{flex:1}}>
                             {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} />}
-                            <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>
+                            {/* HIDE CO NAME ON JOB CARD */}
+                            {docType !== 'JOB CARD' && <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>}
                             <p style={{fontSize:'12px', lineHeight:'1.4'}}>{settings.address}<br/>{settings.phone}</p>
                         </div>
                         <div style={{textAlign:'right', flex:1}}>
@@ -339,7 +333,8 @@ const EstimateApp = ({ userId }) => {
                                 </div>
                             )}
 
-                            {settings.terms && (
+                            {/* HIDE TERMS ON JOB CARD */}
+                            {docType !== 'JOB CARD' && settings.terms && (
                                 <div style={{pageBreakBefore: 'always', paddingTop: '20px'}}>
                                     <h2 style={{color:'#f97316', borderBottom:'4px solid #f97316', paddingBottom:'10px', fontSize:'18px', margin:0}}>TERMS & CONDITIONS</h2>
                                     <div style={{columnCount: 2, columnGap: '30px', fontSize:'10px', lineHeight:'1.4', marginTop:'15px', whiteSpace: 'pre-wrap'}}>{settings.terms}</div>
@@ -425,7 +420,7 @@ const EstimateApp = ({ userId }) => {
 
                             <span style={{...s.label, marginTop:'20px'}}>Parts / Line Items</span>
                             {job.repair.items.map((it, i) => (
-                                <div key={it.id} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                                <div key={i} style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
                                     <input style={{...s.input, flex:3, marginBottom:0}} value={it.desc} placeholder="Item Description" onChange={(e) => updateLineItem(it.id, 'desc', e.target.value)} />
                                     <input style={{...s.input, flex:1, marginBottom:0}} value={it.cost} placeholder="£" onChange={(e) => updateLineItem(it.id, 'cost', e.target.value)} />
                                     <button style={{...s.btnG(theme.danger), padding:'15px'}} onClick={() => deleteLineItem(it.id)}>X</button>
