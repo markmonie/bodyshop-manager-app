@@ -30,6 +30,7 @@ const s = {
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
+    traffic: (active, color) => ({ width: '50px', height: '50px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' }),
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
@@ -100,12 +101,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v440_FINAL');
+        const saved = localStorage.getItem('mmm_v460_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v440_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v460_FINAL', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -117,7 +118,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v440_FINAL');
+            localStorage.removeItem('mmm_v460_FINAL');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -176,7 +177,6 @@ const EstimateApp = ({ userId }) => {
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         
-        // FAILOVER PROXY LIST
         const proxies = ['https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         
@@ -251,10 +251,10 @@ const EstimateApp = ({ userId }) => {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
-                {/* FLOATING ACTION BAR */}
+                {/* FLOATING ACTION BAR - SPLIT BUTTONS */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
-                    {/* NATIVE PRINT TRIGGER - NO LOGIC, NO FOCUS */}
-                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'24px', fontWeight:'900'}} onClick={window.print}>🖨️ PRINT / PDF</button>
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:1, fontSize:'20px', fontWeight:'900'}} onClick={() => window.print()}>🖨️ PRINT</button>
+                    <button style={{...s.btnG('#f97316'), color:'#fff', flex:1, fontSize:'20px', fontWeight:'900'}} onClick={() => window.print()}>📄 SAVE PDF</button>
                     <button style={{...s.btnG('#333'), flex:1, fontSize:'20px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
                 </div>
 
@@ -283,15 +283,15 @@ const EstimateApp = ({ userId }) => {
                         <div style={{marginTop:'40px', textAlign: 'center'}}>
                             <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
                             
-                            {/* VEHICLE & CLAIM BOX - CENTERED */}
+                            {/* VEHICLE & CLAIM BOX - CENTERED WITH DETAILS */}
                             <div style={{
                                 border:'2px solid #333', 
                                 padding:'20px', 
                                 borderRadius:'15px', 
                                 marginBottom:'40px', 
                                 background:'#f9f9f9', 
-                                display: 'inline-block', // This centers the box
-                                textAlign: 'left', // Keeps content aligned nicely
+                                display: 'inline-block', 
+                                textAlign: 'left', 
                                 minWidth: '500px'
                             }}>
                                 <table style={{width:'100%', fontSize:'18px', fontWeight:'bold'}}>
@@ -303,6 +303,14 @@ const EstimateApp = ({ userId }) => {
                                         <tr>
                                             <td style={{padding:'8px', textAlign:'right', color:'#666'}}>REGISTRATION:</td>
                                             <td style={{padding:'8px'}}>{job.vehicle.reg}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{padding:'8px', textAlign:'right', color:'#666'}}>INVOICE #:</td>
+                                            <td style={{padding:'8px'}}>{job.invoiceNo || 'PENDING'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{padding:'8px', textAlign:'right', color:'#666'}}>DATE:</td>
+                                            <td style={{padding:'8px'}}>{job.invoiceDate || new Date().toLocaleDateString()}</td>
                                         </tr>
                                         {job.insurance.claim && (
                                             <tr>
@@ -325,7 +333,6 @@ const EstimateApp = ({ userId }) => {
                                     <div style={{width:'300px', height:'100px', borderBottom:'2px solid #000'}}></div>
                                 )}
                                 <p style={{marginTop:'10px', fontSize:'18px', fontWeight:'bold'}}>SIGNED</p>
-                                <p style={{fontSize:'14px', color:'#666'}}>{new Date().toLocaleDateString()}</p>
                             </div>
                         </div>
                     ) : (
