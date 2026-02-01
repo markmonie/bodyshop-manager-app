@@ -101,12 +101,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v530_CLEAN');
+        const saved = localStorage.getItem('mmm_v540_BOTTOM');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v530_CLEAN', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v540_BOTTOM', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -118,7 +118,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v530_CLEAN');
+            localStorage.removeItem('mmm_v540_BOTTOM');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -215,6 +215,7 @@ const EstimateApp = ({ userId }) => {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
+                
                 {/* FLOATING ACTION BAR - BACK BUTTON ONLY */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
                     <button style={{...s.btnG('#333'), width:'100%', fontSize:'20px', fontWeight:'900'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>⬅️ BACK TO APP</button>
@@ -245,7 +246,7 @@ const EstimateApp = ({ userId }) => {
                         <div style={{marginTop:'40px', textAlign: 'center'}}>
                             <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
                             
-                            {/* VEHICLE & CLAIM BOX - CENTERED WITH DETAILS */}
+                            {/* VEHICLE & CLAIM BOX - CENTERED */}
                             <div style={{
                                 border:'2px solid #333', 
                                 padding:'20px', 
@@ -349,6 +350,12 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     )}
                 </div>
+                
+                {/* BOTTOM PRINT BUTTON - VISIBLE ONLY IN PREVIEW, HIDDEN ON PAPER */}
+                <div className="no-print" style={{marginTop:'50px', borderTop:'2px solid #eee', paddingTop:'20px', paddingBottom:'50px', textAlign:'center'}}>
+                    <button style={{...s.btnG(theme.hub), width:'100%', fontSize:'24px', padding:'25px'}} onClick={() => window.print()}>🖨️ OPEN PRINTER</button>
+                </div>
+
                 <style>{`@media print { .no-print { display: none !important; } body { background: white !important; overflow: visible !important; } }`}</style>
             </div>
         );
