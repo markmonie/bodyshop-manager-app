@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME: TITAN TUNGSTEN (V340 RESTORED) ---
+// --- THEME ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -61,11 +61,12 @@ const NativeSignature = ({ onSave }) => {
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
+    
+    // --- PRINT ENGINE STATE ---
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
-    const [history, setHistory] = useState([]);
     
-    // --- RESTORED VARIABLES (MUSCLE) ---
+    const [history, setHistory] = useState([]);
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
@@ -91,14 +92,14 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v340_FINAL');
+        const saved = localStorage.getItem('mmm_v350_RESTORE');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v340_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v350_RESTORE', JSON.stringify(job)); }, [job]);
 
-    // --- CLIENT RECALL (RESTORED) ---
+    // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
         if(!name || name.length < 3) { setClientMatch(null); return; }
         const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
@@ -106,27 +107,17 @@ const EstimateApp = ({ userId }) => {
     };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
 
-    // --- JOB MANAGEMENT (RESTORED) ---
+    // --- JOB OPS ---
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v340_FINAL');
+            localStorage.removeItem('mmm_v350_RESTORE');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
         }
     };
-
-    const loadJob = (savedJob) => {
-        setJob(savedJob);
-        setView('HUB');
-        window.scrollTo(0,0);
-    };
-
-    const deleteJob = async (id) => {
-        if(window.confirm("Permanently delete this record?")) {
-            await deleteDoc(doc(db, 'estimates', id));
-        }
-    };
+    const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
+    const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
 
     // --- MATH ---
     const totals = useMemo(() => {
@@ -148,7 +139,7 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- PRINT ENGINE (CLASSIC 500MS DELAY - RESTORED) ---
+    // --- THE "GOLDEN" PRINT LOGIC (SIMPLIFIED) ---
     const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -156,28 +147,25 @@ const EstimateApp = ({ userId }) => {
         let currentInvoiceNo = job.invoiceNo;
         const today = new Date().toLocaleDateString('en-GB');
 
+        // IF INVOICE, GENERATE NUMBER
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
             setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
             setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
             
-            // Database Saves
+            // BACKGROUND SAVE (Don't block print)
             setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
             setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
-        const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
-        document.title = filename;
-
-        // CLASSIC DELAY METHOD
+        // DELAY TO ALLOW RENDER, THEN PRINT
         setTimeout(() => {
             window.print();
-            setTimeout(() => document.title = "Triple MMM", 2000);
-        }, 500);
+        }, 800);
     };
 
-    // --- CSV EXPORT (RESTORED) ---
+    // --- CSV EXPORT ---
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
         const rows = history.map(h => [
@@ -193,7 +181,7 @@ const EstimateApp = ({ userId }) => {
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
-    // --- DVLA HANDSHAKE (RESTORED) ---
+    // --- DVLA HANDSHAKE ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) return;
         setLoading(true);
@@ -222,7 +210,7 @@ const EstimateApp = ({ userId }) => {
 
     const saveMaster = async () => {
         await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
-        alert("Master File Saved.");
+        alert("Saved.");
     };
 
     const handleFileUpload = async (e, path, field) => {
@@ -587,7 +575,7 @@ const EstimateApp = ({ userId }) => {
                     </>
                 )}
             </div>
-            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } }`}</style>
+            <style>{`@media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; overflow: visible !important; } @page { margin: 10mm; } }`}</style>
         </div>
     );
 };
