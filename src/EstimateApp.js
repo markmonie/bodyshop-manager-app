@@ -5,7 +5,6 @@ import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
-// 1. FIREBASE CONFIG (Required for App Login/Database)
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -90,7 +89,6 @@ const EstimateApp = ({ userId }) => {
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
-    // 2. DEFAULT SETTINGS - DVLA KEY HARDCODED HERE
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -186,7 +184,12 @@ const EstimateApp = ({ userId }) => {
     };
 
     const runPrint = () => {
-        setTimeout(() => { window.print(); }, 300);
+        window.print();
+    };
+
+    const runPdf = () => {
+        alert("Select 'Save as PDF' from the printer list.");
+        window.print();
     };
 
     const downloadCSV = () => {
@@ -254,7 +257,8 @@ const EstimateApp = ({ userId }) => {
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'15px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)', alignItems:'center'}}>
-                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'20px', fontWeight:'900', padding:'15px'}} onClick={runPrint}>🖨️ PRINT / PDF</button>
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:1, fontSize:'16px', fontWeight:'900', padding:'15px'}} onClick={runPrint}>🖨️ PRINT</button>
+                    <button style={{...s.btnG('#f97316'), color:'#fff', flex:1, fontSize:'16px', fontWeight:'900', padding:'15px'}} onClick={runPdf}>📄 PDF</button>
                     <button style={{...s.btnG('#333'), flex:1, fontSize:'16px', padding:'15px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
                 </div>
 
@@ -477,22 +481,6 @@ const EstimateApp = ({ userId }) => {
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => openDocument('ESTIMATE', 'FULL')}>VIEW ESTIMATE</button>
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px', background:'#f59e0b', color:'black'}} onClick={() => openDocument('JOB CARD', 'FULL')}>VIEW JOB CARD</button>
                             </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* SATISFACTION NOTE */}
-                {view === 'SAT' && (
-                    <div style={{maxWidth:'850px', margin:'0 auto'}}>
-                        <HeaderNav />
-                        <div style={s.card(theme.deal)}>
-                            <h1 style={{textAlign:'center', color:theme.deal}}>SATISFACTION NOTE</h1>
-                            <div style={{marginBottom:'30px', fontSize:'18px', lineHeight:'1.6'}}>
-                                <p>I hereby confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
-                                <p><strong>Client:</strong> {job.client.name}<br/><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
-                            </div>
-                            <NativeSignature onSave={(sig) => setJob({...job, vault: {...job.vault, signature: sig}})} />
-                            <button style={{...s.btnG(theme.deal), width:'100%'}} onClick={() => openDocument('SATISFACTION NOTE', 'FULL')}>VIEW NOTE</button>
                         </div>
                     </div>
                 )}
