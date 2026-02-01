@@ -5,7 +5,7 @@ import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
-// Keys restored as requested.
+// 1. FIREBASE CONFIG (Required for App Login/Database)
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -23,14 +23,12 @@ const storage = getStorage(app);
 // --- THEME & STYLES ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
-    // Added position:relative and better spacing for mobile
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)', position: 'relative' }),
     input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
     textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none' }),
-    // Fixed Dock z-index and background to prevent bleed-through on scrolling
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(10px)', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 9999, paddingRight: '20px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
@@ -48,51 +46,34 @@ const LoadingOverlay = () => (
 const NativeSignature = ({ onSave }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
-    
-    // Improved coordinate capture for Samsung/Android Touch
     const getXY = (e) => {
         const rect = canvasRef.current.getBoundingClientRect();
         let cX, cY;
-        // Check for touch events first
-        if (e.changedTouches && e.changedTouches.length > 0) {
-            cX = e.changedTouches[0].clientX;
-            cY = e.changedTouches[0].clientY;
-        } else {
-            cX = e.clientX;
-            cY = e.clientY;
-        }
+        if (e.changedTouches && e.changedTouches.length > 0) { cX = e.changedTouches[0].clientX; cY = e.changedTouches[0].clientY; } 
+        else { cX = e.clientX; cY = e.clientY; }
         return { x: cX - rect.left, y: cY - rect.top };
     };
-    
     const start = (e) => {
-        // Prevent scrolling while signing
         if(e.type === 'touchstart') document.body.style.overflow = 'hidden';
         const { x, y } = getXY(e);
         const ctx = canvasRef.current.getContext('2d');
         ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(x, y);
         setIsDrawing(true);
     };
-    
     const move = (e) => { 
         if (!isDrawing) return; 
         const { x, y } = getXY(e); 
         canvasRef.current.getContext('2d').lineTo(x, y); 
         canvasRef.current.getContext('2d').stroke(); 
     };
-    
     const end = (e) => { 
-        if(e.type === 'touchend') document.body.style.overflow = 'auto'; // Re-enable scroll
+        if(e.type === 'touchend') document.body.style.overflow = 'auto';
         setIsDrawing(false); 
         onSave(canvasRef.current.toDataURL()); 
     };
-    
     return (
         <div style={{ background: '#fff', borderRadius: '25px', padding: '20px', marginBottom:'20px' }}>
-            <canvas ref={canvasRef} width={350} height={200} 
-                onMouseDown={start} onMouseMove={move} onMouseUp={end} 
-                onTouchStart={start} onTouchMove={move} onTouchEnd={end} 
-                style={{ width: '100%', height: '200px', touchAction: 'none', border:'1px dashed #ccc', cursor: 'crosshair' }} 
-            />
+            <canvas ref={canvasRef} width={350} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none', border:'1px dashed #ccc', cursor: 'crosshair' }} />
             <button style={{ ...s.btnG('#222'), width: '100%', padding: '15px' }} onClick={() => { canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>CLEAR PAD</button>
         </div>
     );
@@ -109,10 +90,12 @@ const EstimateApp = ({ userId }) => {
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
+    // 2. DEFAULT SETTINGS - DVLA KEY HARDCODED HERE
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
+        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
+        logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
     });
@@ -132,7 +115,6 @@ const EstimateApp = ({ userId }) => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
         const saved = localStorage.getItem('mmm_v420_CENTERED');
         if (saved) setJob(JSON.parse(saved));
-        // Limit query to last 50 to save reads and improve speed
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
@@ -181,7 +163,7 @@ const EstimateApp = ({ userId }) => {
     const openDocument = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
-        setLoading(true); // UX improvement
+        setLoading(true);
         
         let currentInvoiceNo = job.invoiceNo;
         const today = new Date().toLocaleDateString('en-GB');
@@ -204,11 +186,7 @@ const EstimateApp = ({ userId }) => {
     };
 
     const runPrint = () => {
-        // Specifically for Android/Samsung: Sometimes window.print() is weird.
-        // We delay slightly to ensure the DOM is ready.
-        setTimeout(() => {
-            window.print();
-        }, 300);
+        setTimeout(() => { window.print(); }, 300);
     };
 
     const downloadCSV = () => {
@@ -227,33 +205,18 @@ const EstimateApp = ({ userId }) => {
     };
 
     const runDVLA = async () => {
-        if (!job?.vehicle?.reg || !settings.dvlaKey) {
-            alert("Please enter Reg and ensure API Key is in Settings");
-            return;
-        }
+        if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Please enter Reg and ensure API Key is in Settings"); return; }
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles')}`;
         try {
-            const response = await fetch(proxyUrl, {
-                method: 'POST',
-                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ registrationNumber: cleanReg })
-            });
+            const response = await fetch(proxyUrl, { method: 'POST', headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' }, body: JSON.stringify({ registrationNumber: cleanReg }) });
             if (!response.ok) throw new Error(`Status ${response.status}`);
             const d = await response.json();
-            
-            // Check for DVLA specific errors
             if(d.errors) throw new Error(d.errors[0]?.detail || "DVLA Error");
-
             setJob(prev => ({
-                ...prev, 
-                lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: {
-                    ...prev.vehicle, 
-                    make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, 
-                    engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate
-                }
+                ...prev, lastSuccess: new Date().toLocaleString('en-GB'),
+                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
             }));
         } catch (e) { alert(`Lookup Failed: ${e.message}`); }
         setLoading(false);
@@ -261,13 +224,8 @@ const EstimateApp = ({ userId }) => {
 
     const saveMaster = async () => {
         setLoading(true);
-        try {
-            await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
-            alert("Master File Saved.");
-        } catch (error) {
-            console.error(error);
-            alert("Error saving: Check Console");
-        }
+        try { await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() }); alert("Master File Saved."); } 
+        catch (error) { console.error(error); alert("Error saving: Check Console"); }
         setLoading(false);
     };
 
@@ -280,9 +238,7 @@ const EstimateApp = ({ userId }) => {
             const url = await getDownloadURL(r);
             if (path === 'branding') setSettings(prev => ({...prev, [field]: url}));
             else setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}}));
-        } catch (error) {
-            alert("Upload Failed. Check permissions.");
-        }
+        } catch (error) { alert("Upload Failed. Check permissions."); }
         setLoading(false);
     };
 
@@ -297,14 +253,12 @@ const EstimateApp = ({ userId }) => {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
-                {/* FLOATING ACTION BAR FOR MOBILE */}
                 <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'15px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)', alignItems:'center'}}>
                     <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'20px', fontWeight:'900', padding:'15px'}} onClick={runPrint}>🖨️ PRINT / PDF</button>
                     <button style={{...s.btnG('#333'), flex:1, fontSize:'16px', padding:'15px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
                 </div>
 
                 <div style={{padding:'100px 40px 40px 40px'}}>
-                    {/* INVOICE / ESTIMATE HEADER */}
                     <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                         <div style={{flex:1}}>
                             {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} alt="Logo" />}
@@ -323,7 +277,6 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     </div>
 
-                    {/* CONTENT SWAP */}
                     {docType === 'SATISFACTION NOTE' ? (
                         <div style={{marginTop:'40px', maxWidth:'800px', marginLeft:'auto', marginRight:'auto'}}>
                             <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px', textAlign:'center'}}>SATISFACTION NOTE</h1>
@@ -347,6 +300,7 @@ const EstimateApp = ({ userId }) => {
                             <table style={{width:'100%', marginTop:'10px', borderCollapse:'collapse', fontSize:'12px'}}>
                                 <thead><tr style={{background:'#eee', borderBottom:'2px solid #ddd'}}><th style={{padding:'8px', textAlign:'left'}}>Task / Description</th><th style={{padding:'8px', textAlign:'right'}}>{docType === 'JOB CARD' ? 'Check' : 'Amount'}</th></tr></thead>
                                 <tbody>
+                                    {/* STANDARD ITEMS (Full or Insurer View) */}
                                     {printMode !== 'EXCESS' && (
                                         <>
                                             {(job.repair.items || []).map((it, i) => (
@@ -362,7 +316,22 @@ const EstimateApp = ({ userId }) => {
                                             )}
                                         </>
                                     )}
-                                    {printMode === 'EXCESS' && <tr><td style={{padding:'8px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>}
+
+                                    {/* INSURER DEDUCTION LINE (Shows explicit deduction on table) */}
+                                    {printMode === 'INSURER' && parseFloat(job.repair.excess) > 0 && (
+                                        <tr style={{background:'#fff3f3'}}>
+                                            <td style={{padding:'8px', fontStyle:'italic', color:'#ef4444'}}>Less Client Excess Contribution</td>
+                                            <td style={{textAlign:'right', padding:'8px', color:'#ef4444', fontWeight:'bold'}}>-£{parseFloat(job.repair.excess).toFixed(2)}</td>
+                                        </tr>
+                                    )}
+
+                                    {/* EXCESS ONLY ITEM (Shows only when printing 'Excess Invoice') */}
+                                    {printMode === 'EXCESS' && (
+                                        <tr>
+                                            <td style={{padding:'8px'}}>Insurance Excess Contribution</td>
+                                            <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
 
@@ -380,7 +349,7 @@ const EstimateApp = ({ userId }) => {
                                     </div>
                                     <div style={{flex:1, textAlign:'right'}}>
                                         <h1 style={{fontSize:'45px', margin:0, color:'#f97316'}}>£{printMode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printMode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}</h1>
-                                        {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Less Client Excess of £{job.repair.excess}</div>}
+                                        {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Client pays Excess directly</div>}
                                     </div>
                                 </div>
                             )}
@@ -394,7 +363,6 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     )}
                 </div>
-                {/* PDF GENERATION CSS - ESSENTIAL FOR MOBILE */}
                 <style>{`
                     @media print { 
                         .no-print { display: none !important; } 
@@ -500,10 +468,10 @@ const EstimateApp = ({ userId }) => {
                             <input style={s.input} value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} placeholder="DD/MM/YYYY" />
 
                             <span style={s.label}>PRINT OPTIONS</span>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}>
-                                <button style={{...s.btnG('#333'), fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'FULL')}>VIEW FULL INVOICE</button>
-                                <button style={{...s.btnG(theme.deal), fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'INSURER')}>VIEW INSURER (NET)</button>
-                                <button style={{...s.btnG(theme.danger), fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'EXCESS')}>VIEW CUST EXCESS</button>
+                            <div style={{display:'flex', flexWrap:'wrap', gap:'10px', marginTop:'10px'}}>
+                                <button style={{...s.btnG('#333'), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'FULL')}>FULL INVOICE</button>
+                                <button style={{...s.btnG(theme.deal), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'INSURER')}>INSURER (NET)</button>
+                                <button style={{...s.btnG(theme.danger), flex:1, minWidth:'140px', fontSize:'12px'}} onClick={() => openDocument('INVOICE', 'EXCESS')}>CUST EXCESS</button>
                             </div>
                             <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
                                 <button style={{...s.btnG(theme.work), flex:1, fontSize:'14px'}} onClick={() => openDocument('ESTIMATE', 'FULL')}>VIEW ESTIMATE</button>
