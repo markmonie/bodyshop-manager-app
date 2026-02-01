@@ -77,7 +77,7 @@ const EstimateApp = ({ userId }) => {
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
-    const [expenses, setExpenses] = useState([]); // NEW: Global Expenses
+    const [expenses, setExpenses] = useState([]); 
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
@@ -108,13 +108,36 @@ const EstimateApp = ({ userId }) => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
         const saved = localStorage.getItem('mmm_v690_FINAL');
         if (saved) setJob(JSON.parse(saved));
-        // JOB HISTORY
-        onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
-        // NEW: EXPENSE HISTORY
-        onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => setExpenses(snap.docs.map(d => ({id:d.id, ...d.data()}))));
+        
+        // JOB HISTORY (Error handled)
+        onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), 
+            (snap) => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))),
+            (error) => console.log("History sync error:", error)
+        );
+
+        // EXPENSE HISTORY (Error handled & Simplified Query)
+        onSnapshot(collection(db, 'expenses'), 
+            (snap) => {
+                const loaded = snap.docs.map(d => ({id:d.id, ...d.data()}));
+                loaded.sort((a,b) => (b.date > a.date ? 1 : -1));
+                setExpenses(loaded);
+            },
+            (error) => console.log("Expense sync error:", error)
+        );
     }, []);
 
     useEffect(() => { localStorage.setItem('mmm_v690_FINAL', JSON.stringify(job)); }, [job]);
+
+    // --- SAFE CALCULATIONS (Prevent Blank Screen) ---
+    const totalIncome = useMemo(() => {
+        if (!history || history.length === 0) return 0;
+        return history.reduce((a, b) => a + (parseFloat(b.totals?.total) || 0), 0);
+    }, [history]);
+
+    const totalExpenses = useMemo(() => {
+        if (!expenses || expenses.length === 0) return 0;
+        return expenses.reduce((a, b) => a + (parseFloat(b.cost) || 0), 0);
+    }, [expenses]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -126,8 +149,6 @@ const EstimateApp = ({ userId }) => {
     const resetJob = () => { if(window.confirm("⚠️ Clear current data?")) { localStorage.removeItem('mmm_v690_FINAL'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
-    
-    // NEW: Delete Expense
     const deleteExpense = async (id) => { if(window.confirm("Delete expense?")) await deleteDoc(doc(db, 'expenses', id)); };
 
     const totals = useMemo(() => {
@@ -149,20 +170,15 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- UPDATED CSV: INCOME & EXPENDITURE ---
+    // --- CSV LOGIC ---
     const downloadCSV = () => {
         let csv = "TYPE,DATE,REF/REG,DETAILS,AMOUNT (£)\n";
-        
-        // Add Income (Jobs)
         history.forEach(h => {
             csv += `INCOME,${new Date(h.createdAt?.seconds*1000).toLocaleDateString()},${h.vehicle?.reg},${h.client?.name},${h.totals?.total?.toFixed(2)}\n`;
         });
-
-        // Add Expenses (Global)
         expenses.forEach(e => {
             csv += `EXPENSE,${e.date},${e.vendor},${e.desc},-${parseFloat(e.cost).toFixed(2)}\n`;
         });
-
         const link = document.createElement("a"); 
         link.setAttribute("href", "data:text/csv;charset=utf-8," + encodeURI(csv)); 
         link.setAttribute("download", `MMM_Ledger_${new Date().toLocaleDateString()}.csv`); 
@@ -185,30 +201,22 @@ const EstimateApp = ({ userId }) => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Check Reg & Key"); return; }
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        // Smart fallback proxy logic
-        const proxies = ['https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        let success = false; let data = null;
-        
-        for (const proxy of proxies) {
-            if(success) break;
-            try {
-                const response = await fetch(proxy + encodeURIComponent(targetUrl), {
-                    method: 'POST',
-                    headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ registrationNumber: cleanReg })
-                });
-                if (response.ok) { data = await response.json(); success = true; }
-            } catch (e) { console.warn(`Proxy fail`); }
-        }
-        
-        if (success && data && !data.errors) {
-            setJob(prev => ({
-                ...prev, vehicle: { ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType, engine: data.engineCapacity, mot: data.motStatus, motExpiry: data.motExpiryDate }
-            }));
-        } else { 
-            alert("⚠️ Network Blocked Lookup.\nPlease enter Vehicle Make/Model manually."); 
-        }
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+
+        try {
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ registrationNumber: cleanReg })
+            });
+            if (response.ok) { 
+                const data = await response.json();
+                setJob(prev => ({
+                    ...prev, vehicle: { ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType, engine: data.engineCapacity, mot: data.motStatus, motExpiry: data.motExpiryDate }
+                }));
+            } else { throw new Error("API Rejected"); }
+        } catch (e) { alert("⚠️ Network Blocked Lookup.\nPlease enter Vehicle Make/Model manually."); }
         setLoading(false);
     };
 
@@ -461,11 +469,11 @@ const EstimateApp = ({ userId }) => {
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'40px'}}>
                                 <div style={{...s.displayBox, textAlign:'center'}}>
                                     <span style={{...s.label, color:'#4ade80'}}>TOTAL INCOME</span>
-                                    <div style={{fontSize:'35px', fontWeight:'900', color:'#4ade80'}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                    <div style={{fontSize:'35px', fontWeight:'900', color:'#4ade80'}}>£{totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                 </div>
                                 <div style={{...s.displayBox, textAlign:'center'}}>
                                     <span style={{...s.label, color:theme.danger}}>TOTAL EXPENSES</span>
-                                    <div style={{fontSize:'35px', fontWeight:'900', color:theme.danger}}>£{expenses.reduce((a,b)=>a+(parseFloat(b.cost)||0),0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                    <div style={{fontSize:'35px', fontWeight:'900', color:theme.danger}}>£{totalExpenses.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                                 </div>
                             </div>
 
