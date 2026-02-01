@@ -30,7 +30,6 @@ const s = {
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
-    traffic: (active, color) => ({ width: '50px', height: '50px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' }),
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
@@ -101,12 +100,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v540_BOTTOM');
+        const saved = localStorage.getItem('mmm_v550_MANUAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v540_BOTTOM', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v550_MANUAL', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -118,7 +117,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v540_BOTTOM');
+            localStorage.removeItem('mmm_v550_MANUAL');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -246,7 +245,7 @@ const EstimateApp = ({ userId }) => {
                         <div style={{marginTop:'40px', textAlign: 'center'}}>
                             <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
                             
-                            {/* VEHICLE & CLAIM BOX - CENTERED */}
+                            {/* VEHICLE & CLAIM BOX - CENTERED WITH DETAILS */}
                             <div style={{
                                 border:'2px solid #333', 
                                 padding:'20px', 
