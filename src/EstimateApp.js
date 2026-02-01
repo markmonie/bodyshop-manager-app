@@ -19,25 +19,24 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME & STYLES ---
+// --- THEME ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
-    card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)', position: 'relative' }),
+    card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
     input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
     textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none' }),
-    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(17,17,17,0.95)', backdropFilter: 'blur(10px)', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 9999, paddingRight: '20px' },
+    dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
-// --- COMPONENTS ---
 const LoadingOverlay = () => (
     <div style={s.loader}>
         <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '50px', height: '50px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
-        PROCESSING...
+        CONNECTING...
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
 );
@@ -53,26 +52,16 @@ const NativeSignature = ({ onSave }) => {
         return { x: cX - rect.left, y: cY - rect.top };
     };
     const start = (e) => {
-        if(e.type === 'touchstart') document.body.style.overflow = 'hidden';
         const { x, y } = getXY(e);
         const ctx = canvasRef.current.getContext('2d');
         ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(x, y);
         setIsDrawing(true);
     };
-    const move = (e) => { 
-        if (!isDrawing) return; 
-        const { x, y } = getXY(e); 
-        canvasRef.current.getContext('2d').lineTo(x, y); 
-        canvasRef.current.getContext('2d').stroke(); 
-    };
-    const end = (e) => { 
-        if(e.type === 'touchend') document.body.style.overflow = 'auto';
-        setIsDrawing(false); 
-        onSave(canvasRef.current.toDataURL()); 
-    };
+    const move = (e) => { if (!isDrawing) return; const { x, y } = getXY(e); canvasRef.current.getContext('2d').lineTo(x, y); canvasRef.current.getContext('2d').stroke(); };
+    const end = () => { setIsDrawing(false); onSave(canvasRef.current.toDataURL()); };
     return (
         <div style={{ background: '#fff', borderRadius: '25px', padding: '20px', marginBottom:'20px' }}>
-            <canvas ref={canvasRef} width={350} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none', border:'1px dashed #ccc', cursor: 'crosshair' }} />
+            <canvas ref={canvasRef} width={400} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none' }} />
             <button style={{ ...s.btnG('#222'), width: '100%', padding: '15px' }} onClick={() => { canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>CLEAR PAD</button>
         </div>
     );
@@ -82,19 +71,18 @@ const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); 
     const [loading, setLoading] = useState(false);
     
-    // --- STATE ---
+    // --- STATE VARIABLES ---
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
-    // --- SETTINGS (DVLA KEY HARDCODED) ---
+    // --- SETTINGS ---
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
-        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', 
-        logoUrl: '', paypalQr: '',
+        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
         terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
         invoiceCount: 1000 
     });
@@ -112,12 +100,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v420_CENTERED');
+        const saved = localStorage.getItem('mmm_v440_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v420_CENTERED', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v440_FINAL', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -129,7 +117,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v420_CENTERED');
+            localStorage.removeItem('mmm_v440_FINAL');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -158,11 +146,10 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- ACTIONS ---
+    // --- STEP 1: PREPARE VIEW ---
     const openDocument = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
-        setLoading(true);
         
         let currentInvoiceNo = job.invoiceNo;
         const today = new Date().toLocaleDateString('en-GB');
@@ -179,80 +166,79 @@ const EstimateApp = ({ userId }) => {
         const filename = `${job.vehicle.reg || 'DOC'}_${currentInvoiceNo || 'EST'}_${type}`;
         document.title = filename;
 
-        setLoading(false);
         setView('PREVIEW');
         window.scrollTo(0,0);
     };
 
-    const runPrint = () => {
-        window.print();
-    };
+    // --- DVLA PROXY ROTATOR ---
+    const runDVLA = async () => {
+        if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Enter Reg & Check API Key"); return; }
+        setLoading(true);
+        const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        
+        // FAILOVER PROXY LIST
+        const proxies = ['https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
+        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
+        
+        let success = false;
+        let data = null;
 
-    const runPdf = () => {
-        alert("Select 'Save as PDF' from the printer list.");
-        window.print();
+        for (const proxy of proxies) {
+            if(success) break;
+            try {
+                const response = await fetch(proxy + encodeURIComponent(targetUrl), {
+                    method: 'POST',
+                    headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registrationNumber: cleanReg })
+                });
+                if (response.ok) {
+                    data = await response.json();
+                    success = true;
+                }
+            } catch (e) { console.warn(`Proxy failed.`); }
+        }
+
+        if (success && data) {
+            setJob(prev => ({
+                ...prev, lastSuccess: new Date().toLocaleString('en-GB'),
+                vehicle: {
+                    ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType, 
+                    engine: data.engineCapacity, mot: data.motStatus, motExpiry: data.motExpiryDate
+                }
+            }));
+        } else { alert("DVLA Lookup Failed. Enter manually."); }
+        setLoading(false);
     };
 
     const downloadCSV = () => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Total (£)", "Excess (£)", "Status"];
         const rows = history.map(h => [
-            new Date(h.createdAt?.seconds * 1000).toLocaleDateString(),
-            h.invoiceNo || '-',
-            h.vehicle.reg,
-            h.client.name,
-            (h.totals?.total || 0).toFixed(2),
-            (h.repair?.excess || 0),
-            h.status
+            new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || '-', h.vehicle.reg, h.client.name,
+            (h.totals?.total || 0).toFixed(2), (h.repair?.excess || 0), h.status
         ]);
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
-    const runDVLA = async () => {
-        if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Please enter Reg"); return; }
-        setLoading(true);
-        const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        
-        // --- UPDATED PROXY METHOD (CORSPROXY.IO) ---
-        const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
-
-        try {
-            const response = await fetch(proxyUrl, {
-                method: 'POST',
-                headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ registrationNumber: cleanReg })
-            });
-            if (!response.ok) throw new Error(`Status ${response.status}`);
-            const d = await response.json();
-            if(d.errors) throw new Error(d.errors[0]?.detail || "DVLA Error");
-            setJob(prev => ({
-                ...prev, lastSuccess: new Date().toLocaleString('en-GB'),
-                vehicle: { ...prev.vehicle, make: d.make, year: d.yearOfManufacture, colour: d.colour, fuel: d.fuelType, engine: d.engineCapacity, mot: d.motStatus, motExpiry: d.motExpiryDate }
-            }));
-        } catch (e) { alert(`Lookup Failed: ${e.message}`); }
-        setLoading(false);
-    };
-
     const saveMaster = async () => {
-        setLoading(true);
-        try { await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() }); alert("Master File Saved."); } 
-        catch (error) { console.error(error); alert("Error saving: Check Console"); }
-        setLoading(false);
+        await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
+        alert("Master File Saved.");
     };
 
     const handleFileUpload = async (e, path, field) => {
         const file = e.target.files[0]; if (!file) return;
         setLoading(true);
-        try {
-            const r = ref(storage, `${path}/${Date.now()}_${file.name}`);
-            await uploadBytes(r, file);
-            const url = await getDownloadURL(r);
-            if (path === 'branding') setSettings(prev => ({...prev, [field]: url}));
-            else setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}}));
-        } catch (error) { alert("Upload Failed. Check permissions."); }
+        const r = ref(storage, `${path}/${Date.now()}_${file.name}`);
+        await uploadBytes(r, file);
+        const url = await getDownloadURL(r);
+        if (path === 'branding') setSettings(prev => ({...prev, [field]: url}));
+        else setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}}));
         setLoading(false);
     };
+
+    const addLineItem = () => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, { id: Date.now(), desc: '', cost: '' }] } }));
+    const updateLineItem = (id, field, value) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.map(item => item.id === id ? { ...item, [field]: value } : item) } }));
+    const deleteLineItem = (id) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.filter(item => item.id !== id) } }));
 
     const HeaderNav = () => (
         <div style={s.navBar} className="no-print">
@@ -265,21 +251,23 @@ const EstimateApp = ({ userId }) => {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
                 {loading && <LoadingOverlay />}
-                <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'15px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)', alignItems:'center'}}>
-                    <button style={{...s.btnG('#fff'), color:'#000', flex:1, fontSize:'16px', fontWeight:'900', padding:'15px'}} onClick={runPrint}>🖨️ PRINT</button>
-                    <button style={{...s.btnG('#f97316'), color:'#fff', flex:1, fontSize:'16px', fontWeight:'900', padding:'15px'}} onClick={runPdf}>📄 PDF</button>
-                    <button style={{...s.btnG('#333'), flex:1, fontSize:'16px', padding:'15px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
+                {/* FLOATING ACTION BAR */}
+                <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
+                    {/* NATIVE PRINT TRIGGER - NO LOGIC, NO FOCUS */}
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:2, fontSize:'24px', fontWeight:'900'}} onClick={window.print}>🖨️ PRINT / PDF</button>
+                    <button style={{...s.btnG('#333'), flex:1, fontSize:'20px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
                 </div>
 
-                <div style={{padding:'100px 40px 40px 40px'}}>
+                <div style={{padding:'120px 40px 40px 40px'}}>
+                    {/* HEADER */}
                     <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                         <div style={{flex:1}}>
-                            {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} alt="Logo" />}
+                            {settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} />}
                             {docType !== 'JOB CARD' && <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>}
                             <p style={{fontSize:'12px', lineHeight:'1.4'}}>{settings.address}<br/>{settings.phone}</p>
                         </div>
                         <div style={{textAlign:'right', flex:1}}>
-                            <h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{docType === 'JOB CARD' ? 'JOB CARD' : printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
+                            <h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{docType === 'JOB CARD' ? 'WORKSHOP JOB CARD' : printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2>
                             <p style={{fontSize:'16px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate || new Date().toLocaleDateString()}</p>
                             {job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}
                             {docType === 'JOB CARD' && <div style={{marginTop:'10px', fontSize:'14px', fontWeight:'bold', border:'1px solid black', padding:'5px'}}>Mileage: {job.vehicle.mileage || '_______'} | Fuel: {job.vehicle.fuelLevel || '_______'}</div>}
@@ -290,22 +278,54 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     </div>
 
+                    {/* CONTENT SWAP */}
                     {docType === 'SATISFACTION NOTE' ? (
-                        <div style={{marginTop:'40px', maxWidth:'800px', marginLeft:'auto', marginRight:'auto'}}>
-                            <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px', textAlign:'center'}}>SATISFACTION NOTE</h1>
-                            <div style={{border:'2px solid #000', padding:'15px', borderRadius:'10px', marginBottom:'30px', background:'#f8f8f8', maxWidth:'600px', margin:'0 auto'}}>
-                                <table style={{width:'100%', fontSize:'16px', fontWeight:'bold'}}>
+                        <div style={{marginTop:'40px', textAlign: 'center'}}>
+                            <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
+                            
+                            {/* VEHICLE & CLAIM BOX - CENTERED */}
+                            <div style={{
+                                border:'2px solid #333', 
+                                padding:'20px', 
+                                borderRadius:'15px', 
+                                marginBottom:'40px', 
+                                background:'#f9f9f9', 
+                                display: 'inline-block', // This centers the box
+                                textAlign: 'left', // Keeps content aligned nicely
+                                minWidth: '500px'
+                            }}>
+                                <table style={{width:'100%', fontSize:'18px', fontWeight:'bold'}}>
                                     <tbody>
-                                        <tr><td style={{padding:'8px', width:'150px', textAlign:'right'}}>VEHICLE:</td><td style={{padding:'8px'}}>{job.vehicle.make} {job.vehicle.year}</td></tr>
-                                        <tr><td style={{padding:'8px', textAlign:'right'}}>REGISTRATION:</td><td style={{padding:'8px'}}>{job.vehicle.reg}</td></tr>
-                                        {job.insurance.claim && <tr><td style={{padding:'8px', textAlign:'right'}}>CLAIM REF:</td><td style={{padding:'8px'}}>{job.insurance.claim}</td></tr>}
+                                        <tr>
+                                            <td style={{padding:'8px', textAlign:'right', color:'#666', width:'40%'}}>VEHICLE:</td>
+                                            <td style={{padding:'8px', width:'60%'}}>{job.vehicle.make} {job.vehicle.year}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{padding:'8px', textAlign:'right', color:'#666'}}>REGISTRATION:</td>
+                                            <td style={{padding:'8px'}}>{job.vehicle.reg}</td>
+                                        </tr>
+                                        {job.insurance.claim && (
+                                            <tr>
+                                                <td style={{padding:'8px', textAlign:'right', color:'#666'}}>CLAIM REF:</td>
+                                                <td style={{padding:'8px'}}>{job.insurance.claim}</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
-                            <p style={{fontSize:'20px', lineHeight:'1.8', textAlign:'center'}}>I, <strong>{job.client.name}</strong>, hereby confirm that the repairs to the vehicle listed above have been completed to my total satisfaction.</p>
-                            <div style={{marginTop:'50px', textAlign:'center'}}>
-                                {job.vault.signature && <img src={job.vault.signature} style={{width:'300px', borderBottom:'2px solid black'}} alt="Sig" />}
-                                <p style={{marginTop:'10px', fontSize:'16px'}}>Signed</p>
+
+                            <p style={{fontSize:'22px', lineHeight:'1.6', maxWidth:'700px', margin:'0 auto 40px auto'}}>
+                                I, <strong>{job.client.name}</strong>, hereby confirm that the repairs to the vehicle listed above have been completed to my total satisfaction.
+                            </p>
+
+                            <div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>
+                                {job.vault.signature ? (
+                                    <img src={job.vault.signature} style={{width:'300px', borderBottom:'2px solid #000', paddingBottom:'10px'}} />
+                                ) : (
+                                    <div style={{width:'300px', height:'100px', borderBottom:'2px solid #000'}}></div>
+                                )}
+                                <p style={{marginTop:'10px', fontSize:'18px', fontWeight:'bold'}}>SIGNED</p>
+                                <p style={{fontSize:'14px', color:'#666'}}>{new Date().toLocaleDateString()}</p>
                             </div>
                         </div>
                     ) : (
@@ -313,7 +333,6 @@ const EstimateApp = ({ userId }) => {
                             <table style={{width:'100%', marginTop:'10px', borderCollapse:'collapse', fontSize:'12px'}}>
                                 <thead><tr style={{background:'#eee', borderBottom:'2px solid #ddd'}}><th style={{padding:'8px', textAlign:'left'}}>Task / Description</th><th style={{padding:'8px', textAlign:'right'}}>{docType === 'JOB CARD' ? 'Check' : 'Amount'}</th></tr></thead>
                                 <tbody>
-                                    {/* STANDARD ITEMS (Full or Insurer View) */}
                                     {printMode !== 'EXCESS' && (
                                         <>
                                             {(job.repair.items || []).map((it, i) => (
@@ -329,22 +348,7 @@ const EstimateApp = ({ userId }) => {
                                             )}
                                         </>
                                     )}
-
-                                    {/* INSURER DEDUCTION LINE (Shows explicit deduction on table) */}
-                                    {printMode === 'INSURER' && parseFloat(job.repair.excess) > 0 && (
-                                        <tr style={{background:'#fff3f3'}}>
-                                            <td style={{padding:'8px', fontStyle:'italic', color:'#ef4444'}}>Less Client Excess Contribution</td>
-                                            <td style={{textAlign:'right', padding:'8px', color:'#ef4444', fontWeight:'bold'}}>-£{parseFloat(job.repair.excess).toFixed(2)}</td>
-                                        </tr>
-                                    )}
-
-                                    {/* EXCESS ONLY ITEM (Shows only when printing 'Excess Invoice') */}
-                                    {printMode === 'EXCESS' && (
-                                        <tr>
-                                            <td style={{padding:'8px'}}>Insurance Excess Contribution</td>
-                                            <td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td>
-                                        </tr>
-                                    )}
+                                    {printMode === 'EXCESS' && <tr><td style={{padding:'8px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>}
                                 </tbody>
                             </table>
 
@@ -358,11 +362,11 @@ const EstimateApp = ({ userId }) => {
                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'30px'}}>
                                     <div style={{flex:1, textAlign:'center', border:'4px solid #f97316', borderRadius:'20px', padding:'20px', marginRight:'20px'}}>
                                         <div style={{fontSize:'26px', fontWeight:'900', marginBottom:'10px'}}>BACS PAYMENT:<br/>{settings.bank}</div>
-                                        {settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} alt="QR" />}
+                                        {settings.paypalQr && <img src={settings.paypalQr} style={{height:'150px'}} />}
                                     </div>
                                     <div style={{flex:1, textAlign:'right'}}>
                                         <h1 style={{fontSize:'45px', margin:0, color:'#f97316'}}>£{printMode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printMode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}</h1>
-                                        {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Client pays Excess directly</div>}
+                                        {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Less Client Excess of £{job.repair.excess}</div>}
                                     </div>
                                 </div>
                             )}
@@ -376,13 +380,7 @@ const EstimateApp = ({ userId }) => {
                         </div>
                     )}
                 </div>
-                <style>{`
-                    @media print { 
-                        .no-print { display: none !important; } 
-                        body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                        @page { size: A4 portrait; margin: 1cm; }
-                    }
-                `}</style>
+                <style>{`@media print { .no-print { display: none !important; } body { background: white !important; overflow: visible !important; } }`}</style>
             </div>
         );
     }
@@ -583,7 +581,7 @@ const EstimateApp = ({ userId }) => {
                             <span style={s.label}>Upload Receipt</span>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} style={{marginBottom:'20px'}} />
                             <div style={{display:'flex', gap:'10px', overflowX:'auto'}}>
-                                {(job.vault?.expenses || []).map((url, i) => <img key={i} src={url} style={{height:'100px', border:'2px solid #333'}} alt="Receipt" />)}
+                                {(job.vault?.expenses || []).map((url, i) => <img key={i} src={url} style={{height:'100px', border:'2px solid #333'}} />)}
                             </div>
                         </div>
                     </div>
