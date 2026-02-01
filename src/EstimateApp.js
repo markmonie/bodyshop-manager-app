@@ -19,7 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME ---
+// --- THEME: TITAN TUNGSTEN (V370 DETAILED SAT NOTE) ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '40px 30px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -65,7 +65,8 @@ const EstimateApp = ({ userId }) => {
     // --- PRINT ENGINE STATE ---
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
-    
+    const [printSignal, setPrintSignal] = useState(0); // The Frame-Sync Trigger
+
     const [history, setHistory] = useState([]);
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
@@ -92,12 +93,28 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v350_RESTORE');
+        const saved = localStorage.getItem('mmm_v370_DETAIL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v350_RESTORE', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v370_DETAIL', JSON.stringify(job)); }, [job]);
+
+    // --- FRAME-SYNC PRINT ENGINE (THE FIX) ---
+    useEffect(() => {
+        if (printSignal > 0) {
+            const filename = `${job.vehicle.reg || 'DOC'}_${job.invoiceNo || 'EST'}_${docType}`;
+            document.title = filename;
+            
+            // Wait for next browser paint frame (Exact Timing)
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    window.print();
+                    setTimeout(() => document.title = "Triple MMM", 1000);
+                });
+            });
+        }
+    }, [printSignal]);
 
     // --- CLIENT RECALL ---
     const checkClientMatch = (name) => {
@@ -110,7 +127,7 @@ const EstimateApp = ({ userId }) => {
     // --- JOB OPS ---
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v350_RESTORE');
+            localStorage.removeItem('mmm_v370_DETAIL');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -139,7 +156,7 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- THE "GOLDEN" PRINT LOGIC (SIMPLIFIED) ---
+    // --- PRINT TRIGGER ---
     const handlePrint = async (type, mode = 'FULL') => {
         setDocType(type);
         setPrintMode(mode);
@@ -147,22 +164,18 @@ const EstimateApp = ({ userId }) => {
         let currentInvoiceNo = job.invoiceNo;
         const today = new Date().toLocaleDateString('en-GB');
 
-        // IF INVOICE, GENERATE NUMBER
         if (type === 'INVOICE' && !currentInvoiceNo) {
             const nextNum = parseInt(settings.invoiceCount || 1000) + 1;
             currentInvoiceNo = nextNum.toString();
             setJob(prev => ({ ...prev, invoiceNo: currentInvoiceNo, invoiceDate: today }));
             setSettings(prev => ({ ...prev, invoiceCount: nextNum }));
             
-            // BACKGROUND SAVE (Don't block print)
             setDoc(doc(db, 'settings', 'global'), { ...settings, invoiceCount: nextNum });
             setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, invoiceNo: currentInvoiceNo, invoiceDate: today, totals }, { merge: true });
         }
 
-        // DELAY TO ALLOW RENDER, THEN PRINT
-        setTimeout(() => {
-            window.print();
-        }, 800);
+        // FIRE SIGNAL TO EFFECT
+        setPrintSignal(prev => prev + 1);
     };
 
     // --- CSV EXPORT ---
@@ -210,7 +223,7 @@ const EstimateApp = ({ userId }) => {
 
     const saveMaster = async () => {
         await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() });
-        alert("Saved.");
+        alert("Master File Saved.");
     };
 
     const handleFileUpload = async (e, path, field) => {
@@ -448,7 +461,7 @@ const EstimateApp = ({ userId }) => {
                 </div>
             </div>
 
-            {/* PRINT ENGINE (V5.0: NO MARGIN LOCK + JOB CARD + INSTANT PRINT) */}
+            {/* PRINT ENGINE (V360: FRAME-SYNC & NO SCALING) */}
             <div className="print-only" style={{display:'none', color:'black', padding:'20px', fontFamily:'Arial', width:'100%', boxSizing:'border-box', fontSize:'14px'}}>
                 <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                     <div style={{flex:1}}>
@@ -490,11 +503,30 @@ const EstimateApp = ({ userId }) => {
                 </div>
 
                 {docType === 'SATISFACTION NOTE' ? (
-                    <div style={{marginTop:'60px', textAlign:'center'}}>
-                        <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
-                        <p style={{fontSize:'20px', lineHeight:'1.8'}}>I, <strong>{job.client.name}</strong>, confirm that the repairs to vehicle <strong>{job.vehicle.reg}</strong> have been completed to my total satisfaction.</p>
-                        {job.vault.signature && <img src={job.vault.signature} style={{width:'300px', marginTop:'40px', borderBottom:'2px solid black'}} />}
-                        <p style={{marginTop:'10px', fontSize:'16px'}}>Signed</p>
+                    <div style={{marginTop:'40px'}}>
+                        <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px', textAlign:'center'}}>SATISFACTION NOTE</h1>
+
+                        {/* NEW: Vehicle & Claim Details Block */}
+                        <div style={{border:'2px solid #ddd', padding:'20px', borderRadius:'10px', marginBottom:'30px'}}>
+                            <table style={{width:'100%', fontSize:'16px'}}>
+                                <tbody>
+                                    <tr><td style={{padding:'5px'}}><strong>Vehicle:</strong></td><td>{job.vehicle.make} {job.vehicle.year}</td></tr>
+                                    <tr><td style={{padding:'5px'}}><strong>Registration:</strong></td><td>{job.vehicle.reg}</td></tr>
+                                    {job.insurance.claim && (
+                                        <tr><td style={{padding:'5px'}}><strong>Insurance Claim #:</strong></td><td>{job.insurance.claim}</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p style={{fontSize:'20px', lineHeight:'1.8', textAlign:'center'}}>
+                            I, <strong>{job.client.name}</strong>, hereby confirm that the repairs to the vehicle listed above have been completed to my total satisfaction.
+                        </p>
+
+                        <div style={{marginTop:'50px', textAlign:'center'}}>
+                             {job.vault.signature && <img src={job.vault.signature} style={{width:'300px', borderBottom:'2px solid black'}} />}
+                             <p style={{marginTop:'10px'}}>Signed</p>
+                        </div>
                     </div>
                 ) : (
                     <>
