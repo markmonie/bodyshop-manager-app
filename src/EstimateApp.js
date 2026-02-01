@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc, addDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- CONFIGURATION ---
@@ -24,13 +24,14 @@ const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb'
 
 // --- STYLES ---
 const s = {
-    card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
+    card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)', position: 'relative' }),
     input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
     textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
     btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.1s', fontSize: '16px', flexShrink: 0, userSelect: 'none', touchAction: 'manipulation' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
+    navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
@@ -76,9 +77,14 @@ const EstimateApp = ({ userId }) => {
     const [docType, setDocType] = useState('ESTIMATE'); 
     const [printMode, setPrintMode] = useState('FULL'); 
     const [history, setHistory] = useState([]);
+    const [expenses, setExpenses] = useState([]); // NEW: Global Expenses
     const [vaultSearch, setVaultSearch] = useState('');
     const [clientMatch, setClientMatch] = useState(null);
     
+    // NEW: Expense Form State
+    const [newExpense, setNewExpense] = useState({ vendor: '', desc: '', cost: '', date: new Date().toISOString().split('T')[0] });
+
+    // SETTINGS (Hardcoded Key Included)
     const [settings, setSettings] = useState({ 
         coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
         bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
@@ -102,7 +108,10 @@ const EstimateApp = ({ userId }) => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
         const saved = localStorage.getItem('mmm_v690_FINAL');
         if (saved) setJob(JSON.parse(saved));
+        // JOB HISTORY
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
+        // NEW: EXPENSE HISTORY
+        onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => setExpenses(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
     useEffect(() => { localStorage.setItem('mmm_v690_FINAL', JSON.stringify(job)); }, [job]);
@@ -117,6 +126,9 @@ const EstimateApp = ({ userId }) => {
     const resetJob = () => { if(window.confirm("⚠️ Clear current data?")) { localStorage.removeItem('mmm_v690_FINAL'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
+    
+    // NEW: Delete Expense
+    const deleteExpense = async (id) => { if(window.confirm("Delete expense?")) await deleteDoc(doc(db, 'expenses', id)); };
 
     const totals = useMemo(() => {
         const n = (v) => { let p = parseFloat(v); return isFinite(p) ? p : 0; };
@@ -137,37 +149,47 @@ const EstimateApp = ({ userId }) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }, [job.repair]);
 
-    // --- UPDATED CSV LOGIC: INCOME & EXPENDITURE ---
+    // --- UPDATED CSV: INCOME & EXPENDITURE ---
     const downloadCSV = () => {
-        const headers = ["Date", "Invoice #", "Reg", "Client", "Net Revenue (£)", "VAT (£)", "Total (£)", "Excess Paid (£)", "Expense Count"];
-        const rows = history.map(h => {
-            const tot = h.totals?.total || 0;
-            const vatRate = parseFloat(settings.vatRate || 20) / 100;
-            const net = tot / (1 + vatRate);
-            const vatVal = tot - net;
-            return [
-                new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), 
-                h.invoiceNo || 'Draft', 
-                h.vehicle?.reg || 'N/A', 
-                h.client?.name || 'Unknown',
-                net.toFixed(2),
-                vatVal.toFixed(2),
-                tot.toFixed(2), 
-                (h.repair?.excess || 0),
-                (h.vault?.expenses?.length || 0)
-            ];
+        let csv = "TYPE,DATE,REF/REG,DETAILS,AMOUNT (£)\n";
+        
+        // Add Income (Jobs)
+        history.forEach(h => {
+            csv += `INCOME,${new Date(h.createdAt?.seconds*1000).toLocaleDateString()},${h.vehicle?.reg},${h.client?.name},${h.totals?.total?.toFixed(2)}\n`;
         });
-        const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `TripleMMM_Tax_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
+
+        // Add Expenses (Global)
+        expenses.forEach(e => {
+            csv += `EXPENSE,${e.date},${e.vendor},${e.desc},-${parseFloat(e.cost).toFixed(2)}\n`;
+        });
+
+        const link = document.createElement("a"); 
+        link.setAttribute("href", "data:text/csv;charset=utf-8," + encodeURI(csv)); 
+        link.setAttribute("download", `MMM_Ledger_${new Date().toLocaleDateString()}.csv`); 
+        document.body.appendChild(link); 
+        link.click();
+    };
+
+    const addGlobalExpense = async () => {
+        if(!newExpense.vendor || !newExpense.cost) return alert("Enter Vendor and Cost");
+        setLoading(true);
+        await addDoc(collection(db, 'expenses'), {
+            ...newExpense,
+            createdAt: serverTimestamp()
+        });
+        setNewExpense({ vendor: '', desc: '', cost: '', date: new Date().toISOString().split('T')[0] });
+        setLoading(false);
     };
 
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Check Reg & Key"); return; }
         setLoading(true);
         const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        // Smart fallback proxy logic
         const proxies = ['https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
         const targetUrl = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
         let success = false; let data = null;
+        
         for (const proxy of proxies) {
             if(success) break;
             try {
@@ -179,11 +201,14 @@ const EstimateApp = ({ userId }) => {
                 if (response.ok) { data = await response.json(); success = true; }
             } catch (e) { console.warn(`Proxy fail`); }
         }
-        if (success && data) {
+        
+        if (success && data && !data.errors) {
             setJob(prev => ({
                 ...prev, vehicle: { ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType, engine: data.engineCapacity, mot: data.motStatus, motExpiry: data.motExpiryDate }
             }));
-        } else { alert("Lookup failed."); }
+        } else { 
+            alert("⚠️ Network Blocked Lookup.\nPlease enter Vehicle Make/Model manually."); 
+        }
         setLoading(false);
     };
 
@@ -204,6 +229,11 @@ const EstimateApp = ({ userId }) => {
         document.title = `${safeDate}_${job.vehicle.reg || 'REG'}_${currentInvoiceNo || 'DOC'}`;
         setView('PREVIEW');
         window.scrollTo(0,0);
+    };
+
+    const runPdf = () => {
+        alert("Select 'Save as PDF' from the printer list.");
+        window.print();
     };
 
     const saveMaster = async () => {
@@ -230,8 +260,10 @@ const EstimateApp = ({ userId }) => {
     if (view === 'PREVIEW') {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
-                <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'20px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}>
-                    <button style={{...s.btnG('#333'), width:'100%', fontSize:'20px', fontWeight:'900'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>⬅️ BACK TO APP</button>
+                <div className="no-print" style={{position:'fixed', top:0, left:0, right:0, background:theme.deal, padding:'15px', zIndex:9999, display:'flex', gap:'10px', boxShadow:'0 4px 12px rgba(0,0,0,0.3)', alignItems:'center'}}>
+                    <button style={{...s.btnG('#fff'), color:'#000', flex:1, fontSize:'16px', fontWeight:'900', padding:'15px'}} onClick={() => window.print()}>🖨️ PRINT</button>
+                    <button style={{...s.btnG('#f97316'), color:'#fff', flex:1, fontSize:'16px', fontWeight:'900', padding:'15px'}} onClick={runPdf}>📄 PDF</button>
+                    <button style={{...s.btnG('#333'), flex:1, fontSize:'16px', padding:'15px'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>BACK</button>
                 </div>
                 <div style={{padding:'100px 40px 40px 40px'}}>
                     <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
@@ -289,7 +321,7 @@ const EstimateApp = ({ userId }) => {
                                             )}
                                         </>
                                     )}
-                                    {printMode === 'EXCESS' && <tr><td style={{padding:'8px'}}>Insurance Excess</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>}
+                                    {printMode === 'EXCESS' && <tr><td style={{padding:'8px'}}>Insurance Excess Contribution</td><td style={{textAlign:'right', padding:'8px', fontWeight:'bold'}}>£{parseFloat(job.repair.excess || 0).toFixed(2)}</td></tr>}
                                 </tbody>
                             </table>
                             {docType === 'JOB CARD' ? (
@@ -303,7 +335,10 @@ const EstimateApp = ({ userId }) => {
                                         <div style={{fontSize:'22px', fontWeight:'900'}}>BACS:<br/>{settings.bank}</div>
                                         {settings.paypalQr && <img src={settings.paypalQr} style={{height:'120px', marginTop:'10px'}} alt="QR" />}
                                     </div>
-                                    <div style={{flex:1, textAlign:'right'}}><h1 style={{fontSize:'45px', color:'#f97316'}}>£{printMode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printMode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}</h1></div>
+                                    <div style={{flex:1, textAlign:'right'}}>
+                                        <h1 style={{fontSize:'45px', color:'#f97316'}}>£{printMode === 'EXCESS' ? parseFloat(job.repair.excess||0).toFixed(2) : printMode === 'INSURER' ? totals.insurer.toFixed(2) : totals.total.toFixed(2)}</h1>
+                                        {printMode === 'INSURER' && <div style={{marginTop:'5px', color:'#f97316', fontSize:'12px'}}>*Client pays Excess directly</div>}
+                                    </div>
                                 </div>
                             )}
                             {docType !== 'JOB CARD' && settings.terms && (
@@ -314,9 +349,6 @@ const EstimateApp = ({ userId }) => {
                             )}
                         </div>
                     )}
-                </div>
-                <div className="no-print" style={{marginTop:'50px', borderTop:'2px solid #eee', paddingTop:'20px', paddingBottom:'80px', textAlign:'center', maxWidth:'600px', margin:'50px auto'}}>
-                    <button style={{...s.btnG(theme.hub), width:'100%', fontSize:'26px', padding:'30px', border:'5px solid #fff'}} onClick={() => window.print()}>🖨️ OPEN PRINTER</button>
                 </div>
                 <style>{`@media print { .no-print { display: none !important; } body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }`}</style>
             </div>
@@ -421,18 +453,50 @@ const EstimateApp = ({ userId }) => {
                 {view === 'FIN' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}>
                         <div style={{display:'flex', gap:'15px', marginBottom:'40px'}}><button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK</button></div>
+                        
                         <div style={s.card(theme.fin)}>
-                            <h1 style={{color:theme.fin, marginBottom:'30px'}}>FINANCE CSR VAULT</h1>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'30px', marginBottom:'40px'}}>
-                                <div style={s.displayBox}><span style={s.label}>REVENUE</span><div style={{fontSize:'40px', fontWeight:'900'}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toFixed(0)}</div></div>
-                                <div style={s.displayBox}><span style={s.label}>RECEIPTS</span><div style={{fontSize:'40px', fontWeight:'900', color:theme.danger}}>{job.vault?.expenses?.length || 0}</div></div>
+                            <h1 style={{color:theme.fin, marginBottom:'30px', textAlign:'center'}}>FINANCIAL LEDGER</h1>
+                            
+                            {/* P&L DASHBOARD */}
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'40px'}}>
+                                <div style={{...s.displayBox, textAlign:'center'}}>
+                                    <span style={{...s.label, color:'#4ade80'}}>TOTAL INCOME</span>
+                                    <div style={{fontSize:'35px', fontWeight:'900', color:'#4ade80'}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                </div>
+                                <div style={{...s.displayBox, textAlign:'center'}}>
+                                    <span style={{...s.label, color:theme.danger}}>TOTAL EXPENSES</span>
+                                    <div style={{fontSize:'35px', fontWeight:'900', color:theme.danger}}>£{expenses.reduce((a,b)=>a+(parseFloat(b.cost)||0),0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                </div>
                             </div>
-                            <button style={{...s.btnG(theme.fin), marginBottom:'30px'}} onClick={downloadCSV}>TAX LEDGER (CSV)</button>
-                            <span style={s.label}>UPLOAD EXPENDITURE EVIDENCE</span>
-                            <input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} style={{marginBottom:'20px'}} />
-                            <div style={{display:'flex', gap:'10px', overflowX:'auto'}}>
-                                {(job.vault?.expenses || []).map((url, i) => <img key={i} src={url} style={{height:'100px', border:'2px solid #333', borderRadius:'10px'}} alt="Receipt" />)}
+
+                            {/* ADD NEW EXPENSE */}
+                            <div style={{marginBottom:'40px', borderTop:'2px solid #333', paddingTop:'20px'}}>
+                                <span style={s.label}>ADD SHOP EXPENSE</span>
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px'}}>
+                                    <input style={s.input} placeholder="Vendor (e.g. Euro Car Parts)" value={newExpense.vendor} onChange={e => setNewExpense({...newExpense, vendor: e.target.value})} />
+                                    <input style={s.input} placeholder="Cost (£)" type="number" value={newExpense.cost} onChange={e => setNewExpense({...newExpense, cost: e.target.value})} />
+                                </div>
+                                <input style={{...s.input, marginBottom:'10px'}} placeholder="Description (Optional)" value={newExpense.desc} onChange={e => setNewExpense({...newExpense, desc: e.target.value})} />
+                                <input style={{...s.input, marginBottom:'10px'}} type="date" value={newExpense.date} onChange={e => setNewExpense({...newExpense, date: e.target.value})} />
+                                <button style={{...s.btnG(theme.fin), width:'100%'}} onClick={addGlobalExpense}>+ LOG EXPENSE</button>
                             </div>
+
+                            <button style={{...s.btnG(theme.hub), width:'100%', marginBottom:'20px'}} onClick={downloadCSV}>DOWNLOAD ACCOUNTANT CSV</button>
+
+                            {/* EXPENSE LIST */}
+                            <span style={s.label}>RECENT EXPENDITURE</span>
+                            {expenses.map(ex => (
+                                <div key={ex.id} style={{borderBottom:'1px solid #333', padding:'15px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                    <div>
+                                        <div style={{fontWeight:'bold', color:'#fff'}}>{ex.vendor}</div>
+                                        <div style={{fontSize:'12px', color:'#888'}}>{ex.date} - {ex.desc}</div>
+                                    </div>
+                                    <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                                        <div style={{fontWeight:'900', color:theme.danger}}>-£{parseFloat(ex.cost).toFixed(2)}</div>
+                                        <button style={{background:'none', border:'none', cursor:'pointer', color:'#666'}} onClick={() => deleteExpense(ex.id)}>🗑️</button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
