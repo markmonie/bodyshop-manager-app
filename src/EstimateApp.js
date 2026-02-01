@@ -27,16 +27,17 @@ const s = {
     textarea: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '16px', fontWeight: 'bold', minHeight: '150px', boxSizing: 'border-box', fontFamily: 'Arial' },
     label: { color: '#94a3b8', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '10px', display: 'block', letterSpacing: '2px' },
     displayBox: { background: '#050505', padding: '25px', borderRadius: '22px', border: '2px solid #222', marginBottom: '20px' },
-    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none' }),
+    btnG: (bg) => ({ background: bg || theme.deal, color: 'white', border: 'none', padding: '20px 30px', borderRadius: '20px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', transition: '0.2s', fontSize: '16px', flexShrink: 0, userSelect: 'none', touchAction: 'manipulation' }),
     dock: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#111', padding: '20px', display: 'flex', gap: '15px', overflowX: 'auto', flexWrap: 'nowrap', borderTop: '5px solid #222', zIndex: 1000, paddingRight: '150px' },
     navBar: { display: 'flex', gap: '15px', marginBottom: '40px' },
+    traffic: (active, color) => ({ width: '50px', height: '50px', borderRadius: '50%', opacity: active ? 1 : 0.1, border: '4px solid #fff', background: color, cursor: 'pointer' }),
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
 const LoadingOverlay = () => (
     <div style={s.loader}>
-        <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '50px', height: '50px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
-        SAVING...
+        <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '60px', height: '60px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
+        PROCESSING...
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
 );
@@ -100,12 +101,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v550_MANUAL');
+        const saved = localStorage.getItem('mmm_v560_PERFECT');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v550_MANUAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v560_PERFECT', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -117,7 +118,7 @@ const EstimateApp = ({ userId }) => {
 
     const resetJob = () => {
         if(window.confirm("⚠️ Clear all fields?")) {
-            localStorage.removeItem('mmm_v550_MANUAL');
+            localStorage.removeItem('mmm_v560_PERFECT');
             setJob(INITIAL_JOB);
             setClientMatch(null); 
             window.scrollTo(0, 0); 
@@ -199,10 +200,6 @@ const EstimateApp = ({ userId }) => {
         setLoading(false);
     };
 
-    const addLineItem = () => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: [...prev.repair.items, { id: Date.now(), desc: '', cost: '' }] } }));
-    const updateLineItem = (id, field, value) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.map(item => item.id === id ? { ...item, [field]: value } : item) } }));
-    const deleteLineItem = (id) => setJob(prev => ({ ...prev, repair: { ...prev.repair, items: prev.repair.items.filter(item => item.id !== id) } }));
-
     const HeaderNav = () => (
         <div style={s.navBar} className="no-print">
             <button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK TO HUB</button>
@@ -220,7 +217,7 @@ const EstimateApp = ({ userId }) => {
                     <button style={{...s.btnG('#333'), width:'100%', fontSize:'20px', fontWeight:'900'}} onClick={() => { setView(docType === 'SATISFACTION NOTE' ? 'SAT' : 'EST'); document.title="Triple MMM"; }}>⬅️ BACK TO APP</button>
                 </div>
 
-                <div style={{padding:'100px 40px 40px 40px'}}>
+                <div style={{padding:'120px 40px 40px 40px'}}>
                     {/* HEADER */}
                     <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                         <div style={{flex:1}}>
@@ -243,57 +240,24 @@ const EstimateApp = ({ userId }) => {
                     {/* CONTENT SWAP */}
                     {docType === 'SATISFACTION NOTE' ? (
                         <div style={{marginTop:'40px', textAlign: 'center'}}>
-                            <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px'}}>SATISFACTION NOTE</h1>
+                            <h1 style={{color:'#f97316', fontSize:'40px', marginBottom:'30px', fontWeight:'bold'}}>SATISFACTION NOTE</h1>
                             
-                            {/* VEHICLE & CLAIM BOX - CENTERED WITH DETAILS */}
-                            <div style={{
-                                border:'2px solid #333', 
-                                padding:'20px', 
-                                borderRadius:'15px', 
-                                marginBottom:'40px', 
-                                background:'#f9f9f9', 
-                                display: 'inline-block', 
-                                textAlign: 'left', 
-                                minWidth: '500px'
-                            }}>
+                            <div style={{border:'2px solid #333', padding:'20px', borderRadius:'15px', marginBottom:'40px', background:'#f9f9f9', display: 'inline-block', textAlign: 'left', minWidth: '500px'}}>
                                 <table style={{width:'100%', fontSize:'18px', fontWeight:'bold'}}>
                                     <tbody>
-                                        <tr>
-                                            <td style={{padding:'8px', textAlign:'right', color:'#666', width:'40%'}}>VEHICLE:</td>
-                                            <td style={{padding:'8px', width:'60%'}}>{job.vehicle.make} {job.vehicle.year}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style={{padding:'8px', textAlign:'right', color:'#666'}}>REGISTRATION:</td>
-                                            <td style={{padding:'8px'}}>{job.vehicle.reg}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style={{padding:'8px', textAlign:'right', color:'#666'}}>INVOICE #:</td>
-                                            <td style={{padding:'8px'}}>{job.invoiceNo || 'PENDING'}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style={{padding:'8px', textAlign:'right', color:'#666'}}>DATE:</td>
-                                            <td style={{padding:'8px'}}>{job.invoiceDate || new Date().toLocaleDateString()}</td>
-                                        </tr>
-                                        {job.insurance.claim && (
-                                            <tr>
-                                                <td style={{padding:'8px', textAlign:'right', color:'#666'}}>CLAIM REF:</td>
-                                                <td style={{padding:'8px'}}>{job.insurance.claim}</td>
-                                            </tr>
-                                        )}
+                                        <tr><td style={{padding:'8px', textAlign:'right', color:'#666', width:'40%'}}>VEHICLE:</td><td style={{padding:'8px', width:'60%'}}>{job.vehicle.make} {job.vehicle.year}</td></tr>
+                                        <tr><td style={{padding:'8px', textAlign:'right', color:'#666'}}>REGISTRATION:</td><td style={{padding:'8px'}}>{job.vehicle.reg}</td></tr>
+                                        <tr><td style={{padding:'8px', textAlign:'right', color:'#666'}}>INVOICE #:</td><td style={{padding:'8px'}}>{job.invoiceNo || 'PENDING'}</td></tr>
+                                        <tr><td style={{padding:'8px', textAlign:'right', color:'#666'}}>DATE:</td><td style={{padding:'8px'}}>{job.invoiceDate || new Date().toLocaleDateString()}</td></tr>
+                                        {job.insurance.claim && <tr><td style={{padding:'8px', textAlign:'right', color:'#666'}}>CLAIM REF:</td><td style={{padding:'8px'}}>{job.insurance.claim}</td></tr>}
                                     </tbody>
                                 </table>
                             </div>
 
-                            <p style={{fontSize:'22px', lineHeight:'1.6', maxWidth:'700px', margin:'0 auto 40px auto'}}>
-                                I, <strong>{job.client.name}</strong>, hereby confirm that the repairs to the vehicle listed above have been completed to my total satisfaction.
-                            </p>
+                            <p style={{fontSize:'22px', lineHeight:'1.6', maxWidth:'700px', margin:'0 auto 40px auto'}}>I, <strong>{job.client.name}</strong>, hereby confirm that the repairs to the vehicle listed above have been completed to my total satisfaction.</p>
 
                             <div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                {job.vault.signature ? (
-                                    <img src={job.vault.signature} style={{width:'300px', borderBottom:'2px solid #000', paddingBottom:'10px'}} />
-                                ) : (
-                                    <div style={{width:'300px', height:'100px', borderBottom:'2px solid #000'}}></div>
-                                )}
+                                {job.vault.signature ? <img src={job.vault.signature} style={{width:'300px', borderBottom:'2px solid #000', paddingBottom:'10px'}} /> : <div style={{width:'300px', height:'100px', borderBottom:'2px solid #000'}}></div>}
                                 <p style={{marginTop:'10px', fontSize:'18px', fontWeight:'bold'}}>SIGNED</p>
                             </div>
                         </div>
@@ -351,11 +315,19 @@ const EstimateApp = ({ userId }) => {
                 </div>
                 
                 {/* BOTTOM PRINT BUTTON - VISIBLE ONLY IN PREVIEW, HIDDEN ON PAPER */}
-                <div className="no-print" style={{marginTop:'50px', borderTop:'2px solid #eee', paddingTop:'20px', paddingBottom:'50px', textAlign:'center'}}>
-                    <button style={{...s.btnG(theme.hub), width:'100%', fontSize:'24px', padding:'25px'}} onClick={() => window.print()}>🖨️ OPEN PRINTER</button>
+                <div className="no-print" style={{marginTop:'50px', borderTop:'2px solid #eee', paddingTop:'20px', paddingBottom:'80px', textAlign:'center', maxWidth:'600px', margin:'50px auto'}}>
+                    <button style={{...s.btnG(theme.hub), width:'100%', fontSize:'26px', padding:'30px', border:'5px solid #fff'}} onClick={() => window.print()}>🖨️ OPEN PRINTER</button>
                 </div>
 
-                <style>{`@media print { .no-print { display: none !important; } body { background: white !important; overflow: visible !important; } }`}</style>
+                <style>{`
+                    @media screen {
+                        body { background: #fff !important; }
+                    }
+                    @media print { 
+                        .no-print { display: none !important; } 
+                        body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } 
+                    }
+                `}</style>
             </div>
         );
     }
@@ -373,7 +345,6 @@ const EstimateApp = ({ userId }) => {
                             <span style={s.label}>Technical ID</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}>
                                 <input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" />
-                                {/* MANUAL INPUT - NO DVLA BUTTON */}
                             </div>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                                 <div><span style={s.label}>MAKE</span><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} /></div>
@@ -491,7 +462,6 @@ const EstimateApp = ({ userId }) => {
                             <span style={s.label}>Enterprise Settings</span>
                             <input style={s.input} placeholder="Business Name" value={settings.coName} onChange={e=>setSettings({...settings, coName:e.target.value})} />
                             <input style={s.input} placeholder="Bank Sort/Acc" value={settings.bank} onChange={e=>setSettings({...settings, bank:e.target.value})} />
-                            {/* DVLA KEY INPUT REMOVED - MANUAL ONLY */}
                             
                             <span style={s.label}>Financial Variables</span>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'15px'}}>
