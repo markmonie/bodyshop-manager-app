@@ -5,7 +5,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// --- FIREBASE CONFIG ---
+// --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -23,6 +23,7 @@ const storage = getStorage(app);
 // --- THEME ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 
+// --- STYLES ---
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
     input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
@@ -52,32 +53,34 @@ const NativeSignature = ({ onSave }) => {
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); const [loading, setLoading] = useState(false); const [docType, setDocType] = useState('ESTIMATE'); const [printMode, setPrintMode] = useState('FULL'); const [history, setHistory] = useState([]); const [vaultSearch, setVaultSearch] = useState(''); const [clientMatch, setClientMatch] = useState(null);
     const [settings, setSettings] = useState({ coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '', terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.', invoiceCount: 1000 });
-    const INITIAL_JOB = { status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '', client: { name: '', address: '', phone: '', email: '', claim: '' }, insurance: { name: '', address: '', phone: '', email: '', claim: '' }, vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' }, repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' }, vault: { signature: '', expenses: [] } };
+    const INITIAL_JOB = { status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '', client: { name: '', address: '', phone: '', email: '', claim: '' }, insurance: { name: '', address: '', phone: '', email: '', claim: '' }, vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' }, repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' }, vault: { signature: '', expenses: [], otherCost: '' } };
     const [job, setJob] = useState(INITIAL_JOB);
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v790_FINAL');
+        const saved = localStorage.getItem('mmm_v810_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v790_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v810_FINAL', JSON.stringify(job)); }, [job]);
 
     const checkClientMatch = (name) => { if(!name || name.length < 3) { setClientMatch(null); return; } const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase())); if(match) setClientMatch(match.client); else setClientMatch(null); };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
-    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v790_FINAL'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
+    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v810_FINAL'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
 
     const totals = useMemo(() => {
         const n = (v) => { let p = parseFloat(v); return isFinite(p) ? p : 0; };
         const itemsTotal = (job.repair.items || []).reduce((a, b) => a + (n(b.cost) * (1 + (n(settings.markup) / 100))), 0);
+        // V810: Calculate Raw Parts Cost for Finance
+        const partsRaw = (job.repair.items || []).reduce((a, b) => a + n(b.cost), 0);
         const lHrs = n(job.repair.panelHrs) + n(job.repair.paintHrs) + n(job.repair.metHrs);
         const lPrice = lHrs * n(settings.labourRate);
         const subtotal = itemsTotal + lPrice + n(job.repair.paintMats);
         const total = subtotal * (1 + (n(settings.vatRate) / 100));
-        return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice };
+        return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice, partsRaw };
     }, [job.repair, settings]);
 
     const runDVLA = async () => {
@@ -96,11 +99,30 @@ const EstimateApp = ({ userId }) => {
         else alert("Manual entry required."); setLoading(false);
     };
 
+    // V810 UPDATE: Smart Ledger with Auto-Parts and Other Costs
     const downloadCSV = () => {
-        const headers = ["Date", "Invoice #", "Reg", "Client", "Net", "VAT", "Total", "Excess Paid", "Expense Links"];
+        const headers = ["Date", "Invoice #", "Reg", "Client", "Net Income", "Parts Cost (Auto)", "Other Costs", "Total Expense", "Gross Profit", "Expense Proof"];
         const rows = history.map(h => {
-            const tot = h.totals?.total || 0; const vatR = parseFloat(settings.vatRate || 20) / 100; const net = tot / (1 + vatR);
-            return [new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || 'DRAFT', h.vehicle?.reg || 'N/A', `"${h.client?.name || 'Unknown'}"`, net.toFixed(2), (tot - net).toFixed(2), tot.toFixed(2), (h.repair?.excess || 0), (h.vault?.expenses || []).join(" ; ")];
+            const tot = h.totals?.total || 0; 
+            const vatR = parseFloat(settings.vatRate || 20) / 100; 
+            const netIncome = tot / (1 + vatR);
+            const partsCost = h.totals?.partsRaw || 0;
+            const otherCost = parseFloat(h.vault?.otherCost || 0);
+            const totalExp = partsCost + otherCost;
+            const profit = netIncome - totalExp;
+            
+            return [
+                new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), 
+                h.invoiceNo || 'DRAFT', 
+                h.vehicle?.reg || 'N/A', 
+                `"${h.client?.name || 'Unknown'}"`, 
+                netIncome.toFixed(2), 
+                partsCost.toFixed(2),
+                otherCost.toFixed(2),
+                totalExp.toFixed(2),
+                profit.toFixed(2),
+                (h.vault?.expenses || []).join(" ; ")
+            ];
         });
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Ledger_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`); document.body.appendChild(link); link.click();
@@ -159,7 +181,11 @@ const EstimateApp = ({ userId }) => {
                     <div style={{maxWidth:'850px', margin:'0 auto'}}><div style={{display:'flex', gap:'15px', marginBottom:'40px'}}><button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK</button></div><div style={s.card(theme.deal)}><h2 style={{color:theme.deal}}>SATISFACTION SIGN OFF</h2><p style={{marginBottom:'20px'}}>Please ask client to sign below.</p><NativeSignature onSave={(data) => setJob({...job, vault: {...job.vault, signature: data}})} /><div style={{display:'flex', gap:'10px'}}><button style={s.btnG(theme.deal)} onClick={() => openDocument('SATISFACTION NOTE')}>GENERATE DOCUMENT</button></div></div></div>
                 )}
                 {view === 'FIN' && (
-                    <div style={{maxWidth:'850px', margin:'0 auto'}}><div style={{display:'flex', gap:'15px', marginBottom:'40px'}}><button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK</button></div><div style={s.card(theme.fin)}><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'30px', marginBottom:'40px'}}><div style={s.displayBox}><span style={s.label}>REVENUE</span><div style={{fontSize:'40px'}}>£{history.reduce((a,b)=>a+(b.totals?.total||0),0).toFixed(0)}</div></div><div style={s.displayBox}><span style={s.label}>RECEIPTS</span><div style={{fontSize:'40px', color:theme.danger}}>{job.vault?.expenses?.length || 0}</div></div></div><button style={{...s.btnG(theme.fin), marginBottom:'30px'}} onClick={downloadCSV}>TAX LEDGER (CSV)</button><input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} style={{marginBottom:'20px'}} /><div style={{display:'flex', gap:'10px', overflowX:'auto'}}>{(job.vault?.expenses || []).map((url, i) => <img key={i} src={url} style={{height:'100px', border:'2px solid #333', borderRadius:'10px'}} alt="Receipt" />)}</div></div></div>
+                    <div style={{maxWidth:'850px', margin:'0 auto'}}><div style={{display:'flex', gap:'15px', marginBottom:'40px'}}><button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK</button></div><div style={s.card(theme.fin)}><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'30px', marginBottom:'40px'}}><div style={s.displayBox}><span style={s.label}>NET REVENUE</span><div style={{fontSize:'40px'}}>£{history.reduce((a,b)=>a+((b.totals?.total||0)/(1+(parseFloat(settings.vatRate||20)/100))),0).toFixed(0)}</div></div><div style={s.displayBox}><span style={s.label}>EXPENSES</span><div style={{fontSize:'40px', color:theme.danger}}>£{history.reduce((a,b)=>a+(b.totals?.partsRaw||0)+parseFloat(b.vault?.otherCost||0),0).toFixed(0)}</div></div></div><button style={{...s.btnG(theme.fin), marginBottom:'30px'}} onClick={downloadCSV}>DOWNLOAD TAX LEDGER (CSV)</button>
+                    {/* V810 SMART LEDGER INPUTS */}
+                    <span style={s.label}>Parts Cost (Auto-Calc)</span><div style={{...s.input, color:'#999', border:'2px dashed #444', marginBottom:'20px'}}>£{totals.partsRaw.toFixed(2)}</div>
+                    <span style={s.label}>Overheads / Other (£)</span><input style={s.input} placeholder="Paint, Fuel, Sublet..." value={job.vault?.otherCost} onChange={(e) => setJob({...job, vault: {...job.vault, otherCost: e.target.value}})} />
+                    <span style={s.label}>Upload Evidence</span><input type="file" onChange={(e) => handleFileUpload(e, 'finances', 'expenses')} style={{marginBottom:'20px'}} /><div style={{display:'flex', gap:'10px', overflowX:'auto'}}>{(job.vault?.expenses || []).map((url, i) => <img key={i} src={url} style={{height:'100px', border:'2px solid #333', borderRadius:'10px'}} alt="Receipt" />)}</div></div></div>
                 )}
                 {view === 'RECENT' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}><div style={{display:'flex', gap:'15px', marginBottom:'40px'}}><button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK</button></div>{history.filter(h => JSON.stringify(h).toLowerCase().includes(vaultSearch.toLowerCase())).map((h) => (<div key={h.id} style={{...s.card('#333'), display:'flex', justifyContent:'space-between', alignItems:'center', padding:'25px'}}><div><h2 style={{margin:0, color:theme.hub}}>{h.vehicle?.reg}</h2><p style={{margin:0}}>{h.client?.name}</p></div><div style={{display:'flex', gap:'10px'}}><button style={s.btnG(theme.deal)} onClick={() => loadJob(h)}>OPEN</button><button style={s.btnG(theme.danger)} onClick={() => deleteJob(h.id)}>DEL</button></div></div>))}</div>
