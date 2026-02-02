@@ -4,6 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+// --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -18,7 +19,10 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
+// --- THEME ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
+
+// --- STYLES ---
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
     input: { width: '100%', background: '#000', border: '3px solid #666', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '15px', outline: 'none', fontSize: '20px', fontWeight: 'bold', boxSizing: 'border-box' },
@@ -30,8 +34,13 @@ const s = {
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
+// --- BUILD-CRITICAL COMPONENTS ---
 const LoadingOverlay = () => (
-    <div style={s.loader}><div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '60px', height: '60px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>SYNCING...<style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style></div>
+    <div style={s.loader}>
+        <div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '60px', height: '60px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>
+        SYNCING...
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+    </div>
 );
 
 const NativeSignature = ({ onSave }) => {
@@ -50,21 +59,60 @@ const NativeSignature = ({ onSave }) => {
     };
     const move = (e) => { if (!isDrawing) return; const { x, y } = getXY(e); canvasRef.current.getContext('2d').lineTo(x, y); canvasRef.current.getContext('2d').stroke(); };
     const end = () => { setIsDrawing(false); onSave(canvasRef.current.toDataURL()); };
-    return (<div style={{ background: '#fff', borderRadius: '25px', padding: '20px', marginBottom:'20px' }}><canvas ref={canvasRef} width={400} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none' }} /><button style={{ ...s.btnG('#222'), width: '100%', padding: '15px' }} onClick={() => { if(canvasRef.current) canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>CLEAR PAD</button></div>);
+    return (
+        <div style={{ background: '#fff', borderRadius: '25px', padding: '20px', marginBottom:'20px' }}>
+            <canvas ref={canvasRef} width={400} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none' }} />
+            <button style={{ ...s.btnG('#222'), width: '100%', padding: '15px' }} onClick={() => { if(canvasRef.current) canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>CLEAR PAD</button>
+        </div>
+    );
 };
 
+// --- CORE APP LOGIC ---
 const EstimateApp = ({ userId }) => {
-    const [view, setView] = useState('HUB'); const [loading, setLoading] = useState(false); const [docType, setDocType] = useState('ESTIMATE'); const [printMode, setPrintMode] = useState('FULL'); const [history, setHistory] = useState([]); const [vaultSearch, setVaultSearch] = useState(''); const [clientMatch, setClientMatch] = useState(null);
-    const [settings, setSettings] = useState({ coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '', terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.', invoiceCount: 1000 });
-    const INITIAL_JOB = { status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '', client: { name: '', address: '', phone: '', email: '', claim: '' }, insurance: { name: '', address: '', phone: '', email: '', claim: '' }, vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' }, repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' }, vault: { signature: '', expenses: [] } };
+    const [view, setView] = useState('HUB'); 
+    const [loading, setLoading] = useState(false);
+    const [docType, setDocType] = useState('ESTIMATE'); 
+    const [printMode, setPrintMode] = useState('FULL'); 
+    const [history, setHistory] = useState([]);
+    const [vaultSearch, setVaultSearch] = useState('');
+    const [clientMatch, setClientMatch] = useState(null);
+    
+    const [settings, setSettings] = useState({ 
+        coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', 
+        bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', 
+        dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '',
+        terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.',
+        invoiceCount: 1000 
+    });
+
+    const INITIAL_JOB = {
+        status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '',
+        client: { name: '', address: '', phone: '', email: '', claim: '' },
+        insurance: { name: '', address: '', phone: '', email: '', claim: '' },
+        vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' },
+        repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' },
+        vault: { signature: '', expenses: [] }
+    };
+
     const [job, setJob] = useState(INITIAL_JOB);
 
-    useEffect(() => { getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()}))); const saved = localStorage.getItem('mmm_v720_LOCKED'); if (saved) setJob(JSON.parse(saved)); onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()})))); }, []);
-    useEffect(() => { localStorage.setItem('mmm_v720_LOCKED', JSON.stringify(job)); }, [job]);
+    useEffect(() => {
+        getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
+        const saved = localStorage.getItem('mmm_v720_PERFECT');
+        if (saved) setJob(JSON.parse(saved));
+        onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
+    }, []);
 
-    const checkClientMatch = (name) => { if(!name || name.length < 3) { setClientMatch(null); return; } const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase())); if(match) setClientMatch(match.client); else setClientMatch(null); };
+    useEffect(() => { localStorage.setItem('mmm_v720_PERFECT', JSON.stringify(job)); }, [job]);
+
+    // --- LOGIC ---
+    const checkClientMatch = (name) => {
+        if(!name || name.length < 3) { setClientMatch(null); return; }
+        const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase()));
+        if(match) setClientMatch(match.client); else setClientMatch(null);
+    };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
-    const resetJob = () => { if(window.confirm("⚠️ Clear current data?")) { localStorage.removeItem('mmm_v720_LOCKED'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
+    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v720_PERFECT'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
 
@@ -78,6 +126,7 @@ const EstimateApp = ({ userId }) => {
         return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice };
     }, [job.repair, settings]);
 
+    // --- DVLA LOGIC ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Need Reg & Key"); return; }
         setLoading(true); const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -88,14 +137,15 @@ const EstimateApp = ({ userId }) => {
         else alert("Manual entry required."); setLoading(false);
     };
 
+    // --- CSV LOGIC ---
     const downloadCSV = () => {
-        const headers = ["Date", "Invoice #", "Reg", "Client", "Net (£)", "VAT (£)", "Total (£)", "Excess Paid (£)", "Receipt Links"];
+        const headers = ["Date", "Invoice #", "Reg", "Client", "Net (£)", "VAT (£)", "Total (£)", "Excess Paid (£)", "Expense Links"];
         const rows = history.map(h => {
             const tot = h.totals?.total || 0; const vatR = parseFloat(settings.vatRate || 20) / 100; const net = tot / (1 + vatR);
             return [new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || 'DRAFT', h.vehicle?.reg || 'N/A', h.client?.name || 'Unknown', net.toFixed(2), (tot - net).toFixed(2), tot.toFixed(2), (h.repair?.excess || 0), (h.vault?.expenses || []).join(" ; ")];
         });
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
+        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Ledger_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`); document.body.appendChild(link); link.click();
     };
 
     const openDocument = async (type, mode = 'FULL') => {
@@ -114,6 +164,7 @@ const EstimateApp = ({ userId }) => {
     const saveMaster = async () => { setLoading(true); await setDoc(doc(db, 'estimates', job.vehicle.reg || Date.now().toString()), { ...job, totals, createdAt: serverTimestamp() }); setLoading(false); alert("SAVED."); };
     const handleFileUpload = async (e, path, field) => { const file = e.target.files[0]; if (!file) return; setLoading(true); try { const r = ref(storage, `${path}/${Date.now()}_${file.name}`); await uploadBytes(r, file); const url = await getDownloadURL(r); if (path === 'branding') setSettings(prev => ({...prev, [field]: url})); else setJob(prev => ({...prev, vault: {...prev.vault, expenses: [...(prev.vault.expenses || []), url]}})); } catch(err) { alert("Upload error"); } setLoading(false); };
 
+    // --- VIEW: PREVIEW ---
     if (view === 'PREVIEW') {
         return (
             <div style={{background:'#fff', minHeight:'100vh', color:'#000', fontFamily:'Arial'}}>
@@ -140,7 +191,7 @@ const EstimateApp = ({ userId }) => {
             {loading && <LoadingOverlay />}
             <div className="no-print">
                 {view === 'HUB' && (
-                    <div style={{maxWidth:'850px', margin:'0 auto'}}><h1 style={{color:theme.hub, fontSize:'65px', textAlign:'center'}}>COMMAND HUB</h1><div style={s.card(theme.hub)}><div style={{display:'flex', gap:'12px', marginBottom:'20px'}}><input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center'}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" /><button style={{...s.btnG(theme.hub), flex:1}} onClick={runDVLA}>FIND</button></div><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} placeholder="MAKE" /><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} placeholder="SPEC" /></div></div><div style={s.card(theme.deal)}><input style={s.input} placeholder="Client Name" value={job.client.name} onChange={e => { setJob({...job, client:{...job.client, name:e.target.value}}); checkClientMatch(e.target.value); }} />{clientMatch && ( <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}><span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS</span></div> )}<input style={s.input} placeholder="Full Address" value={job.client.address} onChange={e=>setJob({...job, client:{...job.client, address:e.target.value}})} /></div><button style={{...s.btnG(theme.deal), width:'100%', padding:'35px', fontSize:'32px'}} onClick={()=>setView('EST')}>ESTIMATOR</button><button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px'}} onClick={resetJob}>⚠️ START NEW JOB</button></div>
+                    <div style={{maxWidth:'850px', margin:'0 auto'}}><h1 style={{color:theme.hub, fontSize:'65px', textAlign:'center'}}>COMMAND HUB</h1><div style={s.card(theme.hub)}><div style={{display:'flex', gap:'12px', marginBottom:'20px'}}><input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center'}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" /><button style={{...s.btnG(theme.hub), flex:1}} onClick={runDVLA}>FIND</button></div><div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} placeholder="MAKE" /><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} placeholder="SPEC" /></div></div><div style={s.card(theme.deal)}><input style={s.input} placeholder="Client Name" value={job.client.name} onChange={e => { setJob({...job, client:{...job.client, name:e.target.value}}); checkClientMatch(e.target.value); }} />{clientMatch && ( <div style={{background:'#111', border:`1px solid ${theme.deal}`, padding:'10px', borderRadius:'10px', marginBottom:'15px', cursor:'pointer'}} onClick={autofillClient}><span style={{color:theme.deal, fontWeight:'bold'}}>✨ FOUND PREVIOUS CLIENT</span></div> )}<input style={s.input} placeholder="Full Address" value={job.client.address} onChange={e=>setJob({...job, client:{...job.client, address:e.target.value}})} /></div><button style={{...s.btnG(theme.deal), width:'100%', padding:'35px', fontSize:'32px'}} onClick={()=>setView('EST')}>ESTIMATOR</button><button style={{...s.btnG(theme.danger), width:'100%', marginTop:'20px'}} onClick={resetJob}>⚠️ START NEW JOB</button></div>
                 )}
                 {view === 'EST' && (
                     <div style={{maxWidth:'850px', margin:'0 auto'}}><div style={{display:'flex', gap:'15px', marginBottom:'40px'}}><button style={{...s.btnG('#222'), flex:1}} onClick={() => setView('HUB')}>⬅️ BACK</button></div><div style={s.card(theme.work)}><div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'15px'}}><input style={s.input} value={job.repair.metHrs} onChange={e=>setJob({...job, repair:{...job.repair, metHrs:e.target.value}})} placeholder="MET" /><input style={s.input} value={job.repair.panelHrs} onChange={e=>setJob({...job, repair:{...job.repair, panelHrs:e.target.value}})} placeholder="PANEL" /><input style={s.input} value={job.repair.paintHrs} onChange={e=>setJob({...job, repair:{...job.repair, paintHrs:e.target.value}})} placeholder="PAINT" /></div>{job.repair.items.map((it, i) => (<div key={i} style={{display:'flex', gap:'10px', marginBottom:'15px'}}><input style={{...s.input, flex:3}} value={it.desc} placeholder="Part" onChange={(e) => { const n = [...job.repair.items]; n[i].desc = e.target.value; setJob({...job, repair:{...job.repair, items: n}}); }} /><input style={{...s.input, flex:1}} value={it.cost} placeholder="£" onChange={(e) => { const n = [...job.repair.items]; n[i].cost = e.target.value; setJob({...job, repair:{...job.repair, items: n}}); }} /><button onClick={() => { const n = job.repair.items.filter((_, idx) => idx !== i); setJob({...job, repair:{...job.repair, items: n}}); }} style={{...s.btnG(theme.danger), padding:'15px'}}>X</button></div>))}<button style={{...s.btnG(theme.work), width:'100%'}} onClick={() => setJob({...job, repair:{...job.repair, items: [...job.repair.items, { desc: '', cost: '' }]}})}>+ ADD ITEM</button></div><div style={s.card(theme.deal)}><h2 style={{fontSize:'45px', textAlign:'right'}}>£{totals.total.toFixed(2)}</h2><div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'10px'}}><button style={s.btnG('#333')} onClick={() => openDocument('INVOICE', 'FULL')}>FULL INV</button><button style={s.btnG(theme.deal)} onClick={() => openDocument('INVOICE', 'INSURER')}>INSURER</button><button style={s.btnG(theme.danger)} onClick={() => openDocument('INVOICE', 'EXCESS')}>EXCESS</button></div></div></div>
