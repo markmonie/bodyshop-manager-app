@@ -4,7 +4,6 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// --- FIREBASE SETUP ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -19,7 +18,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// --- THEME & UI ---
 const theme = { hub: '#f97316', work: '#fbbf24', deal: '#16a34a', set: '#2563eb', fin: '#8b5cf6', bg: '#000', card: '#111', text: '#f8fafc', border: '#333', danger: '#ef4444' };
 const s = {
     card: (color) => ({ background: theme.card, borderRadius: '32px', padding: '30px 20px', marginBottom: '35px', border: `2px solid ${theme.border}`, borderTop: `14px solid ${color || theme.hub}`, boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }),
@@ -32,33 +30,41 @@ const s = {
     loader: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, fontSize: '30px', flexDirection: 'column' }
 };
 
-// --- GLOBAL COMPONENTS ---
 const LoadingOverlay = () => (
     <div style={s.loader}><div style={{border: '5px solid #333', borderTop: `5px solid ${theme.hub}`, borderRadius: '50%', width: '60px', height: '60px', animation: 'spin 1s linear infinite', marginBottom:'20px'}}></div>SYNCING...<style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style></div>
 );
 
 const NativeSignature = ({ onSave }) => {
     const canvasRef = useRef(null); const [isDrawing, setIsDrawing] = useState(false);
-    const getXY = (e) => { const rect = canvasRef.current.getBoundingClientRect(); let cX, cY; if (e.changedTouches && e.changedTouches.length > 0) { cX = e.changedTouches[0].clientX; cY = e.changedTouches[0].clientY; } else { cX = e.clientX; cY = e.clientY; } return { x: cX - rect.left, y: cY - rect.top }; };
-    const start = (e) => { const { x, y } = getXY(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(x, y); setIsDrawing(true); };
+    const getXY = (e) => { 
+        if (!canvasRef.current) return { x: 0, y: 0 };
+        const rect = canvasRef.current.getBoundingClientRect(); 
+        let cX, cY; 
+        if (e.changedTouches && e.changedTouches.length > 0) { cX = e.changedTouches[0].clientX; cY = e.changedTouches[0].clientY; } 
+        else { cX = e.clientX; cY = e.clientY; } 
+        return { x: cX - rect.left, y: cY - rect.top }; 
+    };
+    const start = (e) => { 
+        const { x, y } = getXY(e); const ctx = canvasRef.current.getContext('2d'); 
+        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(x, y); setIsDrawing(true); 
+    };
     const move = (e) => { if (!isDrawing) return; const { x, y } = getXY(e); canvasRef.current.getContext('2d').lineTo(x, y); canvasRef.current.getContext('2d').stroke(); };
     const end = () => { setIsDrawing(false); onSave(canvasRef.current.toDataURL()); };
-    return (<div style={{ background: '#fff', borderRadius: '25px', padding: '20px', marginBottom:'20px' }}><canvas ref={canvasRef} width={400} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none' }} /><button style={{ ...s.btnG('#222'), width: '100%', padding: '15px' }} onClick={() => { canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>CLEAR PAD</button></div>);
+    return (<div style={{ background: '#fff', borderRadius: '25px', padding: '20px', marginBottom:'20px' }}><canvas ref={canvasRef} width={400} height={200} onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} style={{ width: '100%', height: '200px', touchAction: 'none' }} /><button style={{ ...s.btnG('#222'), width: '100%', padding: '15px' }} onClick={() => { if(canvasRef.current) canvasRef.current.getContext('2d').clearRect(0,0,400,200); onSave(''); }}>CLEAR PAD</button></div>);
 };
 
-// --- CORE APP ---
 const EstimateApp = ({ userId }) => {
     const [view, setView] = useState('HUB'); const [loading, setLoading] = useState(false); const [docType, setDocType] = useState('ESTIMATE'); const [printMode, setPrintMode] = useState('FULL'); const [history, setHistory] = useState([]); const [vaultSearch, setVaultSearch] = useState(''); const [clientMatch, setClientMatch] = useState(null);
     const [settings, setSettings] = useState({ coName: 'Triple MMM Body Repairs', address: '20A New Street, Stonehouse, ML9 3LT', phone: '07501 728319', bank: 'Sort Code: 80-22-60 | Acc: 06163462', markup: '20', labourRate: '50', vatRate: '20', dvlaKey: 'lXqv1yDD1IatEPHlntk2w8MEuz9X57lE9TP9sxGc', logoUrl: '', paypalQr: '', terms: 'TERMS & CONDITIONS\n\n1. Payment due on completion.\n2. Vehicles left at owner risk.', invoiceCount: 1000 });
     const INITIAL_JOB = { status: 'STRIPPING', lastSuccess: '', invoiceNo: '', invoiceDate: '', client: { name: '', address: '', phone: '', email: '', claim: '' }, insurance: { name: '', address: '', phone: '', email: '', claim: '' }, vehicle: { reg: '', make: '', vin: '', year: '', colour: '', fuel: '', engine: '', mot: '', motExpiry: '', mileage: '', fuelLevel: '' }, repair: { items: [], panelHrs: '0', paintHrs: '0', metHrs: '0', paintMats: '0', excess: '0', techNotes: '' }, vault: { signature: '', expenses: [] } };
     const [job, setJob] = useState(INITIAL_JOB);
 
-    useEffect(() => { getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()}))); const saved = localStorage.getItem('mmm_v710_MASTER'); if (saved) setJob(JSON.parse(saved)); onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()})))); }, []);
-    useEffect(() => { localStorage.setItem('mmm_v710_MASTER', JSON.stringify(job)); }, [job]);
+    useEffect(() => { getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()}))); const saved = localStorage.getItem('mmm_v720_LOCKED'); if (saved) setJob(JSON.parse(saved)); onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()})))); }, []);
+    useEffect(() => { localStorage.setItem('mmm_v720_LOCKED', JSON.stringify(job)); }, [job]);
 
     const checkClientMatch = (name) => { if(!name || name.length < 3) { setClientMatch(null); return; } const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase())); if(match) setClientMatch(match.client); else setClientMatch(null); };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
-    const resetJob = () => { if(window.confirm("⚠️ Clear current data?")) { localStorage.removeItem('mmm_v710_MASTER'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
+    const resetJob = () => { if(window.confirm("⚠️ Clear current data?")) { localStorage.removeItem('mmm_v720_LOCKED'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
 
@@ -89,7 +95,7 @@ const EstimateApp = ({ userId }) => {
             return [new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || 'DRAFT', h.vehicle?.reg || 'N/A', h.client?.name || 'Unknown', net.toFixed(2), (tot - net).toFixed(2), tot.toFixed(2), (h.repair?.excess || 0), (h.vault?.expenses || []).join(" ; ")];
         });
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
+        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `Ledger_${new Date().toLocaleDateString()}.csv`); document.body.appendChild(link); link.click();
     };
 
     const openDocument = async (type, mode = 'FULL') => {
