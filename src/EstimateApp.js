@@ -98,12 +98,12 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v730_PERFECT');
+        const saved = localStorage.getItem('mmm_v720_PERFECT');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v730_PERFECT', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v720_PERFECT', JSON.stringify(job)); }, [job]);
 
     // --- LOGIC ---
     const checkClientMatch = (name) => {
@@ -112,7 +112,7 @@ const EstimateApp = ({ userId }) => {
         if(match) setClientMatch(match.client); else setClientMatch(null);
     };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
-    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v730_PERFECT'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
+    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v720_PERFECT'); setJob(INITIAL_JOB); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
 
@@ -126,55 +126,15 @@ const EstimateApp = ({ userId }) => {
         return { total, insurer: (total - n(job.repair.excess)), lHrs, lPrice };
     }, [job.repair, settings]);
 
-    // --- HARDENED DVLA LOGIC ---
+    // --- DVLA LOGIC ---
     const runDVLA = async () => {
         if (!job?.vehicle?.reg || !settings.dvlaKey) { alert("Need Reg & Key"); return; }
-        setLoading(true);
-        const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        const apiPath = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles';
-        
-        // Priority list: Corsproxy first (most reliable), then direct, then thingproxy
-        const proxies = [
-            'https://corsproxy.io/?',
-            '', 
-            'https://thingproxy.freeboard.io/fetch/'
-        ];
-        
-        let success = false;
-        for (const proxy of proxies) {
-            if(success) break;
-            try {
-                const response = await fetch(proxy + encodeURIComponent(apiPath), {
-                    method: 'POST',
-                    headers: { 
-                        'x-api-key': settings.dvlaKey.trim(),
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ registrationNumber: cleanReg })
-                });
-                if (response.ok) { 
-                    const data = await response.json(); 
-                    if (data && data.make) {
-                        setJob(prev => ({ 
-                            ...prev, 
-                            vehicle: { 
-                                ...prev.vehicle, 
-                                make: data.make, 
-                                year: data.yearOfManufacture, 
-                                colour: data.colour, 
-                                fuel: data.fuelType,
-                                engine: data.engineCapacity,
-                                mot: data.motStatus
-                            } 
-                        }));
-                        success = true; 
-                    }
-                }
-            } catch (e) { console.warn(`Proxy ${proxy} failed`); }
-        }
-        if (!success) alert("Manual entry required.");
-        setLoading(false);
+        setLoading(true); const cleanReg = job.vehicle.reg.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        const proxies = ['', 'https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
+        let success = false; let data = null;
+        for (const proxy of proxies) { if(success) break; try { const res = await fetch(proxy + encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles'), { method: 'POST', headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' }, body: JSON.stringify({ registrationNumber: cleanReg }) }); if (res.ok) { data = await res.json(); success = true; } } catch (e) {} }
+        if (success && data) setJob(prev => ({ ...prev, vehicle: { ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType } }));
+        else alert("Manual entry required."); setLoading(false);
     };
 
     // --- CSV LOGIC ---
@@ -182,17 +142,7 @@ const EstimateApp = ({ userId }) => {
         const headers = ["Date", "Invoice #", "Reg", "Client", "Net (£)", "VAT (£)", "Total (£)", "Excess Paid (£)", "Expense Links"];
         const rows = history.map(h => {
             const tot = h.totals?.total || 0; const vatR = parseFloat(settings.vatRate || 20) / 100; const net = tot / (1 + vatR);
-            return [
-                new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), 
-                h.invoiceNo || 'DRAFT', 
-                h.vehicle?.reg || 'N/A', 
-                h.client?.name || 'Unknown', 
-                net.toFixed(2), 
-                (tot - net).toFixed(2), 
-                tot.toFixed(2), 
-                (h.repair?.excess || 0), 
-                (h.vault?.expenses || []).join(" ; ")
-            ];
+            return [new Date(h.createdAt?.seconds * 1000).toLocaleDateString(), h.invoiceNo || 'DRAFT', h.vehicle?.reg || 'N/A', h.client?.name || 'Unknown', net.toFixed(2), (tot - net).toFixed(2), tot.toFixed(2), (h.repair?.excess || 0), (h.vault?.expenses || []).join(" ; ")];
         });
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `MMM_Ledger_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`); document.body.appendChild(link); link.click();
@@ -236,6 +186,7 @@ const EstimateApp = ({ userId }) => {
         );
     }
 
+    // --- RENDER HUB ---
     return (
         <div style={{ background: '#000', minHeight: '100vh', color: '#fff', padding: '20px', paddingBottom: '180px' }}>
             {loading && <LoadingOverlay />}
