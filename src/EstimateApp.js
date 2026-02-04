@@ -5,7 +5,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// --- FIREBASE CONFIGURATION ---
+// --- FIREBASE CONFIG ---
 const firebaseConfig = {
   apiKey: "AIzaSyDVfPvFLoL5eqQ3WQB96n08K3thdclYXRQ",
   authDomain: "triple-mmm-body-repairs.firebaseapp.com",
@@ -57,16 +57,16 @@ const EstimateApp = ({ userId }) => {
 
     useEffect(() => {
         getDoc(doc(db, 'settings', 'global')).then(snap => snap.exists() && setSettings(prev => ({...prev, ...snap.data()})));
-        const saved = localStorage.getItem('mmm_v870_FINAL');
+        const saved = localStorage.getItem('mmm_v880_FINAL');
         if (saved) setJob(JSON.parse(saved));
         onSnapshot(query(collection(db, 'estimates'), orderBy('createdAt', 'desc')), snap => setHistory(snap.docs.map(d => ({id:d.id, ...d.data()}))));
     }, []);
 
-    useEffect(() => { localStorage.setItem('mmm_v870_FINAL', JSON.stringify(job)); }, [job]);
+    useEffect(() => { localStorage.setItem('mmm_v880_FINAL', JSON.stringify(job)); }, [job]);
 
     const checkClientMatch = (name) => { if(!name || name.length < 3) { setClientMatch(null); return; } const match = history.find(h => h.client?.name?.toLowerCase().includes(name.toLowerCase())); if(match) setClientMatch(match.client); else setClientMatch(null); };
     const autofillClient = () => { if(clientMatch) { setJob(prev => ({...prev, client: {...prev.client, ...clientMatch}})); setClientMatch(null); } };
-    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v870_FINAL'); setJob({...INITIAL_JOB, invoiceDate: new Date().toLocaleDateString('en-CA')}); setClientMatch(null); window.scrollTo(0, 0); } };
+    const resetJob = () => { if(window.confirm("⚠️ START NEW JOB?")) { localStorage.removeItem('mmm_v880_FINAL'); setJob({...INITIAL_JOB, invoiceDate: new Date().toLocaleDateString('en-CA')}); setClientMatch(null); window.scrollTo(0, 0); } };
     const loadJob = (savedJob) => { setJob(savedJob); setView('HUB'); window.scrollTo(0,0); };
     const deleteJob = async (id) => { if(window.confirm("Delete record?")) await deleteDoc(doc(db, 'estimates', id)); };
 
@@ -90,6 +90,12 @@ const EstimateApp = ({ userId }) => {
         for (const proxy of proxies) { if(success) break; try { const res = await fetch(proxy + encodeURIComponent('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles'), { method: 'POST', headers: { 'x-api-key': settings.dvlaKey.trim(), 'Content-Type': 'application/json' }, body: JSON.stringify({ registrationNumber: cleanReg }) }); if (res.ok) { data = await res.json(); success = true; } } catch { /* empty */ } }
         if (success && data) setJob(prev => ({ ...prev, vehicle: { ...prev.vehicle, make: data.make, year: data.yearOfManufacture, colour: data.colour, fuel: data.fuelType } }));
         else alert("Manual entry required."); setLoading(false);
+    };
+
+    // V880: VIN Lookup Function
+    const openVinSearch = () => {
+        if (!job.vehicle.vin) return alert("Enter Chassis/VIN first");
+        window.open(`https://www.google.com/search?q=${job.vehicle.vin}+vin+decoder+parts+catalog`, '_blank');
     };
 
     // V870: ACCURATE VAT SPLIT ON INCOME CSV
@@ -130,7 +136,6 @@ const EstimateApp = ({ userId }) => {
 
             // Row 2: The Excess Bill (Client)
             if (excess > 0) {
-                // V870 FIX: Calculate VAT portion of the Excess so the Ledger balances correctly
                 const excessNet = excess / (1 + vatR);
                 const excessVat = excess - excessNet;
 
@@ -193,10 +198,10 @@ const EstimateApp = ({ userId }) => {
                 <div style={{padding:'100px 40px 40px 40px'}}>
                     <div style={{display:'flex', justifyContent:'space-between', borderBottom:'8px solid #f97316', paddingBottom:'20px', marginBottom:'20px'}}>
                         <div style={{flex:1}}>{settings.logoUrl && <img src={settings.logoUrl} style={{height:'80px', marginBottom:'10px'}} alt="Logo" />}{docType !== 'JOB CARD' && <h1 style={{margin:0, color:'#f97316', fontSize:'28px'}}>{settings.coName}</h1>}<p style={{fontSize:'12px'}}>{settings.address}<br/>{settings.phone}</p></div>
-                        <div style={{textAlign:'right', flex:1}}><h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{docType === 'JOB CARD' ? 'JOB CARD' : printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2><p style={{fontSize:'16px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>Date:</strong> {job.invoiceDate}</p>{job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}<div style={{marginTop:'15px', fontSize:'12px', borderTop:'2px solid #ddd', paddingTop:'10px'}}><strong>TO:</strong> {printMode === 'INSURER' ? <>{job.insurance.name}<br/>{job.insurance.address}<br/>Ref: {job.insurance.claim}</> : <>{job.client.name}<br/>{job.client.address}<br/>{job.client.email}</>}</div></div>
+                        <div style={{textAlign:'right', flex:1}}><h2 style={{color:'#f97316', fontSize:'40px', margin:0}}>{docType === 'JOB CARD' ? 'JOB CARD' : printMode === 'EXCESS' ? 'INVOICE (EXCESS)' : docType}</h2><p style={{fontSize:'16px'}}><strong>Reg:</strong> {job.vehicle.reg}<br/><strong>VIN:</strong> {job.vehicle.vin}<br/><strong>Date:</strong> {job.invoiceDate}</p>{job.invoiceNo && docType === 'INVOICE' && <p style={{fontSize:'16px', color:'#f97316'}}><strong>Inv #: {job.invoiceNo}</strong></p>}<div style={{marginTop:'15px', fontSize:'12px', borderTop:'2px solid #ddd', paddingTop:'10px'}}><strong>TO:</strong> {printMode === 'INSURER' ? <>{job.insurance.name}<br/>{job.insurance.address}<br/>Ref: {job.insurance.claim}</> : <>{job.client.name}<br/>{job.client.address}<br/>{job.client.email}</>}</div></div>
                     </div>
                     {docType === 'SATISFACTION NOTE' ? (
-                        <div style={{marginTop:'60px', textAlign: 'center'}}><h1 style={{color:'#f97316', fontSize:'48px', marginBottom:'40px', fontWeight:'900'}}>SATISFACTION NOTE</h1><div style={{border:'4px solid #000', padding:'30px', borderRadius:'20px', marginBottom:'50px', background:'#f4f4f5', display: 'inline-block', textAlign: 'left', minWidth: '550px'}}><table style={{width:'100%', fontSize:'20px', fontWeight:'bold'}}><tbody><tr><td style={{padding:'12px'}}>REGISTRATION:</td><td style={{padding:'12px'}}>{job.vehicle.reg}</td></tr><tr><td style={{padding:'12px'}}>INVOICE #:</td><td style={{padding:'12px'}}>{job.invoiceNo || 'DRAFT'}</td></tr><tr><td style={{padding:'12px'}}>DATE:</td><td style={{padding:'12px'}}>{job.invoiceDate}</td></tr></tbody></table></div><p style={{fontSize:'26px', lineHeight:'1.6', maxWidth:'750px', margin:'0 auto 60px auto', fontWeight:'500'}}>I, <strong>{job.client.name}</strong>, confirm repairs are completed to my satisfaction.</p><div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>{job.vault.signature ? <img src={job.vault.signature} style={{width:'350px', borderBottom:'3px solid #000'}} alt="Sig" /> : <div style={{width:'350px', height:'120px', borderBottom:'3px solid #000'}}></div>}<p style={{marginTop:'15px', fontSize:'20px', fontWeight:'900'}}>Signature</p></div></div>
+                        <div style={{marginTop:'60px', textAlign: 'center'}}><h1 style={{color:'#f97316', fontSize:'48px', marginBottom:'40px', fontWeight:'900'}}>SATISFACTION NOTE</h1><div style={{border:'4px solid #000', padding:'30px', borderRadius:'20px', marginBottom:'50px', background:'#f4f4f5', display: 'inline-block', textAlign: 'left', minWidth: '550px'}}><table style={{width:'100%', fontSize:'20px', fontWeight:'bold'}}><tbody><tr><td style={{padding:'12px'}}>REGISTRATION:</td><td style={{padding:'12px'}}>{job.vehicle.reg}</td></tr><tr><td style={{padding:'12px'}}>VIN:</td><td style={{padding:'12px'}}>{job.vehicle.vin}</td></tr><tr><td style={{padding:'12px'}}>INVOICE #:</td><td style={{padding:'12px'}}>{job.invoiceNo || 'DRAFT'}</td></tr><tr><td style={{padding:'12px'}}>DATE:</td><td style={{padding:'12px'}}>{job.invoiceDate}</td></tr></tbody></table></div><p style={{fontSize:'26px', lineHeight:'1.6', maxWidth:'750px', margin:'0 auto 60px auto', fontWeight:'500'}}>I, <strong>{job.client.name}</strong>, confirm repairs are completed to my satisfaction.</p><div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>{job.vault.signature ? <img src={job.vault.signature} style={{width:'350px', borderBottom:'3px solid #000'}} alt="Sig" /> : <div style={{width:'350px', height:'120px', borderBottom:'3px solid #000'}}></div>}<p style={{marginTop:'15px', fontSize:'20px', fontWeight:'900'}}>Signature</p></div></div>
                     ) : (
                         <div>
                             {/* V860: INVOICE LOGIC */}
@@ -251,6 +256,8 @@ const EstimateApp = ({ userId }) => {
                         <div style={s.card(theme.hub)}>
                             <span style={s.label}>Vehicle</span>
                             <div style={{display:'flex', gap:'12px', marginBottom:'20px'}}><input style={{...s.input, flex:4, fontSize:'55px', textAlign:'center', border:`5px solid ${theme.hub}`}} value={job.vehicle.reg} onChange={e=>setJob({...job, vehicle:{...job.vehicle, reg:e.target.value.toUpperCase()}})} placeholder="REG" /><button style={{...s.btnG(theme.hub), flex:1}} onClick={runDVLA}>FIND</button></div>
+                            {/* V880: VIN FIELD & DECODER BUTTON */}
+                            <div style={{display:'flex', gap:'12px', marginTop:'15px', marginBottom:'15px'}}><input style={s.input} placeholder="Chassis / VIN Number" value={job.vehicle.vin} onChange={e=>setJob({...job, vehicle:{...job.vehicle, vin:e.target.value.toUpperCase()}})} /><button style={{...s.btnG('#555'), width:'auto'}} onClick={openVinSearch}>DATA</button></div>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}><input style={s.input} value={job.vehicle.make} onChange={e=>setJob({...job, vehicle:{...job.vehicle, make:e.target.value}})} placeholder="MAKE" /><input style={s.input} value={job.vehicle.year} onChange={e=>setJob({...job, vehicle:{...job.vehicle, year:e.target.value}})} placeholder="SPEC" /></div>
                             <span style={{...s.label, marginTop:'15px'}}>Job Date</span><input type="date" style={s.input} value={job.invoiceDate} onChange={e=>setJob({...job, invoiceDate:e.target.value})} />
                         </div>
